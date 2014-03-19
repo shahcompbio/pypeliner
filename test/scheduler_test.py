@@ -133,7 +133,7 @@ if __name__ == '__main__':
                 with open(self.output_filename, 'r') as output_file:
                     output = output_file.readlines()
 
-                self.assertEqual(output, [os.path.join(pipeline_dir, 'tmp/temp_space.tmp')])
+                self.assertEqual(output, [os.path.join(pipeline_dir, 'tmp/temp_space')])
 
             def notworking_test_remove(self):
 
