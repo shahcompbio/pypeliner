@@ -445,7 +445,7 @@ class TempFileArg(Arg):
         self.name = name
         self.node = node
     def resolve(self):
-        return self.resmgr.get_output(self.name, self.node).filename
+        return self.resmgr.get_output(self.name, self.node).final_filename
 
 class MergeTemplateArg(Arg):
     """ Temp input files merged along a single axis """
