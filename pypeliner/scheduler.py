@@ -266,8 +266,9 @@ class JobArgMismatchException(Exception):
         self.name = name
         self.axes = axes
         self.node = node
+        self.job_name = 'unknown'
     def __str__(self):
-        return 'arg {0} with axes {1} does not match job with axes {2}'.format(self.name, self.axes, tuple(a[0] for a in self.node))
+        return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(self.name, self.axes, self.job_name, tuple(a[0] for a in self.node))
 
 class OutputMissingException(Exception):
     def __init__(self, filename):
@@ -278,6 +279,10 @@ class OutputMissingException(Exception):
 class Managed(object):
     """ Interface class used to represent a managed data """
     def __init__(self, name, axes):
+        if name is not None and type(name) != str:
+            raise ValueError('name of argument must be string')
+        if type(axes) != tuple:
+            raise ValueError('axes must be a tuple')
         self.name = name
         self.axes = axes
     def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
@@ -991,7 +996,11 @@ class Job(object):
         self.node = node
         self.ctx = ctx
         self.func = func
-        self.argset = callset.transform(lambda arg: create_arg(resmgr, nodemgr, arg, node))
+        try:
+            self.argset = callset.transform(lambda arg: create_arg(resmgr, nodemgr, arg, node))
+        except JobArgMismatchException as e:
+            e.job_name = name
+            raise
         self.logs_dir = logs_dir
     @property
     def id(self):
