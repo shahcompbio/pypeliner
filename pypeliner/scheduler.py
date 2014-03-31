@@ -1255,10 +1255,12 @@ class AmbiguousInputException(Exception):
         return 'input {0} not created by any job'.format(self.id)
 
 class AmbiguousOutputException(Exception):
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, output, job1, job2):
+        self.output = output
+        self.job1 = job1
+        self.job2 = job2
     def __str__(self):
-        return 'output {0} created by multiple jobs'.format(self.id)
+        return 'output {0} created by jobs {1} and {2}'.format(self.output, self.job1, self.job2)
 
 class DependencyCycleException(Exception):
     def __init__(self, id):
@@ -1283,7 +1285,7 @@ class DependencyGraph:
         for job in jobs:
             for output in job.outputs:
                 if output in backward:
-                    raise AmbiguousOutputException(output)
+                    raise AmbiguousOutputException(output, job.id, backward[output].id)
                 backward[output] = job
         self.forward = defaultdict(set)
         tovisit = list(self.outputs)
