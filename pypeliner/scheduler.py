@@ -266,8 +266,9 @@ class JobArgMismatchException(Exception):
         self.name = name
         self.axes = axes
         self.node = node
+        self.job_name = 'unknown'
     def __str__(self):
-        return 'arg {0} with axes {1} does not match job with axes {2}'.format(self.name, self.axes, tuple(a[0] for a in self.node))
+        return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(self.name, self.axes, self.job_name, tuple(a[0] for a in self.node))
 
 class OutputMissingException(Exception):
     def __init__(self, filename):
@@ -278,6 +279,10 @@ class OutputMissingException(Exception):
 class Managed(object):
     """ Interface class used to represent a managed data """
     def __init__(self, name, axes):
+        if name is not None and type(name) != str:
+            raise ValueError('name of argument must be string')
+        if type(axes) != tuple:
+            raise ValueError('axes must be a tuple')
         self.name = name
         self.axes = axes
     def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
@@ -445,7 +450,7 @@ class TempFileArg(Arg):
         self.name = name
         self.node = node
     def resolve(self):
-        return self.resmgr.get_output(self.name, self.node).filename
+        return self.resmgr.get_output(self.name, self.node).final_filename
 
 class MergeTemplateArg(Arg):
     """ Temp input files merged along a single axis """
@@ -991,7 +996,11 @@ class Job(object):
         self.node = node
         self.ctx = ctx
         self.func = func
-        self.argset = callset.transform(lambda arg: create_arg(resmgr, nodemgr, arg, node))
+        try:
+            self.argset = callset.transform(lambda arg: create_arg(resmgr, nodemgr, arg, node))
+        except JobArgMismatchException as e:
+            e.job_name = name
+            raise
         self.logs_dir = logs_dir
     @property
     def id(self):
@@ -1246,10 +1255,12 @@ class AmbiguousInputException(Exception):
         return 'input {0} not created by any job'.format(self.id)
 
 class AmbiguousOutputException(Exception):
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, output, job1, job2):
+        self.output = output
+        self.job1 = job1
+        self.job2 = job2
     def __str__(self):
-        return 'output {0} created by multiple jobs'.format(self.id)
+        return 'output {0} created by jobs {1} and {2}'.format(self.output, self.job1, self.job2)
 
 class DependencyCycleException(Exception):
     def __init__(self, id):
@@ -1274,7 +1285,7 @@ class DependencyGraph:
         for job in jobs:
             for output in job.outputs:
                 if output in backward:
-                    raise AmbiguousOutputException(output)
+                    raise AmbiguousOutputException(output, job.id, backward[output].id)
                 backward[output] = job
         self.forward = defaultdict(set)
         tovisit = list(self.outputs)
