@@ -112,19 +112,18 @@ class EasyPypeliner(object):
         logfmt = helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
-        self.exc_dir = os.path.join(self.config.tmpdir, 'exc')
         self.exec_queue = None
         if self.config.submit == 'local':
-            self.exec_queue = pypeliner.execqueue.LocalJobQueue(self.exc_dir, self.modules)
+            self.exec_queue = pypeliner.execqueue.LocalJobQueue(self.modules)
         elif self.config.submit == 'qsub':
-            self.exec_queue = pypeliner.execqueue.QsubJobQueue(self.exc_dir, self.modules, self.config.nativespec)
+            self.exec_queue = pypeliner.execqueue.QsubJobQueue(self.modules, self.config.nativespec)
         elif self.config.submit == 'asyncqsub':
-            self.exec_queue = pypeliner.execqueue.AsyncQsubJobQueue(self.exc_dir, self.modules, self.config.nativespec, 20)
+            self.exec_queue = pypeliner.execqueue.AsyncQsubJobQueue(self.modules, self.config.nativespec, 20)
         elif self.config.submit == 'pbs':
-            self.exec_queue = pypeliner.execqueue.PbsJobQueue(self.exc_dir, self.modules, self.config.nativespec, 20)
+            self.exec_queue = pypeliner.execqueue.PbsJobQueue(self.modules, self.config.nativespec, 20)
         elif self.config.submit == 'drmaa':
             from pypeliner import drmaaqueue
-            self.exec_queue = drmaaqueue.DrmaaJobQueue(self.exc_dir, self.modules, self.config.nativespec)
+            self.exec_queue = drmaaqueue.DrmaaJobQueue(self.modules, self.config.nativespec)
         self.sch = pypeliner.scheduler.Scheduler()
         self.sch.set_pipeline_dir(self.config.tmpdir)
         self.sch.logs_dir = self.logs_dir

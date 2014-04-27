@@ -13,15 +13,11 @@ if __name__ == '__main__':
     import scheduler_test
     from scheduler_test import *
 
-    def clear_directory(directory):
-        for filename in glob.glob(directory+'/*'):
-            os.remove(filename)
     script_directory = os.path.dirname(os.path.abspath(__file__))
 
     pipeline_dir = os.path.join(script_directory, 'pipeline')
-    exc_prefix = os.path.join(script_directory, 'exc')
     
-    with LocalJobQueue(exc_prefix, [scheduler_test]) as exec_queue:
+    with LocalJobQueue([scheduler_test]) as exec_queue:
 
         class scheduler_test(unittest.TestCase):
 
@@ -54,7 +50,10 @@ if __name__ == '__main__':
                 except:
                     pass
 
-                clear_directory(exc_prefix)
+                try:
+                    shutil.rmtree(exc_prefix)
+                except:
+                    pass
 
                 try:
                     os.remove(self.output_filename)
@@ -312,7 +311,7 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['00line1\n', '10line2\n', '00line3\n', '10line4\n', '01line5\n', '11line6\n', '01line7\n', '11line8\n'])
 
-                tmp_input_data_filenames = [os.path.join(pipeline_dir, 'tmp/input_data.byline_a-0'), os.path.join(pipeline_dir, 'tmp/input_data.byline_a-1')]
+                tmp_input_data_filenames = [os.path.join(pipeline_dir, 'tmp/byline_a/0/input_data'), os.path.join(pipeline_dir, 'tmp/byline_a/1/input_data')]
                 tmp_data_checks = [['line1\n', 'line2\n', 'line3\n', 'line4\n'], ['line5\n', 'line6\n', 'line7\n', 'line8\n']]
                 for tmp_input_data_filename, tmp_data_check in zip(tmp_input_data_filenames, tmp_data_checks):
                     with open(tmp_input_data_filename, 'r') as tmp_input_data_file:

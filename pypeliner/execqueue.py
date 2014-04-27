@@ -22,14 +22,14 @@ def log_text(debug_filenames):
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
-    def __init__(self, ctx, job, temps_dir, modules):
+    def __init__(self, ctx, job, modules):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(temps_dir, job.filenamebase + '.delegator'), modules)
+        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(temps_dir, job.filenamebase + '.job.out')
-        self.debug_filenames['job stderr'] = os.path.join(temps_dir, job.filenamebase + '.job.err')
+        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
         self.debug_files = []
         try:
             self.debug_files.append(open(self.debug_filenames['job stdout'], 'w'))
@@ -62,22 +62,22 @@ class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess
     """
-    def __init__(self, ctx, job, temps_dir, modules, qsub_bin, native_spec):
+    def __init__(self, ctx, job, modules, qsub_bin, native_spec):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(temps_dir, job.filenamebase + '.delegator'), modules)
+        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(temps_dir, job.filenamebase + '.job.out')
-        self.debug_filenames['job stderr'] = os.path.join(temps_dir, job.filenamebase + '.job.err')
-        self.debug_filenames['submit stdout'] = os.path.join(temps_dir, job.filenamebase + '.submit.out')
-        self.debug_filenames['submit stderr'] = os.path.join(temps_dir, job.filenamebase + '.submit.err')
+        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
+        self.debug_filenames['submit stdout'] = os.path.join(job.temps_dir, 'submit.out')
+        self.debug_filenames['submit stderr'] = os.path.join(job.temps_dir, 'submit.err')
         self.debug_files = []
-        self.script_filename = os.path.join(temps_dir, job.filenamebase + '.submit.sh')
+        self.script_filename = os.path.join(job.temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, job.filenamebase, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+        self.submit_command = self.create_submit_command(ctx, job.displayname, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             self.debug_files.append(open(self.debug_filenames['submit stdout'], 'w'))
             self.debug_files.append(open(self.debug_filenames['submit stderr'], 'w'))
@@ -124,9 +124,7 @@ class SubProcessJobQueue(object):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-    def __init__(self, temps_dir, modules):
-        self.temps_dir = helpers.abspath(temps_dir)
-        helpers.makedirs(self.temps_dir)
+    def __init__(self, modules):
         self.modules = modules
         self.jobs = dict()
     def __enter__(self):
@@ -156,36 +154,36 @@ class SubProcessJobQueue(object):
 class LocalJobQueue(SubProcessJobQueue):
     """ Queue of local jobs """
     def create(self, ctx, job):
-        return LocalJob(ctx, job, self.temps_dir, self.modules)
+        return LocalJob(ctx, job, self.modules)
 
 class QsubJobQueue(SubProcessJobQueue):
     """ Queue of qsub jobs """
-    def __init__(self, temps_dir, modules, native_spec):
-        super(QsubJobQueue, self).__init__(temps_dir, modules)
+    def __init__(self, modules, native_spec):
+        super(QsubJobQueue, self).__init__(modules)
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
     def create(self, ctx, job):
-        return QsubJob(ctx, job, self.temps_dir, self.modules, self.qsub_bin, self.native_spec)
+        return QsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
 
 class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess, and polled using qstat
     """
-    def __init__(self, ctx, job, temps_dir, modules, qsub_bin, native_spec):
+    def __init__(self, ctx, job, modules, qsub_bin, native_spec):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(temps_dir, job.filenamebase + '.delegator'), modules)
+        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(temps_dir, job.filenamebase + '.job.out')
-        self.debug_filenames['job stderr'] = os.path.join(temps_dir, job.filenamebase + '.job.err')
-        self.debug_filenames['submit stdout'] = os.path.join(temps_dir, job.filenamebase + '.submit.out')
-        self.debug_filenames['submit stderr'] = os.path.join(temps_dir, job.filenamebase + '.submit.err')
-        self.script_filename = os.path.join(temps_dir, job.filenamebase + '.submit.sh')
+        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
+        self.debug_filenames['submit stdout'] = os.path.join(job.temps_dir, 'submit.out')
+        self.debug_filenames['submit stderr'] = os.path.join(job.temps_dir, 'submit.err')
+        self.script_filename = os.path.join(job.temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, job.filenamebase, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+        self.submit_command = self.create_submit_command(ctx, job.displayname, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             with open(self.debug_filenames['submit stdout'], 'w') as submit_stdout, open(self.debug_filenames['submit stderr'], 'w') as submit_stderr:
                 subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
@@ -265,9 +263,7 @@ class AsyncQsubJobQueue(object):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-    def __init__(self, temps_dir, modules, native_spec, poll_time):
-        self.temps_dir = helpers.abspath(temps_dir)
-        helpers.makedirs(self.temps_dir)
+    def __init__(self, modules, native_spec, poll_time):
         self.modules = modules
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
@@ -280,7 +276,7 @@ class AsyncQsubJobQueue(object):
         for qsub_job_id in self.jobs.iterkeys():
             self.delete_job(qsub_job_id)
     def create(self, ctx, job):
-        return AsyncQsubJob(ctx, job, self.temps_dir, self.modules, self.qsub_bin, self.native_spec)
+        return AsyncQsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
     def add(self, ctx, job):
         submitted = self.create(ctx, job)
         self.jobs[submitted.qsub_job_id] = submitted
@@ -339,8 +335,8 @@ class PbsQstatJobStatus(QstatJobStatus):
 
 class PbsJobQueue(AsyncQsubJobQueue):
     """ Queue of jobs running on a pbs cluster """
-    def __init__(self, temps_dir, modules, native_spec, poll_time):
-        super(PbsJobQueue, self).__init__(temps_dir, modules, native_spec, poll_time)
+    def __init__(self, modules, native_spec, poll_time):
+        super(PbsJobQueue, self).__init__(modules, native_spec, poll_time)
         self.qstat = PbsQstatJobStatus(poll_time, 10)
     def create(self, ctx, job):
-        return PbsQsubJob(ctx, job, self.temps_dir, self.modules, self.qsub_bin, self.native_spec)
+        return PbsQsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)

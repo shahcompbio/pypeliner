@@ -169,7 +169,7 @@ class Scheduler(object):
         helpers.makedirs(self.logs_dir)
         depgraph = DependencyGraph()
         with ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
-            nodemgr = NodeManager(self.nodes_dir)
+            nodemgr = NodeManager(self.nodes_dir, self.temps_dir)
             jobs = self._create_jobs(resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             failing = False
@@ -697,7 +697,9 @@ class FilenameCallback(object):
         self.chunks = set()
     def __call__(self, chunk):
         self.chunks.add(chunk)
-        return self.filename_creator(self.name, self.base_node + ((self.split_axis, chunk),))
+        filename = self.filename_creator(self.name, self.base_node + ((self.split_axis, chunk),))
+        helpers.makedirs(os.path.dirname(filename))
+        return filename
     def __repr__(self):
         return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.name, self.base_node, self.split_axis, self.filename_creator)))
 
@@ -806,9 +808,14 @@ class ChunksResource(Resource):
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
-    def __init__(self, nodes_dir):
+    def __init__(self, nodes_dir, temps_dir):
         self.nodes_dir = nodes_dir
+        self.temps_dir = temps_dir
         self.cached_chunks = dict()
+    def node_subdir(self, node):
+        if len(node) == 0:
+            return ''
+        return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node]))
     def retrieve_nodes(self, axes, base_node=()):
         if len(axes) == 0:
             yield base_node
@@ -817,7 +824,7 @@ class NodeManager(object):
                 for node in self.retrieve_nodes(axes[1:], base_node + ((axes[0], chunk),)):
                     yield node
     def get_chunks_filename(self, axis, node):
-        return os.path.join(self.nodes_dir, name_node_filename(axis, node))
+        return os.path.join(self.nodes_dir, self.node_subdir(node), axis+'_chunks')
     def retrieve_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             chunks_filename = self.get_chunks_filename(axis, node)
@@ -828,9 +835,12 @@ class NodeManager(object):
                     self.cached_chunks[(axis, node)] = pickle.load(f)
         return self.cached_chunks[(axis, node)]
     def store_chunks(self, axis, node, chunks):
+        for chunk in chunks:
+            helpers.makedirs(os.path.join(self.temps_dir, self.node_subdir(node + ((axis, chunk),))))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         chunks_filename = self.get_chunks_filename(axis, node)
+        helpers.makedirs(os.path.dirname(chunks_filename))
         temp_chunks_filename = chunks_filename + '.tmp'
         with open(temp_chunks_filename, 'wb') as f:
             pickle.dump(chunks, f)
@@ -866,7 +876,7 @@ class TempResource(Resource):
 
 def name_node_filename(name, node):
     assert not os.path.isabs(name)
-    return '.'.join([str(name)] + ['-'.join((str(axis), str(chunk))) for axis, chunk in node])
+    return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node] + [str(name)]))
 
 def name_node_displayname(name, node):
     return name + '<' + ','.join(':'.join((str(axis), str(chunk))) for axis, chunk in node) + '>'
@@ -1001,7 +1011,7 @@ class Job(object):
         except JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = logs_dir
+        self.logs_dir = os.path.join(logs_dir, nodemgr.node_subdir(node), name)
     @property
     def id(self):
         return (self.name, self.node)
@@ -1116,7 +1126,8 @@ class Job(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.name, self.node, self.ctx, self.func, self.argset.transform(lambda arg: resolve_arg(arg)), self.logs_dir)
+        resolved_args = self.argset.transform(lambda arg: resolve_arg(arg))
+        return JobCallable(self.name, self.node, self.ctx, self.func, resolved_args, self.logs_dir)
     def finalize(self, callable):
         for arg, resolved in zip(self.argset.iteritems(), callable.argset.iteritems()):
             if isinstance(arg, Arg):
@@ -1146,16 +1157,18 @@ class JobCallable(object):
         self.func = func
         self.argset = argset
         self.finished = False
-        job_log_prefix = os.path.join(logs_dir, 'job_' + name_node_filename(self.name, self.node))
-        self.stdout_filename = job_log_prefix + '.out'
-        self.stderr_filename = job_log_prefix + '.err'
+        helpers.makedirs(logs_dir)
+        self.stdout_filename = os.path.join(logs_dir, 'job.out')
+        self.stderr_filename = os.path.join(logs_dir, 'job.err')
+        self.exc_dir = os.path.join(logs_dir, 'exc')
+        helpers.makedirs(self.exc_dir)
         self.job_timer = JobTimer()
     @property
     def id(self):
         return (self.name, self.node)
     @property
-    def filenamebase(self):
-        return name_node_filename(self.name, self.node)
+    def temps_dir(self):
+        return self.exc_dir
     @property
     def displayname(self):
         return name_node_displayname(self.name, self.node)
