@@ -815,6 +815,9 @@ def name_node_filename(name, node):
     assert not os.path.isabs(name)
     return os.path.join(node_subdir(node), name)
 
+def name_node_displayname(name, node):
+    return name + '<' + ','.join(':'.join((str(axis), str(chunk))) for axis, chunk in node) + '>'
+
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
     def __init__(self, nodes_dir, temps_dir):
@@ -878,9 +881,6 @@ class TempResource(Resource):
     @property
     def id(self):
         return (self.name, self.node)
-
-def name_node_displayname(name, node):
-    return name + '<' + ','.join(':'.join((str(axis), str(chunk))) for axis, chunk in node) + '>'
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
