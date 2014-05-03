@@ -806,16 +806,21 @@ class ChunksResource(Resource):
         if self.exists:
             return os.path.getmtime(self.nodemgr.get_chunks_filename(self.axis, self.node))
 
+def node_subdir(node):
+    if len(node) == 0:
+        return ''
+    return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node]))
+
+def name_node_filename(name, node):
+    assert not os.path.isabs(name)
+    return os.path.join(node_subdir(node), name)
+
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
     def __init__(self, nodes_dir, temps_dir):
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
-    def node_subdir(self, node):
-        if len(node) == 0:
-            return ''
-        return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node]))
     def retrieve_nodes(self, axes, base_node=()):
         if len(axes) == 0:
             yield base_node
@@ -824,7 +829,7 @@ class NodeManager(object):
                 for node in self.retrieve_nodes(axes[1:], base_node + ((axes[0], chunk),)):
                     yield node
     def get_chunks_filename(self, axis, node):
-        return os.path.join(self.nodes_dir, self.node_subdir(node), axis+'_chunks')
+        return os.path.join(self.nodes_dir, node_subdir(node), axis+'_chunks')
     def retrieve_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             chunks_filename = self.get_chunks_filename(axis, node)
@@ -836,7 +841,7 @@ class NodeManager(object):
         return self.cached_chunks[(axis, node)]
     def store_chunks(self, axis, node, chunks):
         for chunk in chunks:
-            helpers.makedirs(os.path.join(self.temps_dir, self.node_subdir(node + ((axis, chunk),))))
+            helpers.makedirs(os.path.join(self.temps_dir, node_subdir(node + ((axis, chunk),))))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         chunks_filename = self.get_chunks_filename(axis, node)
@@ -873,10 +878,6 @@ class TempResource(Resource):
     @property
     def id(self):
         return (self.name, self.node)
-
-def name_node_filename(name, node):
-    assert not os.path.isabs(name)
-    return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node] + [str(name)]))
 
 def name_node_displayname(name, node):
     return name + '<' + ','.join(':'.join((str(axis), str(chunk))) for axis, chunk in node) + '>'
@@ -1011,7 +1012,7 @@ class Job(object):
         except JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, nodemgr.node_subdir(node), name)
+        self.logs_dir = os.path.join(logs_dir, node_subdir(node), name)
     @property
     def id(self):
         return (self.name, self.node)
