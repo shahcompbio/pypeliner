@@ -248,7 +248,7 @@ class Scheduler(object):
         """ Pretend run the pipeline """
         depgraph = DependencyGraph()
         with ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
-            nodemgr = NodeManager(self.nodes_dir)
+            nodemgr = NodeManager(self.nodes_dir, self.temps_dir)
             jobs = self._create_jobs(resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             while depgraph.jobs_ready:
@@ -256,8 +256,11 @@ class Scheduler(object):
                 job = jobs[job_id]
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                     self._logger.info(job.displayname + ' executing')
+                    if not job.trigger_regenerate:
+                        depgraph.notify_completed(job)
                 else:
                     self._logger.info(job.displayname + ' skipped')
+                    depgraph.notify_completed(job)
                 self._logger.debug(job.displayname + ' explanation: ' + job.explain())
         return True
 
