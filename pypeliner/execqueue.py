@@ -286,7 +286,7 @@ class AsyncQsubJobQueue(object):
         self.poll_time = poll_time
         self.qstat = QstatJobStatus(poll_time, 10)
         self.jobs = dict()
-        self.local_queue = LocalJobQueue(modules)
+        self.local_queue = LocalJobQueue(temps_dir, modules)
     def __enter__(self):
         self.local_queue.__enter__()
         return self
