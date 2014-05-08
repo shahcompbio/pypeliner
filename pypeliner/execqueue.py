@@ -159,7 +159,7 @@ class SubProcessJobQueue(object):
         return len(self.jobs)
     @property
     def empty(self):
-        return len(self.jobs) == 0
+        return self.length == 0
 
 class LocalJobQueue(SubProcessJobQueue):
     """ Queue of local jobs """
@@ -172,7 +172,7 @@ class QsubJobQueue(SubProcessJobQueue):
         super(QsubJobQueue, self).__init__(temps_dir, modules)
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
-        self.local_queue = SubProcessJobQueue(modules)
+        self.local_queue = LocalJobQueue(temps_dir, modules)
     def create(self, ctx, job):
         if ctx.get('local', False):
             return LocalJob(ctx, job, self.temps_dir, self.modules)
@@ -336,10 +336,10 @@ class AsyncQsubJobQueue(object):
             pass
     @property
     def length(self):
-        return len(self.jobs)
+        return len(self.jobs) + self.local_queue.length
     @property
     def empty(self):
-        return len(self.jobs) == 0
+        return self.length == 0
 
 class PbsQstatJobStatus(QstatJobStatus):
     """ Statuses of jobs on a pbs cluster """
