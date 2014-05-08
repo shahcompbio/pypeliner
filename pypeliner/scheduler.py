@@ -892,7 +892,7 @@ class ResourceManager(object):
     def __enter__(self):
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
         return self
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.createtimes_shelf.close()
     def get_input(self, name, node):
         final_filename = self.get_final_filename(name, node)
@@ -1129,7 +1129,7 @@ class JobTimer(object):
         self._finish = None
     def __enter__(self):
         self._start = time.time()
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self._finish = time.time()
     @property
     def duration(self):

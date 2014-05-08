@@ -66,7 +66,7 @@ class DrmaaJobQueue:
         self.session = drmaa.Session()
         self.session.initialize()
         return self
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.session.exit()
     def create(self, ctx, name, command, temps_prefix, native_spec, session):
         return DrmaaJob(ctx, name, command, temps_prefix, native_spec, session)
