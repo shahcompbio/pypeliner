@@ -4,9 +4,7 @@ import glob
 import os
 import logging
 
-import pypeliner.helpers
-from pypeliner.scheduler import *
-from pypeliner.execqueue import *
+import pypeliner
 
 if __name__ == '__main__':
 
@@ -17,7 +15,7 @@ if __name__ == '__main__':
 
     pipeline_dir = os.path.join(script_directory, 'pipeline')
     
-    with LocalJobQueue([scheduler_test]) as exec_queue:
+    with pypeliner.execqueue.LocalJobQueue([scheduler_test]) as exec_queue:
 
         class scheduler_test(unittest.TestCase):
 
@@ -69,7 +67,7 @@ if __name__ == '__main__':
 
             def create_scheduler(self):
 
-                self.sch = Scheduler()
+                self.sch = pypeliner.scheduler.Scheduler()
                 self.sch.set_pipeline_dir(pipeline_dir)
                 self.sch.max_jobs = 10
 
@@ -182,7 +180,7 @@ if __name__ == '__main__':
                 self.sch.transform('do', (), self.ctx, do_stuff, self.sch.oobj('output_data'), self.sch.iobj('input_data').prop('some_string'))
                 self.sch.transform('write', (), self.ctx, write_stuff, None, self.sch.iobj('output_data'), self.sch.output(self.output_filename), self.sch.oobj('cyclic'))
 
-                self.assertRaises(DependencyCycleException, self.sch.run, exec_queue)
+                self.assertRaises(pypeliner.graph.DependencyCycleException, self.sch.run, exec_queue)
 
             def test_commandline_simple(self):
 
