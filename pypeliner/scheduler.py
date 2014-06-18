@@ -325,7 +325,9 @@ class ManagedUserOutputFile(Managed):
 class ManagedInputObj(Managed):
     """ Interface class used to represent a managed input object """
     def prop(self, prop_name):
-        return ManagedInputObjProp(self.name, self.axes, prop_name)
+        return ManagedInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
+    def extract(self, func):
+        return ManagedInputObjExtract(self.name, self.axes, func)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=TempInputObjArg, splitmerge=TempMergeObjArg)
 
@@ -334,14 +336,14 @@ class ManagedOutputObj(Managed):
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=TempOutputObjArg, splitmerge=TempSplitObjArg)
 
-class ManagedInputObjProp(Managed):
+class ManagedInputObjExtract(Managed):
     """ Interface class used to represent a property of a managed
     input object """
-    def __init__(self, name, axes, prop_name):
+    def __init__(self, name, axes, func):
         Managed.__init__(self, name, axes)
-        self.prop_name = prop_name
+        self.func = func
     def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=TempInputObjArg, splitmerge=TempMergeObjArg, prop_name=self.prop_name)
+        return self._create_arg(resmgr, nodemgr, node, normal=TempInputObjArg, splitmerge=TempMergeObjArg, func=self.func)
 
 class ManagedInputFile(Managed):
     """ Interface class used to represent a managed input file """
@@ -556,32 +558,32 @@ class SplitFileArg(Arg):
 
 class TempInputObjArg(Arg):
     """ Temp input object argument """
-    def __init__(self, resmgr, nodemgr, name, node, prop_name=None):
+    def __init__(self, resmgr, nodemgr, name, node, func=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
-        self.prop_name = prop_name
+        self.func = func
     @property
     def inputs(self):
         yield self.resmgr.get_input(self.name, self.node)
     def resolve(self):
         resource = self.resmgr.get_input(self.name, self.node)
         with open(resource.filename, 'rb') as f:
-            if self.prop_name is None:
-                return pickle.load(f)
-            else:
-                return getattr(pickle.load(f), self.prop_name)
+            obj = pickle.load(f)
+            if self.func is not None:
+                obj = self.func(obj)
+            return obj
 
 class TempMergeObjArg(Arg):
     """ Temp input object arguments merged along single axis """
-    def __init__(self, resmgr, nodemgr, name, node, merge_axis, prop_name=None):
+    def __init__(self, resmgr, nodemgr, name, node, merge_axis, func=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.base_node = node
         self.merge_axis = merge_axis
-        self.prop_name = prop_name
+        self.func = func
     @property
     def inputs(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
@@ -592,10 +594,10 @@ class TempMergeObjArg(Arg):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
             resource = self.resmgr.get_input(self.name, node)
             with open(resource.filename, 'rb') as f:
-                if self.prop_name is None:
-                    resolved[node[-1][1]] = pickle.load(f)
-                else:
-                    resolved[node[-1][1]] = getattr(pickle.load(f), self.prop_name)
+                obj = pickle.load(f)
+                if self.func is not None:
+                    obj = self.func(obj)
+                resolved[node[-1][1]] = obj
         return resolved
 
 class TempOutputObjArg(Arg):
@@ -906,7 +908,7 @@ class ResourceManager(object):
     def __enter__(self):
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
         return self
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.createtimes_shelf.close()
     def get_input(self, name, node):
         final_filename = self.get_final_filename(name, node)
@@ -1144,7 +1146,7 @@ class JobTimer(object):
         self._finish = None
     def __enter__(self):
         self._start = time.time()
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self._finish = time.time()
     @property
     def duration(self):

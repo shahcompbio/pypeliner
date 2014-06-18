@@ -20,6 +20,9 @@ def log_text(debug_filenames):
             text += debug_file.read()
     return text
 
+def qsub_format_name(name):
+    return name.replace('<','_').replace('>', '').replace(':', '.').rstrip('_')
+
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
     def __init__(self, ctx, job, modules):
@@ -98,7 +101,7 @@ class QsubJob(object):
         qsub = [qsub_bin]
         qsub += ['-sync', 'y', '-b', 'y']
         qsub += native_spec.format(**ctx).split()
-        qsub += ['-N', name]
+        qsub += ['-N', qsub_format_name(name)]
         qsub += ['-o', stdout_filename]
         qsub += ['-e', stderr_filename]
         qsub += [script_filename]
@@ -129,16 +132,21 @@ class SubProcessJobQueue(object):
         self.jobs = dict()
     def __enter__(self):
         return self
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         pass
     def create(self, ctx, job):
         raise NotImplementedError()
     def add(self, ctx, job):
         submitted = self.create(ctx, job)
         self.jobs[submitted.process.pid] = submitted
-    def wait(self):
+    def wait(self, immediate=False):
         while True:
-            process_id, returncode = os.wait()
+            if immediate:
+                process_id, returncode = os.waitpid(-1, os.WNOHANG)
+                if process_id is None:
+                    return None, None
+            else:
+                process_id, returncode = os.wait()
             if process_id in self.jobs:
                 submitted = self.jobs[process_id]
                 del self.jobs[process_id]
@@ -149,7 +157,7 @@ class SubProcessJobQueue(object):
         return len(self.jobs)
     @property
     def empty(self):
-        return len(self.jobs) == 0
+        return self.length == 0
 
 class LocalJobQueue(SubProcessJobQueue):
     """ Queue of local jobs """
@@ -162,8 +170,12 @@ class QsubJobQueue(SubProcessJobQueue):
         super(QsubJobQueue, self).__init__(modules)
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
+        self.local_queue = LocalJobQueue(temps_dir, modules)
     def create(self, ctx, job):
-        return QsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
+        if ctx.get('local', False):
+            return LocalJob(ctx, job, self.modules)
+        else:
+            return QsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
 
 class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
@@ -203,7 +215,7 @@ class AsyncQsubJob(object):
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += native_spec.format(**ctx).split()
-        qsub += ['-N', name]
+        qsub += ['-N', qsub_format_name(name)]
         qsub += ['-o', stdout_filename]
         qsub += ['-e', stderr_filename]
         qsub += [script_filename]
@@ -270,19 +282,29 @@ class AsyncQsubJobQueue(object):
         self.poll_time = poll_time
         self.qstat = QstatJobStatus(poll_time, 10)
         self.jobs = dict()
+        self.local_queue = LocalJobQueue(temps_dir, modules)
     def __enter__(self):
+        self.local_queue.__enter__()
         return self
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.local_queue.__exit__(exc_type, exc_value, traceback)
         for qsub_job_id in self.jobs.iterkeys():
             self.delete_job(qsub_job_id)
     def create(self, ctx, job):
         return AsyncQsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
     def add(self, ctx, job):
-        submitted = self.create(ctx, job)
-        self.jobs[submitted.qsub_job_id] = submitted
-        self.qstat.invalidate()
+        if ctx.get('local', False):
+            self.local_queue.add(ctx, job)
+        else:
+            submitted = self.create(ctx, job)
+            self.jobs[submitted.qsub_job_id] = submitted
+            self.qstat.invalidate()
     def wait(self):
         while True:
+            if not self.local_queue.empty:
+                job_id, job = self.local_queue.wait(immediate=True)
+                if job_id is not None:
+                    return job_id, job
             if len(self.jobs) == 0:
                 return None
             try:
@@ -310,21 +332,10 @@ class AsyncQsubJobQueue(object):
             pass
     @property
     def length(self):
-        return len(self.jobs)
+        return len(self.jobs) + self.local_queue.length
     @property
     def empty(self):
-        return len(self.jobs) == 0
-
-class PbsQsubJob(AsyncQsubJob):
-    """ Job running on a pbs job scheduler """
-    def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
-        qsub = [qsub_bin]
-        qsub += native_spec.format(**ctx).split()
-        qsub += ['-N', name]
-        qsub += ['-o', stdout_filename]
-        qsub += ['-e', stderr_filename]
-        qsub += [script_filename]
-        return qsub
+        return self.length == 0
 
 class PbsQstatJobStatus(QstatJobStatus):
     """ Statuses of jobs on a pbs cluster """
@@ -339,4 +350,4 @@ class PbsJobQueue(AsyncQsubJobQueue):
         super(PbsJobQueue, self).__init__(modules, native_spec, poll_time)
         self.qstat = PbsQstatJobStatus(poll_time, 10)
     def create(self, ctx, job):
-        return PbsQsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
+        return PbsQsubJob(ctx, job, self.temps_dir, self.modules, self.qsub_bin, self.native_spec)
