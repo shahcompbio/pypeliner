@@ -349,5 +349,3 @@ class PbsJobQueue(AsyncQsubJobQueue):
     def __init__(self, modules, native_spec, poll_time):
         super(PbsJobQueue, self).__init__(modules, native_spec, poll_time)
         self.qstat = PbsQstatJobStatus(poll_time, 10)
-    def create(self, ctx, job):
-        return PbsQsubJob(ctx, job, self.temps_dir, self.modules, self.qsub_bin, self.native_spec)
