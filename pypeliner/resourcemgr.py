@@ -35,8 +35,6 @@ class ResourceManager(object):
         temp_filename = self.get_temp_filename(name, node)
         final_filename = self.get_final_filename(name, node)
         return resources.TempResource(self, name, node, temp_filename, final_filename)
-    def get_empty_output(self, name, node):
-        return resources.TempResource(self, name, node, None, None)
     def finalize_output(self, resource):
         final_filename = self.get_final_filename(resource.name, resource.node)
         try:
