@@ -10,8 +10,14 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
+   :glob:
+
+   installation
+   quickstart
+   api
 
 
+.. autoclass:: pypeliner.Managed.InputFile
 
 Indices and tables
 ==================
@@ -19,4 +25,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
