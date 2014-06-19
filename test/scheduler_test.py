@@ -679,25 +679,35 @@ if __name__ == '__main__':
 
                 self.create_scheduler()
 
+                # Split input file into 4 lines per output file (axis `byline_a`)
                 self.sch.transform('split_byline_a', (), self.ctx, split_file_byline,
                     None,
                     mgd.InputFile(self.input_filename),
                     4,
                     mgd.TempOutputFile('input_data', 'byline_a'))
+
+                # Split again, this time with 2 lines per output file (axis `byline_b`)
                 self.sch.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a'),
-                    2, 
+                    2,
                     mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
-                self.sch.transform('do', ('byline_a','byline_b'), self.ctx, do_nothing,
+
+                # Modify each file independently, adding the instance of this job on the
+                # `byline_a` axis, fail here
+                self.sch.transform('do', ('byline_a', 'byline_b'), self.ctx, do_nothing,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
                     '!',
                     mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+
+                # Merge along the `byline_b` axis
                 self.sch.transform('merge_byline_b', ('byline_a',), self.ctx, do_nothing,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
                     mgd.TempOutputFile('output_data', 'byline_a'))
+
+                # Merge along the `byline_a` axis
                 self.sch.transform('merge_byline_a', (), self.ctx, do_nothing,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a'),
@@ -707,25 +717,35 @@ if __name__ == '__main__':
 
                 self.create_scheduler()
 
+                # Split input file into 4 lines per output file (axis `byline_a`)
                 self.sch.transform('split_byline_a', (), self.ctx, split_file_byline,
                     None,
                     mgd.InputFile(self.input_filename),
                     4,
                     mgd.TempOutputFile('input_data', 'byline_a'))
+
+                # Split again, this time with 2 lines per output file (axis `byline_b`)
                 self.sch.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a'),
                     2,
                     mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
-                self.sch.transform('do', ('byline_a','byline_b'), self.ctx, append_to_lines,
+
+                # Modify each file independently, adding the instance of this job on the
+                # `byline_a` axis
+                self.sch.transform('do', ('byline_a', 'byline_b'), self.ctx, append_to_lines,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
                     '!',
                     mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+
+                # Merge along the `byline_b` axis, fail here
                 self.sch.transform('merge_byline_b', ('byline_a',), self.ctx, do_nothing,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
                     mgd.TempOutputFile('output_data', 'byline_a'))
+
+                # Merge along the `byline_a` axis
                 self.sch.transform('merge_byline_a', (), self.ctx, do_nothing,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a'),
@@ -735,25 +755,35 @@ if __name__ == '__main__':
 
                 self.create_scheduler()
 
+                # Split input file into 4 lines per output file (axis `byline_a`)
                 self.sch.transform('split_byline_a', (), self.ctx, split_file_byline,
                     None,
                     mgd.InputFile(self.input_filename),
                     4,
                     mgd.TempOutputFile('input_data', 'byline_a'))
+
+                # Split again, this time with 2 lines per output file (axis `byline_b`)
                 self.sch.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a'),
                     2,
                     mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
-                self.sch.transform('do', ('byline_a','byline_b'), self.ctx, append_to_lines,
+
+                # Modify each file independently, adding the instance of this job on the
+                # `byline_a` axis
+                self.sch.transform('do', ('byline_a', 'byline_b'), self.ctx, append_to_lines,
                     None,
                     mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
                     '!',
                     mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+
+                # Merge along the `byline_b` axis
                 self.sch.transform('merge_byline_b', ('byline_a',), self.ctx, merge_file_byline,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
                     mgd.TempOutputFile('output_data', 'byline_a'))
+
+                # Merge along the `byline_a` axis
                 self.sch.transform('merge_byline_a', (), self.ctx, merge_file_byline,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a'),
