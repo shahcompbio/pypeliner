@@ -69,59 +69,59 @@ class Scheduler(object):
         """ Create a ManagedInputFile input file representing a managed argument.
         The ManagedInputFile should be given to transform instead of a real argument
         """
-        return managed.ManagedInputFile(name, axes)
+        return managed.TempInputFile(name, *axes)
     def ofile(self, name, axes=()):
         """ Create a ManagedOutputFile output file representing a managed argument.
         The ManagedOutputFile should be given to transform instead of a real argument
         """
-        return managed.ManagedOutputFile(name, axes)
+        return managed.TempOutputFile(name, *axes)
     def tmpfile(self, name, axes=()):
         """ Create a ManagedTempFile representing a managed temporary filename.
         If ManagedTempFile is given to transform in place of an argument, when
         the function is called the ManagedTempFile will be replaced with the a
         valid temporary filename.
         """
-        return managed.ManagedTempFile(name, axes)
+        return managed.TempFile(name, *axes)
     def iobj(self, name, axes=()):
         """ Create a ManagedInputObj object representing a managed argument.
         The ManagedInputObj should be given to transform instead of a real argument.
         Can only returned.
         """
-        return managed.ManagedInputObj(name, axes)
+        return managed.TempInputObj(name, *axes)
     def oobj(self, name, axes=()):
         """ Create a ManagedOutputObj object representing a managed argument.
         The ManagedOutputObj should be given to transform instead of a real argument.
         Can only be an argument.
         """
-        return managed.ManagedOutputObj(name, axes)
+        return managed.TempOutputObj(name, *axes)
     def inst(self, axis):
         """ Create a ManagedInstance placeholder for job instances.
         If ManagedInstance is given to transform in place of an argument, when
         the function is called the ManagedInstance will be replaced with the chunk
         for the given axis.
         """
-        return managed.ManagedInstance(axis)
+        return managed.Instance(axis)
     def ichunks(self, axes):
         """ Create a ManagedInputChunks placeholder for chunks of a split on an axis.
         If ManagedInputChunks is given to transform in place of an argument, when
         the function is called the ManagedInputChunks will be replaced with the chunk
         for the given axis of the given node.
         """
-        return managed.ManagedInputChunks(None, axes)
+        return managed.InputChunks(*axes)
     def ochunks(self, axes):
         """ Create an ManagedOutputChunks placeholder for chunks of a split on an axis.
         If ManagedOutputChunks is given as the return value to be used for a call to 
         transform, the list returned by the function will be used as the list of chunks
         for the given axis.
         """
-        return managed.ManagedOutputChunks(None, axes)
+        return managed.OutputChunks(*axes)
     def input(self, filename, axes=()):
         """ Create a ManagedUserInputFile placeholder for an input file.
         If ManagedUserInputFile is given to transform in place of an argument, when
         the function is called the ManagedUserInputFile will be replaced with the input
         filename.
         """
-        return managed.ManagedUserInputFile(filename, axes)
+        return managed.InputFile(filename, *axes)
     def output(self, filename, axes=()):
         """ Create a ManagedUserOutputFile placeholder for an output file.
         If ManagedUserOutputFile is given to transform in place of an argument, when
@@ -129,14 +129,14 @@ class Scheduler(object):
         filename, and after successful completion of the associated job, the
         temp file will be moved to the given output filename.
         """
-        return managed.ManagedUserOutputFile(filename, axes)
-    def template(self, template, axes):
+        return managed.OutputFile(filename, *axes)
+    def template(self, template, axes=()):
         """ Create a ManagedTemplate placeholder for a name templated by the given axes.
         If ManagedTemplate is given to transform in place of an argument, when the transform
         function is called, the ManagedTemplate will be resolved to a complete name that will
         replace the argument.
         """
-        return managed.ManagedTemplate(template, axes)
+        return managed.Template(template, *axes)
     def commandline(self, name, axes, ctx, *args):
         """ Add a command line based transform to the pipeline """
         self.transform(name, axes, ctx, commandline.execute, None, *args)

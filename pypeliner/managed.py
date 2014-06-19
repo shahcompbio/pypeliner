@@ -18,7 +18,7 @@ def create_arg(resmgr, nodemgr, mgd, node):
 
 class Managed(object):
     """ Interface class used to represent a managed data """
-    def __init__(self, name, axes):
+    def __init__(self, name, *axes):
         if name is not None and type(name) != str:
             raise ValueError('name of argument must be string')
         if type(axes) != tuple:
@@ -39,60 +39,60 @@ class Managed(object):
         else:
             raise JobArgMismatchException(self.name, self.axes, node)
 
-class ManagedTemplate(Managed):
+class Template(Managed):
     """ Represents a name templated by axes """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TemplateArg, splitmerge=arguments.MergeTemplateArg)
 
-class ManagedTempFile(Managed):
+class TempFile(Managed):
     """ Represents a temp file the can be written to but is not a dependency """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempFileArg)
 
-class ManagedUserInputFile(Managed):
+class InputFile(Managed):
     """ Interface class used to represent a user specified managed input file """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg)
 
-class ManagedUserOutputFile(Managed):
+class OutputFile(Managed):
     """ Interface class used to represent a user specified managed output file """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg)
 
-class ManagedInputObj(Managed):
+class TempInputObj(Managed):
     """ Interface class used to represent a managed input object """
     def prop(self, prop_name):
-        return ManagedInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
+        return TempInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
     def extract(self, func):
-        return ManagedInputObjExtract(self.name, self.axes, func)
+        return TempInputObjExtract(self.name, self.axes, func)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg)
 
-class ManagedOutputObj(Managed):
+class TempOutputObj(Managed):
     """ Interface class used to represent a managed output object """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputObjArg, splitmerge=arguments.TempSplitObjArg)
 
-class ManagedInputObjExtract(Managed):
+class TempInputObjExtract(Managed):
     """ Interface class used to represent a property of a managed
     input object """
     def __init__(self, name, axes, func):
-        Managed.__init__(self, name, axes)
+        Managed.__init__(self, name, *axes)
         self.func = func
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg, func=self.func)
 
-class ManagedInputFile(Managed):
+class TempInputFile(Managed):
     """ Interface class used to represent a managed input file """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputFileArg, splitmerge=arguments.TempMergeFileArg)
 
-class ManagedOutputFile(Managed):
+class TempOutputFile(Managed):
     """ Interface class used to represent a managed input file """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputFileArg, splitmerge=arguments.TempSplitFileArg)
 
-class ManagedInstance(Managed):
+class Instance(Managed):
     """ Interface class used to represent the instance of a job as
     an input parameter """
     def __init__(self, axis):
@@ -100,15 +100,19 @@ class ManagedInstance(Managed):
     def create_arg(self, resmgr, nodemgr, node):
         return arguments.InputInstanceArg(resmgr, nodemgr, node, self.axis)
 
-class ManagedInputChunks(Managed):
+class InputChunks(Managed):
     """ Interface class used to represent the list of chunks
     from a split along a specific axis """
+    def __init__(self, *axes):
+        Managed.__init__(self, None, *axes)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=None, splitmerge=arguments.InputChunksArg)
 
-class ManagedOutputChunks(Managed):
+class OutputChunks(Managed):
     """ Interface class used to represent the list of chunks
     from a split along a specific axis """
+    def __init__(self, *axes):
+        Managed.__init__(self, None, *axes)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=None, splitmerge=arguments.OutputChunksArg)
 
