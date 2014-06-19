@@ -526,13 +526,13 @@ if __name__ == '__main__':
                     mgd.Instance('byline_a'))
 
                 # Merge along the `byline_b` axis
-                self.sch.transform('merge_byline_a', ('byline_a',), self.ctx, merge_file_byline,
+                self.sch.transform('merge_byline_b', ('byline_a',), self.ctx, merge_file_byline,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
                     mgd.TempOutputFile('output_data', 'byline_a'))
 
                 # Merge along the `byline_a` axis
-                self.sch.transform('merge_byline_b', (), self.ctx, merge_file_byline,
+                self.sch.transform('merge_byline_a', (), self.ctx, merge_file_byline,
                     None,
                     mgd.TempInputFile('output_data', 'byline_a'),
                     mgd.OutputFile(self.output_filename))
