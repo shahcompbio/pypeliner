@@ -40,27 +40,89 @@ class Managed(object):
             raise JobArgMismatchException(self.name, self.axes, node)
 
 class Template(Managed):
-    """ Represents a name templated by axes """
+    """ Represents a name templated by axes 
+
+    `Template` objects will resolve the specified name templated by the given
+    axes.  `name` should be a format string, with named fields that match 
+    the names of the axes.  
+
+    For instance, `Template('{case}_details', 'case')` will resolve to the
+    strings 'tumour_details' and 'normal_details' if the `case` axis has chunks
+    'tumour' and 'normal'.
+
+    :param name: The format string to be resolved by pypeliner.  Each axis
+                 should appear at least once as a named field in the format
+                 string.
+    :param axes: The axes to use to resolve `name`.
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TemplateArg, splitmerge=arguments.MergeTemplateArg)
 
 class TempFile(Managed):
-    """ Represents a temp file the can be written to but is not a dependency """
+    """ Represents a temp file the can be written to but is not a dependency
+
+    `TempFile` objects will resolve to the path of a temporary file located
+    in pypeliner's temporary file space.  If axes are given, a new temporary
+    file will be created for each chunk of the given axes.  The file is not
+    guaranteed to exist after the job referencing the `TempFile` has finished
+    execution.
+
+    :param name: The name of the temporary file.  The temp file will have
+                 this filename, but different instances for different axis
+                 chunks will be located in different directories.
+    :param axes: The axes for the file.  This should be identical to the
+                 axes of the referencing job.
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempFileArg)
 
 class InputFile(Managed):
-    """ Interface class used to represent a user specified managed input file """
+    """ Interface class used to represent a user specified managed input file
+
+    `InputFile` objects will resolve the specified name templated by the given
+    axes.  `name` should be a format string, with named fields that match 
+    the names of the axes.  The modification time of the file will be used to
+    determine if the file has been modified, and whether rerun of jobs should
+    be triggered.
+
+    For instance, `InputFile('{case}.bam', 'case')` will resolve to the
+    strings 'tumour.bam' and 'normal.bam' if the `case` axis has chunks
+    'tumour' and 'normal'.
+
+    :param name: The name of the input file.  Each axis should appear at least
+                 once as a named field in the filename.
+    :param axes: The axes for the input file.
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg)
 
 class OutputFile(Managed):
-    """ Interface class used to represent a user specified managed output file """
+    """ Interface class used to represent a user specified managed output file
+
+    `OutputFile` objects will resolve the specified filename templated by the
+    given  axes.  `name` should be a format string, with named fields that match 
+    the names of the axes.  An `OutputFile` of the given name and axes is 
+    associated with a single job that creates that file.  The modification time
+    of the file will be used to determine if the file is outdated relative to
+    the inputs of the creating job.
+
+    For instance, `OutputFile('{case}.bam', 'case')` will resolve to the
+    strings 'tumour.bam' and 'normal.bam' if the `case` axis has chunks
+    'tumour' and 'normal'.
+
+    :param name: The name of the input file.  Each axis should appear at least
+                 once as a named field in the filename.
+    :param axes: The axes for the input file.
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg)
 
 class TempInputObj(Managed):
-    """ Interface class used to represent a managed input object """
+    """ Interface class used to represent a managed input object
+
+    `TempInputObj` objects will resolve to an object
+
+    """
     def prop(self, prop_name):
         return TempInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
     def extract(self, func):

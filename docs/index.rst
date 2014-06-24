@@ -17,8 +17,6 @@ Contents:
    api
 
 
-.. autoclass:: pypeliner.Managed.InputFile
-
 Indices and tables
 ==================
 
