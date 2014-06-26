@@ -170,7 +170,7 @@ class QsubJobQueue(SubProcessJobQueue):
         super(QsubJobQueue, self).__init__(modules)
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
-        self.local_queue = LocalJobQueue(temps_dir, modules)
+        self.local_queue = LocalJobQueue(modules)
     def create(self, ctx, job):
         if ctx.get('local', False):
             return LocalJob(ctx, job, self.modules)
@@ -282,7 +282,7 @@ class AsyncQsubJobQueue(object):
         self.poll_time = poll_time
         self.qstat = QstatJobStatus(poll_time, 10)
         self.jobs = dict()
-        self.local_queue = LocalJobQueue(temps_dir, modules)
+        self.local_queue = LocalJobQueue(modules)
     def __enter__(self):
         self.local_queue.__enter__()
         return self
