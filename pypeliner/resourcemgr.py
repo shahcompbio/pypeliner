@@ -21,8 +21,6 @@ class ResourceManager(object):
         self.temps_dir = temps_dir
         self.db_dir = db_dir
         self.temps_suffix = '.tmp'
-        self.aliases = dict()
-        self.rev_alias = collections.defaultdict(list)
     def __enter__(self):
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
         return self
@@ -55,33 +53,14 @@ class ResourceManager(object):
     def get_temp_filename(self, name, node):
         return self.get_final_filename(name, node) + self.temps_suffix
     def get_final_filename(self, name, node):
-        if (name, node) in self.aliases:
-            return self.get_final_filename(*self.aliases[(name, node)])
-        else:
-            return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
-    def add_alias(self, name, node, alias_name, alias_node):
-        self.aliases[(alias_name, alias_node)] = (name, node)
-        self.rev_alias[(name, node)].append((alias_name, alias_node))
-    def get_aliases(self, name, node):
-        for alias_name, alias_node in self.rev_alias[(name, node)]:
-            yield (alias_name, alias_node)
-            for alias_name_recurse, alias_node_recurse in self.get_aliases(alias_name, alias_node):
-                yield (alias_name_recurse, alias_node_recurse)
+        return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
     def is_temp_file(self, name, node):
         return str((name, node)) in self.createtimes_shelf
     def cleanup(self, depgraph):
-        to_remove = set()
-        for name, node in depgraph.obsolete:
-            if (name, node) in self.aliases:
-                continue
-            if not self.is_temp_file(name, node):
-                continue
-            alias_ids = set([(name, node)] + list(self.get_aliases(name, node)))
-            if alias_ids.issubset(depgraph.obsolete):
+        for name, node in set(depgraph.obsolete):
+            if self.is_temp_file(name, node):
                 filename = self.get_final_filename(name, node)
                 if os.path.exists(filename):
                     os.remove(filename)
-                to_remove.update(alias_ids)
-        for name, node in to_remove:
             depgraph.obsolete.remove((name, node))
 

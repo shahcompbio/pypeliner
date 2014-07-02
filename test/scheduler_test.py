@@ -312,57 +312,6 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['l-i-n-e-1-\n', '-l-i-n-e-2-\n', '-l-i-n-e-3-\n', '-l-i-n-e-4-\n', '-l-i-n-e-5-\n', '-l-i-n-e-6-\n', '-l-i-n-e-7-\n', '-l-i-n-e-8-'])
 
-            def test_change_axis(self):
-
-                self.create_scheduler()
-
-                # Read and modify a file and output to a temporary output file
-                # with name `mod_input_filename`
-                self.sch.transform('dofilestuff', (), self.ctx, do_file_stuff,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    mgd.TempOutputFile('mod_input_filename'),
-                    'm')
-
-                # Split the same input file by pairs of lines and output
-                # two lines per file
-                self.sch.transform('splitbyline', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    2,
-                    mgd.TempOutputFile('input_filename', 'byline'))
-                
-                # Do an identical split on `mod_input_filename`
-                self.sch.transform('splitbyline2', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('mod_input_filename'),
-                    2,
-                    mgd.TempOutputFile('mod_input_filename', 'byline2'))
-                
-                # Change the `mod_input_filename` split file to have the same axis as the first split
-                self.sch.changeaxis('changeaxis', (), 'mod_input_filename', 'byline2', 'byline')
-
-                # Modify split versions of `input_filename` and `mod_input_filename` in tandem, 
-                # concatenate both files together
-                self.sch.transform('dopairedstuff', ('byline',), self.ctx, do_paired_stuff,
-                    None,
-                    mgd.TempOutputFile('output_filename', 'byline'),
-                    mgd.TempInputFile('input_filename', 'byline'),
-                    mgd.TempInputFile('mod_input_filename', 'byline'))
-                
-                # Merge concatenated files and output
-                self.sch.transform('mergebychar', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_filename', 'byline'),
-                    mgd.OutputFile(self.output_filename))
-
-                self.sch.run(exec_queue)
-
-                with open(self.output_filename, 'r') as output_file:
-                    output = output_file.readlines()
-
-                self.assertEqual(output, ['line1\n', 'line2\n', '0mline1\n', '1mline2\n', 'line3\n', 'line4\n', '2mline3\n', '3mline4\n', 'line5\n', 'line6\n', '4mline5\n', '5mline6\n', 'line7\n', 'line8\n', '6mline7\n', '7mline8\n'])
-
             def test_split_getinstance(self):
 
                 self.create_scheduler()

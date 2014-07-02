@@ -145,11 +145,6 @@ class Scheduler(object):
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
         self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)
-    def changeaxis(self, name, axes, var_name, old_axis, new_axis):
-        """ Change the axis for a managed variable """
-        if name in self._abstract_jobs:
-            raise ValueError('Job already defined')
-        self._abstract_jobs[name] = jobs.AbstractChangeAxis(name, axes, var_name, old_axis, new_axis)
     def _create_jobs(self, resmgr, nodemgr):
         """ Create concrete jobs from abstract jobs given resource and
         node managers
