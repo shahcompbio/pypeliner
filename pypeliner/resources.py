@@ -95,6 +95,22 @@ class TempObjResource(Resource):
         return self.resmgr.retrieve_createtime(self.name, self.node, self.filename)
 
 
+def obj_equal(obj1, obj2):
+    try:
+        equal = obj1.__eq__(obj2)
+        if equal is not NotImplemented:
+            return equal
+    except AttributeError:
+        pass
+    if obj1.__class__ != obj2.__class__:
+        return False
+    try:
+        return obj1.__dict__ == obj2.__dict__
+    except AttributeError:
+        pass
+    return obj1 == obj2
+
+
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
     def __init__(self, resmgr, name, node):
@@ -123,8 +139,7 @@ class TempObjManager(object):
     def finalize(self, obj):
         with open(self.output_filename, 'wb') as f:
             pickle.dump(obj, f)
-        prev_obj = self.obj
-        if prev_obj is None or not obj == prev_obj:
+        if not obj_equal(obj, self.obj):
             with open(self.input_filename, 'wb') as f:
                 pickle.dump(obj, f)
 

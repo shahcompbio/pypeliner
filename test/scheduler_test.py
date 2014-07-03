@@ -808,8 +808,6 @@ else:
     class stuff:
         def __init__(self, some_string):
             self.some_string = some_string
-        def __eq__(self, other):
-            return isinstance(other, stuff) and self.some_string == other.some_string
 
     def read_stuff(filename):
         time.sleep(1)
