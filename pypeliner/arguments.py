@@ -4,11 +4,6 @@ import helpers
 import resources
 import resourcemgr
 
-class OutputMissingException(Exception):
-    def __init__(self, filename):
-        self.filename = filename
-    def __str__(self):
-        return 'expected output {0} missing'.format(self.filename)
 
 def resolve_arg(arg):
     """ Resolve an Arg object into a concrete argument """
@@ -62,7 +57,7 @@ class TempFileArg(Arg):
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
-        self.filename = resmgr.get_final_filename(name, node)
+        self.filename = resmgr.get_filename(name, node)
     def resolve(self):
         return self.filename
 
@@ -108,13 +103,12 @@ class InputFileArg(Arg):
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
+        self.resource = resources.UserResource(name, node)
     @property
     def inputs(self):
-        yield resources.UserResource(self.resolve())
+        yield self.resource
     def resolve(self):
-        return self.name.format(**dict(self.node))
+        return self.resource.filename
 
 
 class MergeFileArg(Arg):
@@ -131,14 +125,18 @@ class MergeFileArg(Arg):
         self.base_node = base_node
         self.merge_axis = merge_axis
     @property
+    def resources(self):
+        for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
+            yield resources.UserResource(self.name, node)
+    @property
     def inputs(self):
-        for filename in self.resolve().itervalues():
-            yield resources.UserResource(filename)
+        for resource in self.resources:
+            yield resource
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
-        for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resolved[node[-1][1]] = self.name.format(**dict(node))
+        for resource in self.resources:
+            resolved[resource.chunk] = resource.filename
         return resolved
 
 
@@ -152,20 +150,14 @@ class OutputFileArg(Arg):
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
-        self.filename = self.name.format(**dict(node))
-        self.temp_filename = self.filename + '.tmp'
+        self.resource = resources.UserResource(name, node)
     @property
     def outputs(self):
-        yield resources.UserResource(self.filename)
+        yield self.resource
     def resolve(self):
-        return self.temp_filename
+        return self.resource.filename + '.tmp'
     def finalize(self, resolved):
-        try:
-            os.rename(self.temp_filename, self.filename)
-        except OSError:
-            raise OutputMissingException(self.temp_filename)
+        self.resource.finalize(resolved)
 
 
 class SplitFileArg(Arg):
@@ -183,13 +175,13 @@ class SplitFileArg(Arg):
         self.base_node = base_node
         self.split_axis = split_axis
     @property
-    def filenames(self):
+    def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield self.name.format(**dict(node))
+            yield resources.UserResource(self.name, node)
     @property
     def outputs(self):
-        for filename in self.filenames:
-            yield resources.UserResource(filename)
+        for resource in self.resources:
+            yield resource
         yield self.nodemgr.get_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
@@ -197,32 +189,28 @@ class SplitFileArg(Arg):
     def resolve(self):
         return FilenameCallback(self.name, self.base_node, self.split_axis, UserFilenameCreator('.tmp'))
     def finalize(self, resolved):
-        self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.chunks)
-        for filename in self.filenames:
-            temp_filename = filename + '.tmp'
-            try:
-                os.rename(temp_filename, filename)
-            except OSError:
-                raise OutputMissingException(temp_filename)
+        self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.filenames.keys())
+        for resource in self.resources:
+            resource.finalize(resolved.filenames[resource.chunk])
 
 
 class TempInputObjArg(Arg):
     """ Temporary input object argument
 
-    Resolves to an object.
+    Resolves to an object.  If func is given, resolves to the return value of func called with object as the only
+    parameter.
 
     """
     def __init__(self, resmgr, nodemgr, name, node, func=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
+        self.resource = resources.TempObjManager(resmgr, name, node)
         self.func = func
     @property
     def inputs(self):
-        yield self.resmgr.create_input_object_resource(self.name, self.node)
+        yield self.resource.input
     def resolve(self):
-        obj = self.resmgr.retrieve_object(self.name, self.node)
+        obj = self.resource.obj
         if self.func is not None:
             obj = self.func(obj)
         return obj
@@ -242,17 +230,21 @@ class TempMergeObjArg(Arg):
         self.merge_axis = merge_axis
         self.func = func
     @property
-    def inputs(self):
+    def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield self.resmgr.create_input_object_resource(self.name, node)
+             yield resources.TempObjManager(self.resmgr, self.name, node)
+    @property
+    def inputs(self):
+        for resource in self.resources:
+            yield resource.input
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
-        for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            obj = self.resmgr.retrieve_object(self.name, node)
+        for resource in self.resources:
+            obj = resource.obj
             if self.func is not None:
                 obj = self.func(obj)
-            resolved[node[-1][1]] = obj
+            resolved[resource.chunk] = obj
         return resolved
 
 
@@ -265,13 +257,12 @@ class TempOutputObjArg(Arg):
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
+        self.resource = resources.TempObjManager(resmgr, name, node)
     @property
     def outputs(self):
-        yield self.resmgr.create_output_file_resource(self.name, self.node)
+        yield self.resource.output
     def finalize(self, resolved):
-        self.resmgr.finalize_object(self.name, self.node, resolved)
+        self.resource.finalize(resolved)
 
 
 class TempSplitObjArg(Arg):
@@ -288,18 +279,21 @@ class TempSplitObjArg(Arg):
         self.base_node = base_node
         self.split_axis = split_axis
     @property
-    def outputs(self):
+    def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield self.resmgr.create_output_file_resource(self.name, node)
+             yield resources.TempObjManager(self.resmgr, self.name, node)
+    @property
+    def outputs(self):
+        for resource in self.resources:
+            yield resource.output
         yield self.nodemgr.get_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
         return True
     def finalize(self, resolved):
         self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.keys())
-        for chunk, obj in resolved.iteritems():
-            node = self.base_node + ((self.split_axis, chunk),)
-            self.resmgr.finalize_object(self.name, node, obj)
+        for resource in self.resources:
+            resource.finalize(resolved[resource.chunk])
 
 
 class TempInputFileArg(Arg):
@@ -311,9 +305,7 @@ class TempInputFileArg(Arg):
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
-        self.resource = self.resmgr.create_input_file_resource(self.name, self.node)
+        self.resource = resources.TempFileResource(resmgr, name, node)
     @property
     def inputs(self):
         yield self.resource
@@ -334,18 +326,18 @@ class TempMergeFileArg(Arg):
         self.base_node = base_node
         self.merge_axis = merge_axis
     @property
-    def node_resources(self):
+    def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield node, self.resmgr.create_input_file_resource(self.name, node)
+            yield resources.TempFileResource(self.resmgr, self.name, node)
     @property
     def inputs(self):
-        for node, resource in self.node_resources:
+        for resource in self.resources:
             yield resource
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
-        for node, resource in self.node_resources:
-            resolved[node[-1][1]] = resource.filename
+        for resource in self.resources:
+            resolved[resource.chunk] = resource.filename
         return resolved
 
 
@@ -358,16 +350,14 @@ class TempOutputFileArg(Arg):
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
-        self.node = node
-        self.resource = self.resmgr.create_output_file_resource(self.name, self.node)
+        self.resource = resources.TempFileResource(resmgr, name, node)
     @property
     def outputs(self):
         yield self.resource
     def resolve(self):
-        return self.resource.filename
+        return self.resource.filename + '.tmp'
     def finalize(self, resolved):
-        self.resmgr.finalize_output(self.resource)
+        self.resource.finalize(resolved)
 
 
 class FilenameCallback(object):
@@ -378,10 +368,11 @@ class FilenameCallback(object):
         self.base_node = base_node
         self.split_axis = split_axis
         self.filename_creator = filename_creator
-        self.chunks = set()
+        self.filenames = dict()
     def __call__(self, chunk):
-        self.chunks.add(chunk)
-        filename = self.filename_creator(self.name, self.base_node + ((self.split_axis, chunk),))
+        node = self.base_node + ((self.split_axis, chunk),)
+        filename = self.filename_creator(self.name, node)
+        self.filenames[chunk] = filename
         helpers.makedirs(os.path.dirname(filename))
         return filename
     def __repr__(self):
@@ -404,7 +395,7 @@ class TempSplitFileArg(Arg):
     @property
     def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield self.resmgr.create_output_file_resource(self.name, node)
+            yield resources.TempFileResource(self.resmgr, self.name, node)
     @property
     def outputs(self):
         for resource in self.resources:
@@ -416,9 +407,9 @@ class TempSplitFileArg(Arg):
     def resolve(self):
         return FilenameCallback(self.name, self.base_node, self.split_axis, self.resmgr.filename_creator)
     def finalize(self, resolved):
-        self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.chunks)
+        self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.filenames.keys())
         for resource in self.resources:
-            self.resmgr.finalize_output(resource)
+            resource.finalize(resolved.filenames[resource.chunk])
 
 
 class InputInstanceArg(Arg):
@@ -433,6 +424,7 @@ class InputInstanceArg(Arg):
         return self.chunk
     def finalize(self, resolved):
         pass
+
 
 class InputChunksArg(Arg):
     """ Instance list of an axis as an argument
@@ -452,6 +444,7 @@ class InputChunksArg(Arg):
         return self.nodemgr.retrieve_chunks(self.axis, self.node)
     def finalize(self, resolved):
         pass
+
 
 class OutputChunksArg(Arg):
     """ Instance list of a job as an argument
