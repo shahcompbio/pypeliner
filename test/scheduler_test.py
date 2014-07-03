@@ -228,8 +228,8 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
 
-                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/input_data')))
-                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/output_data')))
+                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/input_data._o')))
+                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/output_data._o')))
 
             def test_cycle(self):
 

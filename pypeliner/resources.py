@@ -37,21 +37,18 @@ class UserResource(Resource):
 
 class TempResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, resmgr, name, node, temp_filename, final_filename):
+    def __init__(self, resmgr, name, node, filename, createtime):
         self.resmgr = resmgr
         self.name = name
         self.node = node
-        self.temp_filename = temp_filename
-        self.final_filename = final_filename
-    @property
-    def filename(self):
-        return self.temp_filename
+        self.filename = filename
+        self._createtime = createtime
     @property
     def exists(self):
-        return os.path.exists(self.final_filename)
+        return os.path.exists(self.filename)
     @property
     def createtime(self):
-        return self.resmgr.retrieve_createtime(self.name, self.node)
+        return self._createtime
     @property
     def id(self):
         return (self.name, self.node)

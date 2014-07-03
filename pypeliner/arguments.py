@@ -1,5 +1,4 @@
 import os
-import pickle
 
 import helpers
 import resources
@@ -18,6 +17,7 @@ def resolve_arg(arg):
     else:
         return arg
 
+
 class Arg(object):
     @property
     def inputs(self):
@@ -33,29 +33,47 @@ class Arg(object):
     def finalize(self, resolved):
         pass
 
+
 class TemplateArg(Arg):
-    """ Templated name argument """
+    """ Templated name argument 
+
+    The name parameter is treated as a string with named formatting.  Resolves to the name formatted using the node 
+    dictionary.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
-        self.filename = user_filename_creator(name, node)
+        self.filename = name.format(**dict(node))
     def resolve(self):
         return self.filename
 
+
 class TempFileArg(Arg):
-    """ Temporary file argument """
+    """ Temporary file argument
+
+    Resolves to a filename contained within the temporary files directory.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
+        self.filename = resmgr.get_final_filename(name, node)
     def resolve(self):
-        return self.resmgr.get_output(self.name, self.node).final_filename
+        return self.filename
+
 
 class MergeTemplateArg(Arg):
-    """ Temp input files merged along a single axis """
+    """ Temp input files merged along a single axis
+
+    The name parameter is treated as a string with named formatting.  Resolves to a dictionary with the keys as chunks
+    for the merge axis.  Each value is the name formatted using the merge node dictionary.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, merge_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -66,9 +84,9 @@ class MergeTemplateArg(Arg):
     def resolve(self):
         resolved = dict()
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resource = resources.UserResource(user_filename_creator(self.name, node))
-            resolved[node[-1][1]] = resource.filename
+            resolved[node[-1][1]] = self.name.format(**dict(node))
         return resolved
+
 
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
@@ -79,24 +97,33 @@ class UserFilenameCreator(object):
     def __repr__(self):
         return '{0}.{1}({2})'.format(resourcemgr.FilenameCreator.__module__, resourcemgr.FilenameCreator.__name__, self.suffix)
 
-user_filename_creator = UserFilenameCreator()
 
 class InputFileArg(Arg):
-    """ Input file argument """
+    """ Input file argument
+
+    The name argument is treated as a filename with named formatting.  Resolves to a filename formatted using the node
+    dictionary.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
-        self.filename = user_filename_creator(name, node)
     @property
     def inputs(self):
-        yield resources.UserResource(self.filename)
+        yield resources.UserResource(self.resolve())
     def resolve(self):
-        return self.filename
+        return self.name.format(**dict(self.node))
+
 
 class MergeFileArg(Arg):
-    """ Temp input files merged along a single axis """
+    """ Input files merged along a single axis
+
+    The name argument is treated as a filename with named formatting.  Resolves to a dictionary with keys as chunks for
+    the merge axis.  Each value is the filename formatted using the merge node dictonary.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, merge_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -105,24 +132,29 @@ class MergeFileArg(Arg):
         self.merge_axis = merge_axis
     @property
     def inputs(self):
-        for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield resources.UserResource(user_filename_creator(self.name, node))
+        for filename in self.resolve().itervalues():
+            yield resources.UserResource(filename)
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resource = resources.UserResource(user_filename_creator(self.name, node))
-            resolved[node[-1][1]] = resource.filename
+            resolved[node[-1][1]] = self.name.format(**dict(node))
         return resolved
 
+
 class OutputFileArg(Arg):
-    """ Input file argument """
+    """ Output file argument
+
+    The name argument is treated as a filename with named formatting.  Resolves to a filename formatted using the node
+    dictionary, including the '.tmp' suffix.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
-        self.filename = user_filename_creator(name, node)
+        self.filename = self.name.format(**dict(node))
         self.temp_filename = self.filename + '.tmp'
     @property
     def outputs(self):
@@ -135,8 +167,15 @@ class OutputFileArg(Arg):
         except OSError:
             raise OutputMissingException(self.temp_filename)
 
+
 class SplitFileArg(Arg):
-    """ Output file arguments from a split """
+    """ Output file arguments from a split
+
+    The name argument is treated as a filename with named formatting.  Resolves to a filename callback that can be used
+    to generate filenames based on a given split axis chunk.  Resolved filenames have the '.tmp' suffix.  Finalizing
+    involves removing the '.tmp' suffix for each file created by the job.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, split_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -144,9 +183,13 @@ class SplitFileArg(Arg):
         self.base_node = base_node
         self.split_axis = split_axis
     @property
-    def outputs(self):
+    def filenames(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield resources.UserResource(user_filename_creator(self.name, node))
+            yield self.name.format(**dict(node))
+    @property
+    def outputs(self):
+        for filename in self.filenames:
+            yield resources.UserResource(filename)
         yield self.nodemgr.get_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
@@ -155,17 +198,20 @@ class SplitFileArg(Arg):
         return FilenameCallback(self.name, self.base_node, self.split_axis, UserFilenameCreator('.tmp'))
     def finalize(self, resolved):
         self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.chunks)
-        for chunk in resolved.chunks:
-            node = self.base_node + ((self.split_axis, chunk),)
-            filename = user_filename_creator(self.name, node)
+        for filename in self.filenames:
             temp_filename = filename + '.tmp'
             try:
                 os.rename(temp_filename, filename)
             except OSError:
                 raise OutputMissingException(temp_filename)
 
+
 class TempInputObjArg(Arg):
-    """ Temp input object argument """
+    """ Temporary input object argument
+
+    Resolves to an object.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node, func=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -174,17 +220,20 @@ class TempInputObjArg(Arg):
         self.func = func
     @property
     def inputs(self):
-        yield self.resmgr.get_input(self.name, self.node)
+        yield self.resmgr.create_input_object_resource(self.name, self.node)
     def resolve(self):
-        resource = self.resmgr.get_input(self.name, self.node)
-        with open(resource.filename, 'rb') as f:
-            obj = pickle.load(f)
-            if self.func is not None:
-                obj = self.func(obj)
-            return obj
+        obj = self.resmgr.retrieve_object(self.name, self.node)
+        if self.func is not None:
+            obj = self.func(obj)
+        return obj
+
 
 class TempMergeObjArg(Arg):
-    """ Temp input object arguments merged along single axis """
+    """ Temp input object arguments merged along single axis
+
+    Resolves to an dictionary of objects with keys given by the merge axis chunks.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node, merge_axis, func=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -195,21 +244,24 @@ class TempMergeObjArg(Arg):
     @property
     def inputs(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield self.resmgr.get_input(self.name, node)
+            yield self.resmgr.create_input_object_resource(self.name, node)
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resource = self.resmgr.get_input(self.name, node)
-            with open(resource.filename, 'rb') as f:
-                obj = pickle.load(f)
-                if self.func is not None:
-                    obj = self.func(obj)
-                resolved[node[-1][1]] = obj
+            obj = self.resmgr.retrieve_object(self.name, node)
+            if self.func is not None:
+                obj = self.func(obj)
+            resolved[node[-1][1]] = obj
         return resolved
 
+
 class TempOutputObjArg(Arg):
-    """ Temp output object argument """
+    """ Temporary output object argument
+
+    Stores an object created by a job.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -217,15 +269,18 @@ class TempOutputObjArg(Arg):
         self.node = node
     @property
     def outputs(self):
-        yield self.resmgr.get_output(self.name, self.node)
+        yield self.resmgr.create_output_file_resource(self.name, self.node)
     def finalize(self, resolved):
-        resource = self.resmgr.get_output(self.name, self.node)
-        with open(resource.filename, 'wb') as f:
-            pickle.dump(resolved, f)
-        self.resmgr.finalize_output(resource)
+        self.resmgr.finalize_object(self.name, self.node, resolved)
+
 
 class TempSplitObjArg(Arg):
-    """ Temp output object arguments from a split """
+    """ Temporary output object arguments from a split
+
+    Stores a dictionary of objects created by a job.  The keys of the dictionary are taken as the chunks for the given
+    split axis.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, split_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -235,36 +290,43 @@ class TempSplitObjArg(Arg):
     @property
     def outputs(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield self.resmgr.get_output(self.name, node)
+            yield self.resmgr.create_output_file_resource(self.name, node)
         yield self.nodemgr.get_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
         return True
     def finalize(self, resolved):
         self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.keys())
-        for chunk, object in resolved.iteritems():
+        for chunk, obj in resolved.iteritems():
             node = self.base_node + ((self.split_axis, chunk),)
-            resource = self.resmgr.get_output(self.name, node)
-            with open(resource.filename, 'wb') as f:
-                pickle.dump(object, f)
-            self.resmgr.finalize_output(resource)
+            self.resmgr.finalize_object(self.name, node, obj)
+
 
 class TempInputFileArg(Arg):
-    """ Temp input file argument """
+    """ Temp input file argument
+
+    Resolves to a filename for a temporary file.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
+        self.resource = self.resmgr.create_input_file_resource(self.name, self.node)
     @property
     def inputs(self):
-        yield self.resmgr.get_input(self.name, self.node)
+        yield self.resource
     def resolve(self):
-        resource = self.resmgr.get_input(self.name, self.node)
-        return resource.filename
+        return self.resource.filename
+
 
 class TempMergeFileArg(Arg):
-    """ Temp input files merged along a single axis """
+    """ Temp input files merged along a single axis
+
+    Resolves to a dictionary of filenames of temporary files.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, merge_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -272,32 +334,41 @@ class TempMergeFileArg(Arg):
         self.base_node = base_node
         self.merge_axis = merge_axis
     @property
-    def inputs(self):
+    def node_resources(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield self.resmgr.get_input(self.name, node)
+            yield node, self.resmgr.create_input_file_resource(self.name, node)
+    @property
+    def inputs(self):
+        for node, resource in self.node_resources:
+            yield resource
         yield self.nodemgr.get_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
-        for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resource = self.resmgr.get_input(self.name, node)
+        for node, resource in self.node_resources:
             resolved[node[-1][1]] = resource.filename
         return resolved
 
+
 class TempOutputFileArg(Arg):
-    """ Temp output file argument """
+    """ Temp output file argument
+
+    Resolves to an output filename for a temporary file.  Finalizes with resource manager.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.node = node
+        self.resource = self.resmgr.create_output_file_resource(self.name, self.node)
     @property
     def outputs(self):
-        yield self.resmgr.get_output(self.name, self.node)
+        yield self.resource
     def resolve(self):
-        return self.resmgr.get_output(self.name, self.node).filename
+        return self.resource.filename
     def finalize(self, resolved):
-        resource = self.resmgr.get_output(self.name, self.node)
-        self.resmgr.finalize_output(resource)
+        self.resmgr.finalize_output(self.resource)
+
 
 class FilenameCallback(object):
     """ Argument to split jobs providing callback for filenames
@@ -316,8 +387,14 @@ class FilenameCallback(object):
     def __repr__(self):
         return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.name, self.base_node, self.split_axis, self.filename_creator)))
 
+
 class TempSplitFileArg(Arg):
-    """ Temp output file arguments from a split """
+    """ Temp output file arguments from a split
+
+    Resolves to a filename callback that can be used to create a temporary filename for each chunk of the split on the 
+    given axis.  Finalizes with resource manager to move from temporary filename to final filename.
+
+    """
     def __init__(self, resmgr, nodemgr, name, base_node, split_axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -325,9 +402,13 @@ class TempSplitFileArg(Arg):
         self.base_node = base_node
         self.split_axis = split_axis
     @property
-    def outputs(self):
+    def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield self.resmgr.get_output(self.name, node)
+            yield self.resmgr.create_output_file_resource(self.name, node)
+    @property
+    def outputs(self):
+        for resource in self.resources:
+            yield resource
         yield self.nodemgr.get_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
@@ -336,12 +417,16 @@ class TempSplitFileArg(Arg):
         return FilenameCallback(self.name, self.base_node, self.split_axis, self.resmgr.filename_creator)
     def finalize(self, resolved):
         self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.chunks)
-        for chunk in resolved.chunks:
-            resource = self.resmgr.get_output(self.name, self.base_node + ((self.split_axis, chunk),))
+        for resource in self.resources:
             self.resmgr.finalize_output(resource)
 
+
 class InputInstanceArg(Arg):
-    """ Instance of a job as an argument """
+    """ Instance of a job as an argument
+
+    Resolves to the instance of the given job for a specific axis.
+
+    """
     def __init__(self, resmgr, nodemgr, node, axis):
         self.chunk = dict(node)[axis]
     def resolve(self):
@@ -350,7 +435,11 @@ class InputInstanceArg(Arg):
         pass
 
 class InputChunksArg(Arg):
-    """ Instance list of an axis as an argument """
+    """ Instance list of an axis as an argument
+
+    Resolves to the list of chunks for the given axes.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node, axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
@@ -365,7 +454,11 @@ class InputChunksArg(Arg):
         pass
 
 class OutputChunksArg(Arg):
-    """ Instance list of a job as an argument """
+    """ Instance list of a job as an argument
+
+    Sets the list of chunks for the given axes.
+
+    """
     def __init__(self, resmgr, nodemgr, name, node, axis):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
