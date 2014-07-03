@@ -64,6 +64,7 @@ class TempFileResource(Resource):
         self.name = name
         self.node = node
         self.filename = resmgr.get_filename(name, node)
+        self.resmgr.register_disposable(name, node, self.filename)
     @property
     def exists(self):
         return os.path.exists(self.filename)
