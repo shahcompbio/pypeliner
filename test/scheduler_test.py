@@ -800,6 +800,38 @@ if __name__ == '__main__':
                 self.sch.run(exec_queue)
 
 
+            def test_simple_split_twice(self):
+
+                self.create_scheduler()
+
+                # Split input file to two different outputs with same split axis
+                self.sch.transform('split', (), self.ctx, split_files_twice,
+                    None,
+                    mgd.InputFile(self.input_filename),
+                    mgd.TempOutputFile('split1', 'byline'),
+                    mgd.TempOutputFile('split2', 'byline'))
+
+                # Merge to two different output files
+                self.sch.transform('merge1', (), self.ctx, merge_file_byline,
+                    None,
+                    mgd.TempInputFile('split1', 'byline'),
+                    mgd.OutputFile(self.output_n_filename.format(byfile='1')))
+
+                self.sch.transform('merge2', (), self.ctx, merge_file_byline,
+                    None,
+                    mgd.TempInputFile('split2', 'byline'),
+                    mgd.OutputFile(self.output_n_filename.format(byfile='2')))
+
+                self.sch.run(exec_queue)
+
+                with open(self.input_filename, 'r') as input_file:
+                    input_data = input_file.readlines()
+
+                for chunk in ('1', '2'):
+                    with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
+                        output_data = output_file.readlines()
+                        self.assertEqual(input_data, output_data)
+
 
         unittest.main()
 
@@ -837,6 +869,10 @@ else:
             finally:
                 if out_file is not None:
                     out_file.close()
+
+    def split_files_twice(in_filename, out_filename_callback_1, out_filename_callback_2):
+        split_file_byline(in_filename, 1, out_filename_callback_1)
+        split_file_byline(in_filename, 1, out_filename_callback_2)
 
     def do_file_stuff(in_filename, out_filename, toadd):
         time.sleep(1)
