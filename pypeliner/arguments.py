@@ -132,7 +132,7 @@ class MergeFileArg(Arg):
     def inputs(self):
         for resource in self.resources:
             yield resource
-        yield self.nodemgr.get_input(self.merge_axis, self.base_node)
+        yield self.nodemgr.get_merge_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
@@ -182,7 +182,7 @@ class SplitFileArg(Arg):
     def outputs(self):
         for resource in self.resources:
             yield resource
-        yield self.nodemgr.get_output(self.split_axis, self.base_node)
+        yield self.nodemgr.get_split_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
         return True
@@ -237,7 +237,7 @@ class TempMergeObjArg(Arg):
     def inputs(self):
         for resource in self.resources:
             yield resource.input
-        yield self.nodemgr.get_input(self.merge_axis, self.base_node)
+        yield self.nodemgr.get_merge_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
@@ -286,7 +286,7 @@ class TempSplitObjArg(Arg):
     def outputs(self):
         for resource in self.resources:
             yield resource.output
-        yield self.nodemgr.get_output(self.split_axis, self.base_node)
+        yield self.nodemgr.get_split_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
         return True
@@ -333,7 +333,7 @@ class TempMergeFileArg(Arg):
     def inputs(self):
         for resource in self.resources:
             yield resource
-        yield self.nodemgr.get_input(self.merge_axis, self.base_node)
+        yield self.nodemgr.get_merge_input(self.merge_axis, self.base_node)
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
@@ -400,7 +400,7 @@ class TempSplitFileArg(Arg):
     def outputs(self):
         for resource in self.resources:
             yield resource
-        yield self.nodemgr.get_output(self.split_axis, self.base_node)
+        yield self.nodemgr.get_split_output(self.split_axis, self.base_node)
     @property
     def is_split(self):
         return True
@@ -439,7 +439,7 @@ class InputChunksArg(Arg):
         self.axis = axis
     @property
     def inputs(self):
-        yield self.nodemgr.get_input(self.axis, self.node)
+        yield self.nodemgr.get_merge_input(self.axis, self.node)
     def resolve(self):
         return self.nodemgr.retrieve_chunks(self.axis, self.node)
     def finalize(self, resolved):
@@ -459,7 +459,7 @@ class OutputChunksArg(Arg):
         self.axis = axis
     @property
     def outputs(self):
-        yield self.nodemgr.get_output(self.axis, self.node)
+        yield self.nodemgr.get_split_output(self.axis, self.node)
     @property
     def is_split(self):
         return True

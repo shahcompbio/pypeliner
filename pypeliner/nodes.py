@@ -51,9 +51,9 @@ class NodeManager(object):
         with open(temp_chunks_filename, 'wb') as f:
             pickle.dump(chunks, f)
         helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
-    def get_input(self, axis, node):
+    def get_merge_input(self, axis, node):
         return resources.ChunksResource(self, axis, node)
-    def get_output(self, axis, node):
+    def get_split_output(self, axis, node):
         return resources.Dependency(axis, node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
