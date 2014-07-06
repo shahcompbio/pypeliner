@@ -258,3 +258,62 @@ class JobCallable(object):
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
 
+class AbstractChangeAxis(object):
+    """ Represents an abstract aliasing """
+    def __init__(self, name, axes, var_name, old_axis, new_axis):
+        self.name = name
+        self.axes = axes
+        self.var_name = var_name
+        self.old_axis = old_axis
+        self.new_axis = new_axis
+    def create_jobs(self, resmgr, nodemgr):
+        for node in nodemgr.retrieve_nodes(self.axes):
+            yield ChangeAxis(resmgr, nodemgr, self.name, node, self.var_name, self.old_axis, self.new_axis)
+
+class ChangeAxisException(Exception):
+    def __init__(self, old, new):
+        self.old = old
+        self.new = new
+    def __str__(self):
+        return 'axis change from {0} to {1}'.format(self.old, self.new)
+
+class ChangeAxis(Job):
+    """ Creates an alias of a managed object """
+    def __init__(self, resmgr, nodemgr, name, node, var_name, old_axis, new_axis):
+        self.resmgr = resmgr
+        self.nodemgr = nodemgr
+        self.name = name
+        self.node = node
+        self.var_name = var_name
+        self.old_axis = old_axis
+        self.new_axis = new_axis
+    @property
+    def _inputs(self):
+        for node in self.nodemgr.retrieve_nodes((self.old_axis,), self.node):
+            yield resources.Dependency(self.var_name, node)
+        yield self.nodemgr.get_merge_input(self.old_axis, self.node)
+        yield self.nodemgr.get_merge_input(self.new_axis, self.node)
+        for node_input in self.nodemgr.get_node_inputs(self.node):
+            yield node_input
+    @property
+    def _outputs(self):
+        for node in self.nodemgr.retrieve_nodes((self.new_axis,), self.node):
+            yield resources.Dependency(self.var_name, node)
+    @property
+    def out_of_date(self):
+        return True
+    @property
+    def trigger_regenerate(self):
+        return True
+    def create_callable(self):
+        return None
+    def finalize(self):
+        old_chunks = set(self.nodemgr.retrieve_chunks(self.old_axis, self.node))
+        new_chunks = set(self.nodemgr.retrieve_chunks(self.new_axis, self.node))
+        if (old_chunks != new_chunks):
+            raise ChangeAxisException(old_chunks, new_chunks)
+        for chunk in old_chunks:
+            old_node = self.node + ((self.old_axis, chunk),)
+            new_node = self.node + ((self.new_axis, chunk),)
+            self.resmgr.add_alias(self.var_name, old_node, self.var_name, new_node)
+

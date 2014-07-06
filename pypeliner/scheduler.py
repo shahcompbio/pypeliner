@@ -139,12 +139,19 @@ class Scheduler(object):
         return managed.Template(template, *axes)
     def commandline(self, name, axes, ctx, *args):
         """ Add a command line based transform to the pipeline """
+        if name in self._abstract_jobs:
+            raise ValueError('Job already defined')
         self.transform(name, axes, ctx, commandline.execute, None, *args)
     def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
         """ Add a transform to the pipeline """
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
         self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)
+    def changeaxis(self, name, axes, var_name, old_axis, new_axis):
+        """ Change the axis for a managed variable """
+        if name in self._abstract_jobs:
+            raise ValueError('Job already defined')
+        self._abstract_jobs[name] = jobs.AbstractChangeAxis(name, axes, var_name, old_axis, new_axis)
     def _create_jobs(self, resmgr, nodemgr):
         """ Create concrete jobs from abstract jobs given resource and
         node managers

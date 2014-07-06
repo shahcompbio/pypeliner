@@ -23,6 +23,8 @@ class ResourceManager(object):
         self.db_dir = db_dir
         self.temps_suffix = '.tmp'
         self.disposable = collections.defaultdict(set)
+        self.aliases = dict()
+        self.rev_alias = collections.defaultdict(list)
     def __enter__(self):
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
         return self
@@ -36,15 +38,30 @@ class ResourceManager(object):
             self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
         return self.createtimes_shelf.get(str((name, node)), None)
     def get_filename(self, name, node):
-        return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
+        if (name, node) in self.aliases:
+            return self.get_filename(*self.aliases[(name, node)])
+        else:
+            return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
+    def add_alias(self, name, node, alias_name, alias_node):
+        self.aliases[(alias_name, alias_node)] = (name, node)
+        self.rev_alias[(name, node)].append((alias_name, alias_node))
+    def get_aliases(self, name, node):
+        for alias_name, alias_node in self.rev_alias[(name, node)]:
+            yield (alias_name, alias_node)
+            for alias_name_recurse, alias_node_recurse in self.get_aliases(alias_name, alias_node):
+                yield (alias_name_recurse, alias_node_recurse)
     def is_temp_file(self, name, node):
         return str((name, node)) in self.createtimes_shelf
     def register_disposable(self, name, node, filename):
         self.disposable[(name, node)].add(filename)
     def cleanup(self, depgraph):
         for name, node in set(depgraph.obsolete):
-            for filename in self.disposable.get((name, node), ()):
-                if os.path.exists(filename):
-                    os.remove(filename)
+            if (name, node) in self.aliases:
+                continue
+            alias_ids = set([(name, node)] + list(self.get_aliases(name, node)))
+            if alias_ids.issubset(depgraph.obsolete):
+                for filename in self.disposable.get((name, node), ()):
+                    if os.path.exists(filename):
+                        os.remove(filename)
             depgraph.obsolete.remove((name, node))
 
