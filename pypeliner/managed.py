@@ -1,3 +1,35 @@
+"""
+pypeliner.managed
+~~~~~~~~~~~~~~~~~
+
+Interface classes used to describe objects managed by the pipeline system.
+
+Objects of each type can be used as placeholder arguments to :py:func:`pypeliner.scheduler.Scheduler.transform` or
+:py:func:`pypeliner.scheduler.Scheduler.commandline`.  During pipeline execution, the placeholder argument will be
+replaced by the appropriate file or object to create the function or command line arguments.
+
+Managed classes have a common set of parameters:
+
+* name - An identifier for the managed object
+* axes - The axes on which the managed object is defined
+
+Axes relate to parallelism.  A managed object with an empty list for axes has a single instance in the system.  A
+managed object with a single axis will have as many instances as were defined for that axis.  Axes can also be nested to
+arbitrary depth.
+
+For example, suppose we are running the same analysis on 2 datasets, thus our first axis is 'dataset' with 2 chunks 'A'
+and 'B'.  Each dataset is split by line, thus our second axis is 'line'.  Each dataset may have a different number of
+lines, and as such the number of chunks for the 'line' axis may be different between dataset 'A' and 'B'.  Thus if
+dataset 'A' has 2 lines nad 'B' has 1 line, a managed object defined on the axes 'dataset', 'line' will have the
+following instances: `{'dataset':'A', 'line':1}`, `{'dataset':'A', 'line':2}`, `{'dataset':'B', 'line':1}`.
+
+A managed object will resolve to a function or command line argument dependent on whether it is a regular input/output,
+merge input or split output.  Regular inputs/outputs have the same axes as the job to which they are given.  Merge
+inputs are inputs with a single additional axis, the merge axis.  Split outputs are outputs with a single additional
+axis, the split axis.
+
+"""
+
 import arguments
 
 class JobArgMismatchException(Exception):
@@ -42,8 +74,8 @@ class Managed(object):
 class Template(Managed):
     """ Represents a name templated by axes 
 
-    `Template` objects will resolve the specified name templated by the given
-    axes.  `name` should be a format string, with named fields that match 
+    `Template` objects will resolve the specified `name` templated by the given
+    `axes`.  `name` should be a format string, with named fields that match 
     the names of the axes.  
 
     For instance, `Template('{case}_details', 'case')` will resolve to the
@@ -77,13 +109,13 @@ class TempFile(Managed):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempFileArg)
 
 class InputFile(Managed):
-    """ Interface class used to represent a user specified managed input file
+    """ Interface class used to represent a user specified managed file input
 
-    `InputFile` objects will resolve the specified name templated by the given
-    axes.  `name` should be a format string, with named fields that match 
+    `InputFile` objects will resolve the specified `name` templated by the given
+    `axes`.  `name` should be a format string, with named fields that match 
     the names of the axes.  The modification time of the file will be used to
-    determine if the file has been modified, and whether rerun of jobs should
-    be triggered.
+    determine if the file has been modified more recently than a job's outputs,
+    in order to determine if a job must be run.
 
     For instance, `InputFile('{case}.bam', 'case')` will resolve to the
     strings 'tumour.bam' and 'normal.bam' if the `case` axis has chunks
@@ -92,19 +124,21 @@ class InputFile(Managed):
     :param name: The name of the input file.  Each axis should appear at least
                  once as a named field in the filename.
     :param axes: The axes for the input file.
+
+    For a merge input, `InputFile` will resolve to a dictionary of filenames
+    as specified above, with chunks of the merge axis as keys.
+
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg)
 
 class OutputFile(Managed):
-    """ Interface class used to represent a user specified managed output file
+    """ Interface class used to represent a user specified managed file output
 
     `OutputFile` objects will resolve the specified filename templated by the
     given  axes.  `name` should be a format string, with named fields that match 
     the names of the axes.  An `OutputFile` of the given name and axes is 
-    associated with a single job that creates that file.  The modification time
-    of the file will be used to determine if the file is outdated relative to
-    the inputs of the creating job.
+    associated with a single job that creates that file.
 
     For instance, `OutputFile('{case}.bam', 'case')` will resolve to the
     strings 'tumour.bam' and 'normal.bam' if the `case` axis has chunks
@@ -113,25 +147,73 @@ class OutputFile(Managed):
     :param name: The name of the input file.  Each axis should appear at least
                  once as a named field in the filename.
     :param axes: The axes for the input file.
+
+    For a split output, `OutputFile` will resolve to a callback function taking
+    the chunk of the split axis as its only parameter and returning the filename
+    for that chunk.
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg)
 
 class TempInputObj(Managed):
-    """ Interface class used to represent a managed input object
+    """ Interface class used to represent a managed object input
 
-    `TempInputObj` objects will resolve to an object
+    `TempInputObj` objects will resolve to an object managed by the pipeline
+    system.  The contents of the object are used for dependency tracking, as
+    described for :py:class:`pypeliner.managed.TempOutputObj`.
+
+    :param name: The name of the object.
+    :param axes: The axes for the object.
+
+    For a merge input, `TempInputObj` will resolve to a dictionary of objects
+    with chunks of the merge axis as keys.
 
     """
     def prop(self, prop_name):
+        """
+        Resolve to a property of the object instead of the object itself.
+
+        :param name: The name of the property.
+        """
         return TempInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
     def extract(self, func):
+        """
+        Resolve to the return value of the given function called on the object
+        rather than the object itself.
+        
+        :param func: The function to be executed on the object.
+
+        .. admonition:: Warning about state
+
+            The function provided should not have any state as this state 
+            cannot be tracked by the dependency system.  Appropriate uses
+            are a lambda function that accesses a dictionary entry or 
+            performs a fixed calculation.
+        """
         return TempInputObjExtract(self.name, self.axes, func)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg)
 
 class TempOutputObj(Managed):
-    """ Interface class used to represent a managed output object """
+    """ Interface class used to represent a managed object output
+
+    `TempOutputObj` objects are only appropriate as return values for calls 
+    to :py:func:`pypeliner.scheduler.Scheduler.transform`.  The object returned
+    by the function executed for a transform job will be stored by the pipeline
+    using `pickle`.
+
+    If returning a user specified type, it is advisable to add a `__eq__` method.
+    Dependency tracking for objects is done by checking if the object has changed
+    since the last call that created the object, and will call `__eq__`, or will
+    default to comparing `__dict__`.
+
+    :param name: The name of the object.
+    :param axes: The axes for the object.
+
+    For a split output, the pipeline system expects a dictionary of objects
+    with chunks of the split axis as keys.
+
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputObjArg, splitmerge=arguments.TempSplitObjArg)
 
@@ -145,18 +227,43 @@ class TempInputObjExtract(Managed):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg, func=self.func)
 
 class TempInputFile(Managed):
-    """ Interface class used to represent a managed input file """
+    """ Interface class used to represent a managed temporary file input
+
+    `TempInputFile` objects will resolve to a filename in the temporary file
+    space of the pipeline.  Temporary files are subject to garbage collection.
+
+    :param name: The name of the temporary file, basename only (no path
+                 information).
+    :param axes: The axes for the file.
+
+    For a merge input, `InputFile` will resolve to a dictionary of filenames,
+    with chunks of the merge axis as keys.
+
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputFileArg, splitmerge=arguments.TempMergeFileArg)
 
 class TempOutputFile(Managed):
-    """ Interface class used to represent a managed input file """
+    """ Interface class used to represent a managed temporary file output
+
+    `TempOutputFile` objects will resolve to a filename in the temporary file
+    space of the pipeline.  Temporary files are subject to garbage collection.
+
+    :param name: The name of the temporary file, basename only (no path
+                 information).
+    :param axes: The axes for the file.
+
+    For a split output, `TempOutputFile` will resolve to a callback function taking
+    the chunk of the split axis as its only parameter and returning the filename
+    for that chunk.
+    """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputFileArg, splitmerge=arguments.TempSplitFileArg)
 
 class Instance(Managed):
     """ Interface class used to represent the instance of a job as
-    an input parameter """
+    an input parameter
+    """
     def __init__(self, axis):
         self.axis = axis
     def create_arg(self, resmgr, nodemgr, node):

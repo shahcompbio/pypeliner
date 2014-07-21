@@ -1,3 +1,10 @@
+"""
+pypeliner.scheduler
+~~~~~~~~~~~~~~~~~~~
+
+Scheduling class.
+"""
+
 import os.path
 import copy
 import pickle
