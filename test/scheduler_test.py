@@ -2,6 +2,7 @@ import unittest
 import shutil
 import glob
 import os
+import time
 import logging
 
 import pypeliner
@@ -228,8 +229,8 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
 
-                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/input_data')))
-                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/output_data')))
+                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/input_data._o')))
+                self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/output_data._o')))
 
             def test_cycle(self):
 
@@ -315,6 +316,7 @@ if __name__ == '__main__':
             def test_change_axis(self):
 
                 self.create_scheduler()
+                self.sch.cleanup = False
 
                 # Read and modify a file and output to a temporary output file
                 # with name `mod_input_filename`
@@ -796,6 +798,60 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1!\n', 'line2!\n', 'line3!\n', 'line4!\n', 'line5!\n', 'line6!\n', 'line7!\n', 'line8!\n'])
 
+
+            def test_object_identical(self):
+
+                self.create_scheduler()
+
+                # Read data into a managed object
+                self.sch.transform('read', (), self.ctx, read_stuff,
+                    mgd.TempOutputObj('input_data'),
+                    mgd.InputFile(self.input_filename))
+
+                # Extract a property of the managed object, modify it
+                # and store the result in another managed object
+                self.sch.transform('do', (), self.ctx, do_stuff,
+                    mgd.TempOutputObj('output_data'),
+                    mgd.TempInputObj('input_data').prop('some_string'))
+
+                # Write the object to an output file
+                self.sch.transform('write', (), self.ctx, write_stuff,
+                    None,
+                    mgd.TempInputObj('output_data'),
+                    mgd.OutputFile(self.output_filename))
+
+                self.sch.cleanup = False
+                self.sch.run(exec_queue)
+
+                with open(self.output_filename, 'r') as output_file:
+                    output = output_file.readlines()
+
+                self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
+
+                self.create_scheduler()
+
+                shutil.copyfile(self.input_filename, self.input_filename+'.tmp')
+
+                # Read the same data into a managed object
+                self.sch.transform('read', (), self.ctx, read_stuff,
+                    mgd.TempOutputObj('input_data'),
+                    mgd.InputFile(self.input_filename+'.tmp'))
+
+                # Extract a property of the managed object, modify it
+                # and store the result in another managed object
+                self.sch.transform('do', (), self.ctx, do_assert,
+                    mgd.TempOutputObj('output_data'),
+                    mgd.TempInputObj('input_data').prop('some_string'))
+
+                # Write the object to an output file
+                self.sch.transform('write', (), self.ctx, do_assert,
+                    None,
+                    mgd.TempInputObj('output_data'),
+                    mgd.OutputFile(self.output_filename))
+
+                self.sch.run(exec_queue)
+
+
         unittest.main()
 
 else:
@@ -805,13 +861,16 @@ else:
             self.some_string = some_string
 
     def read_stuff(filename):
+        time.sleep(1)
         with open(filename, 'r') as f:
             return stuff(''.join(f.readlines()).rstrip())
 
     def split_stuff(stf):
+        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
     def split_file_byline(in_filename, lines_per_file, out_filename_callback):
+        time.sleep(1)
         with open(in_filename, 'r') as in_file:
             file_number = 0
             out_file = None
@@ -831,6 +890,7 @@ else:
                     out_file.close()
 
     def do_file_stuff(in_filename, out_filename, toadd):
+        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             line_number = 0
             for line in in_file:
@@ -838,6 +898,7 @@ else:
                 line_number += 1
 
     def merge_file_byline(in_filenames, out_filename):
+        time.sleep(1)
         with open(out_filename, 'w') as out_file:
             for id, in_filename in sorted(in_filenames.items()):
                 with open(in_filename, 'r') as in_file:
@@ -845,57 +906,70 @@ else:
                         out_file.write(line)
 
     def split_by_line(stf):
+        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(stf.some_string.split('\n'))])
 
     def split_by_char(stf):
+        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
     def do_stuff(a):
+        time.sleep(1)
         return a + '-'
 
     def do_paired_stuff(output_filename, input1_filename, input2_filename):
+        time.sleep(1)
         os.system('cat ' + input1_filename + ' ' + input2_filename + ' > ' + output_filename)
 
     def merge_stuff(stfs):
+        time.sleep(1)
         merged = ''
         for split, stf in sorted(stfs.iteritems()):
             merged = merged + stf
         return merged
 
     def write_stuff(a, filename):
+        time.sleep(1)
         with open(filename, 'w') as f:
             f.write(a)
 
     def append_to_lines(in_filename, append, out_filename):
+        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line.rstrip() + append + '\n')
 
     def append_to_lines_instance(in_filename, instance, out_filename):
+        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line.rstrip() + str(instance) + '\n')
 
     def copy_file(in_filename, out_filename):
+        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line)
 
     def write_list(in_list, out_filename):
+        time.sleep(1)
         with open(out_filename, 'w') as out_file:
             for a in sorted(in_list):
                 out_file.write(str(a))
 
     def do_nothing(*arg):
+        time.sleep(1)
         pass
 
     def do_assert(*arg):
         assert False
 
     def set_chunks():
+        time.sleep(1)
         return [1, 2]
 
     def file_transform(in_filename, out_filename, prefix, template_filename):
+        time.sleep(1)
         with open(template_filename, 'w'):
             pass
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
@@ -903,11 +977,13 @@ else:
                 out_file.write('{0}'.format(prefix) + line)
 
     def write_files(out_filename_callback):
+        time.sleep(1)
         for chunk in (1, 2):
             with open(out_filename_callback(chunk), 'w') as f:
                 f.write('file{0}\n'.format(chunk))
 
     def check_temp(output_filename, temp_filename):
+        time.sleep(1)
         with open(output_filename, 'w') as output_file:
             output_file.write(temp_filename)
 

@@ -1,6 +1,7 @@
 import os
 import collections
 import shelve
+import pickle
 
 import resources
 import nodes
@@ -21,6 +22,7 @@ class ResourceManager(object):
         self.temps_dir = temps_dir
         self.db_dir = db_dir
         self.temps_suffix = '.tmp'
+        self.disposable = collections.defaultdict(set)
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
     def __enter__(self):
@@ -28,35 +30,16 @@ class ResourceManager(object):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         self.createtimes_shelf.close()
-    def get_input(self, name, node):
-        final_filename = self.get_final_filename(name, node)
-        return resources.TempResource(self, name, node, final_filename, final_filename)
-    def get_output(self, name, node):
-        temp_filename = self.get_temp_filename(name, node)
-        final_filename = self.get_final_filename(name, node)
-        return resources.TempResource(self, name, node, temp_filename, final_filename)
-    def finalize_output(self, resource):
-        final_filename = self.get_final_filename(resource.name, resource.node)
-        try:
-            os.rename(resource.filename, final_filename)
-        except OSError:
-            raise OutputMissingException(resource.filename)
-        self.update_createtime(resource.name, resource.node, os.path.getmtime(final_filename))
     @property
     def filename_creator(self):
         return FilenameCreator(self.temps_dir, self.temps_suffix)
-    def retrieve_createtime(self, name, node):
-        final_filename = self.get_final_filename(name, node)
-        if os.path.exists(final_filename):
-            self.createtimes_shelf[str((name, node))] = os.path.getmtime(final_filename)
+    def retrieve_createtime(self, name, node, filename):
+        if os.path.exists(filename):
+            self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
         return self.createtimes_shelf.get(str((name, node)), None)
-    def update_createtime(self, name, node, createtime):
-        self.createtimes_shelf[str((name, node))] = createtime
-    def get_temp_filename(self, name, node):
-        return self.get_final_filename(name, node) + self.temps_suffix
-    def get_final_filename(self, name, node):
+    def get_filename(self, name, node):
         if (name, node) in self.aliases:
-            return self.get_final_filename(*self.aliases[(name, node)])
+            return self.get_filename(*self.aliases[(name, node)])
         else:
             return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
     def add_alias(self, name, node, alias_name, alias_node):
@@ -69,19 +52,16 @@ class ResourceManager(object):
                 yield (alias_name_recurse, alias_node_recurse)
     def is_temp_file(self, name, node):
         return str((name, node)) in self.createtimes_shelf
+    def register_disposable(self, name, node, filename):
+        self.disposable[(name, node)].add(filename)
     def cleanup(self, depgraph):
-        to_remove = set()
-        for name, node in depgraph.obsolete:
+        for name, node in set(depgraph.obsolete):
             if (name, node) in self.aliases:
-                continue
-            if not self.is_temp_file(name, node):
                 continue
             alias_ids = set([(name, node)] + list(self.get_aliases(name, node)))
             if alias_ids.issubset(depgraph.obsolete):
-                filename = self.get_final_filename(name, node)
-                if os.path.exists(filename):
-                    os.remove(filename)
-                to_remove.update(alias_ids)
-        for name, node in to_remove:
+                for filename in self.disposable.get((name, node), ()):
+                    if os.path.exists(filename):
+                        os.remove(filename)
             depgraph.obsolete.remove((name, node))
 

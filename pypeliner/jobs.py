@@ -290,9 +290,9 @@ class ChangeAxis(Job):
     @property
     def _inputs(self):
         for node in self.nodemgr.retrieve_nodes((self.old_axis,), self.node):
-            yield self.resmgr.get_input(self.var_name, node)
-        yield self.nodemgr.get_input(self.old_axis, self.node)
-        yield self.nodemgr.get_input(self.new_axis, self.node)
+            yield resources.Dependency(self.var_name, node)
+        yield self.nodemgr.get_merge_input(self.old_axis, self.node)
+        yield self.nodemgr.get_merge_input(self.new_axis, self.node)
         for node_input in self.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
@@ -304,7 +304,7 @@ class ChangeAxis(Job):
         return True
     @property
     def trigger_regenerate(self):
-        return False
+        return True
     def create_callable(self):
         return None
     def finalize(self):
@@ -316,3 +316,4 @@ class ChangeAxis(Job):
             old_node = self.node + ((self.old_axis, chunk),)
             new_node = self.node + ((self.new_axis, chunk),)
             self.resmgr.add_alias(self.var_name, old_node, self.var_name, new_node)
+
