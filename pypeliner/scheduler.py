@@ -145,12 +145,51 @@ class Scheduler(object):
         """
         return managed.Template(template, *axes)
     def commandline(self, name, axes, ctx, *args):
-        """ Add a command line based transform to the pipeline """
+        """ Add a command line based transform to the pipeline
+
+        This call is equivalent to::
+
+            self.transform(name, axes, ctx, commandline.execute, None, *args)
+
+        See :py:func:`pypeliner.scheduler.transform`
+
+        """
+
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
+
         self.transform(name, axes, ctx, commandline.execute, None, *args)
+
     def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
-        """ Add a transform to the pipeline """
+        """ Add a transform to the pipeline
+
+        :param name: unique name of the job, used to identify the job in logs and when
+                     submitting instances to the exec queue
+        :param axes: axes of the job.  defines the axes on which the job will operate.  A
+                     job with an empty list for the axes has a single instance.  A job with
+                     one axis in the axes list will have as many instances as were defined
+                     for that axis by the split that is responsible for that axis.
+        :param ctx: context of the job as a dictionary of key, value pairs.  The context
+                    is given to the exec queue and provides a way of communicating jobs
+                    specific requirements such as memory and cpu usage.  Setting
+                    `ctx['local'] = True` will result in the job being run locally on
+                    the calling machine even when a cluster is being used.
+        :param func: The function to call for this job.
+        :param ret: The return value 
+        :param args: The list of positional arguments to be used for the function call.
+        :param kwargs: The list of keyword arguments to be used for the function call.
+
+        Any value in args or kwargs that is an instance of
+        :py:class:`pypeliner.managed.Managed` will be resolved to a pipeline managed
+        file or object at runtime.  See :py:mod:`pypeliner.managed`.
+
+        Acceptable values given for `ret` are restricted to a subset of
+        :py:class:`pypeliner.managed.Managed` derived classes that represent output
+        objects.  The return value of `func` will be stored and used by the pipelining
+        system according to the specific details of the :py:class:`pypeliner.managed.Managed`
+        derived class.
+
+        """
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
         self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)

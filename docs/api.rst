@@ -20,9 +20,12 @@ Managed Objects
 .. autoclass:: TempOutputObj
 .. autoclass:: TempInputFile
 .. autoclass:: TempOutputFile
-.. autoclass:: Instance
+.. autoclass:: InputInstance
 .. autoclass:: InputChunks
 .. autoclass:: OutputChunks
+
+Scheduler
+---------
 
 .. automodule:: pypeliner.scheduler
 
