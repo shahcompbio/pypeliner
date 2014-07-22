@@ -14,8 +14,8 @@ Managed classes have a common set of parameters:
 * axes - The axes on which the managed object is defined
 
 Axes relate to parallelism.  A managed object with an empty list for axes has a single instance in the system.  A
-managed object with a single axis will have as many instances as were defined for that axis.  Axes can also be nested to
-arbitrary depth.
+managed object with a single axis will have as many instances as there are chunks defined for that axis.  Axes can also
+be nested to arbitrary depth.
 
 For example, suppose we are running the same analysis on 2 datasets, thus our first axis is 'dataset' with 2 chunks 'A'
 and 'B'.  Each dataset is split by line, thus our second axis is 'line'.  Each dataset may have a different number of
@@ -86,6 +86,7 @@ class Template(Managed):
                  should appear at least once as a named field in the format
                  string.
     :param axes: The axes to use to resolve `name`.
+
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TemplateArg, splitmerge=arguments.MergeTemplateArg)
@@ -104,6 +105,7 @@ class TempFile(Managed):
                  chunks will be located in different directories.
     :param axes: The axes for the file.  This should be identical to the
                  axes of the referencing job.
+
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempFileArg)
@@ -144,13 +146,14 @@ class OutputFile(Managed):
     strings 'tumour.bam' and 'normal.bam' if the `case` axis has chunks
     'tumour' and 'normal'.
 
-    :param name: The name of the input file.  Each axis should appear at least
+    :param name: The name of the output file.  Each axis should appear at least
                  once as a named field in the filename.
-    :param axes: The axes for the input file.
+    :param axes: The axes for the output file.
 
     For a split output, `OutputFile` will resolve to a callback function taking
     the chunk of the split axis as its only parameter and returning the filename
     for that chunk.
+
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg)
@@ -256,13 +259,19 @@ class TempOutputFile(Managed):
     For a split output, `TempOutputFile` will resolve to a callback function taking
     the chunk of the split axis as its only parameter and returning the filename
     for that chunk.
+
     """
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputFileArg, splitmerge=arguments.TempSplitFileArg)
 
-class Instance(Managed):
-    """ Interface class used to represent the instance of a job as
-    an input parameter
+class InputInstance(Managed):
+    """ Interface class used to represent an input chunk associated with the
+    job instance
+
+    :param axis: The axis of interest for which to obtain chunk information.
+
+    Resolves to the chunk of its job's instance for a given axis.
+
     """
     def __init__(self, axis):
         self.axis = axis
@@ -270,16 +279,34 @@ class Instance(Managed):
         return arguments.InputInstanceArg(resmgr, nodemgr, node, self.axis)
 
 class InputChunks(Managed):
-    """ Interface class used to represent the list of chunks
-    from a split along a specific axis """
+    """ Interface class used to represent an input chunk list for a specific axis
+
+    :param axes: The axes of interest for which to obtain a list of chunks.
+
+    `InputChunks` acts similar to a merge.  The specified axes should match
+    the axes of its job, with a single additional axis as for a merge.  
+    Resolves to a list of chunks for the given 'merge' axis.
+
+    """
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
     def create_arg(self, resmgr, nodemgr, node):
         return self._create_arg(resmgr, nodemgr, node, normal=None, splitmerge=arguments.InputChunksArg)
 
 class OutputChunks(Managed):
-    """ Interface class used to represent the list of chunks
-    from a split along a specific axis """
+    """ Interface class used to represent an output that defines the list of
+    chunks for a specific axis
+
+    :param axes: The axes for which chunks will be set.
+
+    `OutputChunks` acts similar to a split object.  `OutputChunks` objects are
+    only appropriate as return values for calls to
+    :py:func:`pypeliner.scheduler.Scheduler.transform`.  The specified axes should
+    match the axes of its job, with a single additional axis as for a split.  The
+    pipeline system expects the job function to return a list, which is then
+    interpreted as the list of chunks for the given 'split' axis.
+
+    """
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
     def create_arg(self, resmgr, nodemgr, node):
