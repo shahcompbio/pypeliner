@@ -24,10 +24,20 @@ Managed Objects
 .. autoclass:: InputChunks
 .. autoclass:: OutputChunks
 
-Scheduler
----------
+Scheduler Object
+----------------
 
 .. automodule:: pypeliner.scheduler
 
 .. autoclass:: Scheduler
+	:members:
+
+Pypeliner Object
+----------------
+
+.. automodule:: pypeliner.easypypeliner
+
+.. autofunction:: add_arguments
+
+.. autoclass:: EasyPypeliner
 	:members:

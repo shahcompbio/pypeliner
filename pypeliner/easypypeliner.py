@@ -1,3 +1,46 @@
+"""
+pypeliner.easypypeliner
+-----------------------
+
+The following options are supported via the config dictionary argument to 
+:py:class:`pypeliner.easypypeliner.EasyPypeliner` or as command line arguments
+by calling :py:func:`pypeliner.easypypeliner.add_arguments` on an
+`argparse.ArgumentParser` object and passing the argument dictionary to
+:py:class:`pypeliner.easypypeliner.EasyPypeliner`.
+
+    tmpdir
+        Location of pypeliner database, temporary files and logs.
+
+    submit
+        Type of exec queue to use for job submission.
+
+    nativespec
+        Tequired for qsub based job submission, specifies how to request memory from
+        the cluster system.  Nativespec is treated as a python style format string
+        and uses the job's context to resolve named.
+
+    maxjobs
+        The maximum number of jobs to execute in parallel, either on a cluster or
+        using subprocess to create multiple processes.
+
+    repopulate
+        Recreate all temporary files that may have been cleaned up during a previous
+        run in which garbage collection was enabled.  Files may be subsequently 
+        garbage collected after creation depending on the `nocleanup` option.
+
+    nocleanup
+        Do not clean up temporary files.  Does not recreate files that were garbage
+        collected in a previous run of the pipeline.
+
+    noprune
+        Do not prune jobs that are not necessary for the requested outputs.  Run
+        all jobs.
+
+    pretend
+        Do not run any jobs, instead just print what would be run.
+
+"""
+
 import sys
 import logging
 import os
@@ -26,7 +69,8 @@ config_infos.append(ConfigInfo('pretend', bool, False, 'do nothing, report initi
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 config_defaults['loglevel'] = logging.WARNING
 
-def add_argument(argparser, config_info):
+
+def _add_argument(argparser, config_info):
     args = list()
     kwargs = dict()
     args.append('--' + config_info.name)
@@ -42,14 +86,36 @@ def add_argument(argparser, config_info):
     argparser.add_argument(*args, **kwargs)
 
 def add_arguments(argparser):
+    """ Add pypeliner arguments to an argparser object
+
+    :param argparser: `argparse.ArgumentParser` object to which pypeliner specific 
+                      arguments should be added.  See
+                      :py:mod:`pypeliner.easypypeliner` for available options.
+
+    Add arguments to an `argparse.ArgumentParser` object to allow command line control
+    of pypeliner.  The options should be extracted after calling 
+    `argparse.ArgumentParser.parse_args`, converted to a dictionary using `vars`
+    and provided to the initializer of a :py:mod:`pypeliner.easypypeliner.EasyPypeliner`
+    object.
+
+    """
     group = argparser.add_argument_group('pypeliner arguments')
     for config_info in config_infos:
-        add_argument(group, config_info)
+        _add_argument(group, config_info)
     group.add_argument('--debug', help='Print debug info', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING)
     group.add_argument('--verbose', help='Verbose', action="store_const", dest="loglevel", const=logging.INFO)
 
+
 class EasyPypeliner(object):
-    ''' Helper class for easy logging, scheduler setup '''
+    """ Helper class for easy logging, scheduler setup
+
+    :param modules: list of modules pypeliner must import before running functions
+                    for this pipeline.  These modules will be imported prior to
+                    calling any of the user functions added to the pipeline.
+    :param config: dictionary of configuration options.  See
+                   :py:mod:`pypeliner.easypypeliner` for available options.
+
+    """
     def __init__(self, modules, config):
         self.modules = modules
         self.config = dict([(info.name, info.default) for info in config_infos])
