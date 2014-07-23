@@ -103,7 +103,7 @@ if __name__ == '__main__':
                     None,
                     mgd.InputFile(self.input_n_filename, 'byfile'),
                     mgd.OutputFile(self.output_n_filename, 'byfile'),
-                    mgd.Instance('byfile'),
+                    mgd.InputInstance('byfile'),
                     mgd.Template(self.output_n_template, 'byfile'))
                 
                 # Merge output files indexed by axis `byfile` into a single output file
@@ -381,7 +381,7 @@ if __name__ == '__main__':
                 self.sch.transform('append', ('byline',), self.ctx, append_to_lines_instance,
                     None,
                     mgd.TempInputFile('input_filename', 'byline'),
-                    mgd.Instance('byline'),
+                    mgd.InputInstance('byline'),
                     mgd.TempOutputFile('output_filename', 'byline'))
                 
                 # Merge files and output
@@ -525,7 +525,7 @@ if __name__ == '__main__':
                     None,
                     mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
                     mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.Instance('byline_a'))
+                    mgd.InputInstance('byline_a'))
 
                 # Merge along the `byline_b` axis
                 self.sch.transform('merge_byline_b', ('byline_a',), self.ctx, merge_file_byline,
