@@ -31,7 +31,9 @@ import jobs
 
 class Scheduler(object):
     """ Main Pypeline class for queueing a set of jobs and running
-    those jobs according to their dependencies """
+    those jobs according to their dependencies
+
+    """
     def __init__(self):
         self._logger = logging.getLogger('scheduler')
         self._abstract_jobs = dict()
@@ -42,108 +44,43 @@ class Scheduler(object):
         self.prune = True
         self.set_pipeline_dir('./')
         self.freeze = True
+
     def __setattr__(self, attr, value):
         if getattr(self, "freeze", False) and not hasattr(self, attr):
             raise AttributeError("Setting new attribute")
         super(Scheduler, self).__setattr__(attr, value)
+ 
     def set_pipeline_dir(self, pipeline_dir):
         pipeline_dir = helpers.abspath(pipeline_dir)
         self.db_dir = os.path.join(pipeline_dir, 'db')
         self.temps_dir = os.path.join(pipeline_dir, 'tmp')
         self.logs_dir = os.path.join(pipeline_dir, 'log')
+ 
     @property
     def db_dir(self):
         return self._db_dir
     @db_dir.setter
     def db_dir(self, value):
         self._db_dir = helpers.abspath(value)
+
     @property
     def nodes_dir(self):
         return os.path.join(self.db_dir, 'nodes')
+
     @property
     def temps_dir(self):
         return self._temps_dir
     @temps_dir.setter
     def temps_dir(self, value):
         self._temps_dir = helpers.abspath(value)
+
     @property
     def logs_dir(self):
         return self._logs_dir
     @logs_dir.setter
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
-    def ifile(self, name, axes=()):
-        """ Create a ManagedInputFile input file representing a managed argument.
-        The ManagedInputFile should be given to transform instead of a real argument
-        """
-        return managed.TempInputFile(name, *axes)
-    def ofile(self, name, axes=()):
-        """ Create a ManagedOutputFile output file representing a managed argument.
-        The ManagedOutputFile should be given to transform instead of a real argument
-        """
-        return managed.TempOutputFile(name, *axes)
-    def tmpfile(self, name, axes=()):
-        """ Create a ManagedTempFile representing a managed temporary filename.
-        If ManagedTempFile is given to transform in place of an argument, when
-        the function is called the ManagedTempFile will be replaced with the a
-        valid temporary filename.
-        """
-        return managed.TempFile(name, *axes)
-    def iobj(self, name, axes=()):
-        """ Create a ManagedInputObj object representing a managed argument.
-        The ManagedInputObj should be given to transform instead of a real argument.
-        Can only returned.
-        """
-        return managed.TempInputObj(name, *axes)
-    def oobj(self, name, axes=()):
-        """ Create a ManagedOutputObj object representing a managed argument.
-        The ManagedOutputObj should be given to transform instead of a real argument.
-        Can only be an argument.
-        """
-        return managed.TempOutputObj(name, *axes)
-    def inst(self, axis):
-        """ Create a ManagedInstance placeholder for job instances.
-        If ManagedInstance is given to transform in place of an argument, when
-        the function is called the ManagedInstance will be replaced with the chunk
-        for the given axis.
-        """
-        return managed.Instance(axis)
-    def ichunks(self, axes):
-        """ Create a ManagedInputChunks placeholder for chunks of a split on an axis.
-        If ManagedInputChunks is given to transform in place of an argument, when
-        the function is called the ManagedInputChunks will be replaced with the chunk
-        for the given axis of the given node.
-        """
-        return managed.InputChunks(*axes)
-    def ochunks(self, axes):
-        """ Create an ManagedOutputChunks placeholder for chunks of a split on an axis.
-        If ManagedOutputChunks is given as the return value to be used for a call to 
-        transform, the list returned by the function will be used as the list of chunks
-        for the given axis.
-        """
-        return managed.OutputChunks(*axes)
-    def input(self, filename, axes=()):
-        """ Create a ManagedUserInputFile placeholder for an input file.
-        If ManagedUserInputFile is given to transform in place of an argument, when
-        the function is called the ManagedUserInputFile will be replaced with the input
-        filename.
-        """
-        return managed.InputFile(filename, *axes)
-    def output(self, filename, axes=()):
-        """ Create a ManagedUserOutputFile placeholder for an output file.
-        If ManagedUserOutputFile is given to transform in place of an argument, when
-        the function is called the ManagedUserOutputFile will be replaced with a temp
-        filename, and after successful completion of the associated job, the
-        temp file will be moved to the given output filename.
-        """
-        return managed.OutputFile(filename, *axes)
-    def template(self, template, axes=()):
-        """ Create a ManagedTemplate placeholder for a name templated by the given axes.
-        If ManagedTemplate is given to transform in place of an argument, when the transform
-        function is called, the ManagedTemplate will be resolved to a complete name that will
-        replace the argument.
-        """
-        return managed.Template(template, *axes)
+
     def commandline(self, name, axes, ctx, *args):
         """ Add a command line based transform to the pipeline
 
@@ -193,11 +130,25 @@ class Scheduler(object):
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
         self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)
+
     def changeaxis(self, name, axes, var_name, old_axis, new_axis):
-        """ Change the axis for a managed variable """
+        """ Change the axis for a managed variable
+
+        :param name: unique name of the change axis job, used to identify the job in logs
+                     and when submitting instances to the exec queue
+        :param axes: base axes of the managed object for which the axis change is requested.
+                     only the last axis may be changed, thus all previous axes should be
+                     given here as a list
+        :param var_name: name of the managed object for which the axis change is requested.
+        :param old_axis: previous axis on which the managed object is defined.
+        :param new_axis: new axis for the new managed object.  The new object will be defined
+                         on this axis and will be equivalent to the previous object.
+
+        """
         if name in self._abstract_jobs:
             raise ValueError('Job already defined')
         self._abstract_jobs[name] = jobs.AbstractChangeAxis(name, axes, var_name, old_axis, new_axis)
+
     def _create_jobs(self, resmgr, nodemgr):
         """ Create concrete jobs from abstract jobs given resource and
         node managers
@@ -207,6 +158,7 @@ class Scheduler(object):
             for job in abstract_job.create_jobs(resmgr, nodemgr):
                 jobs[job.id] = job
         return jobs
+
     def _depgraph_regenerate(self, resmgr, nodemgr, jobs, depgraph):
         """ regenerate dependency graph based on concrete jobs """
         inputs = set((input for job in jobs.itervalues() for input in job.pipeline_inputs))
@@ -216,6 +168,7 @@ class Scheduler(object):
             outputs = set((output for job in jobs.itervalues() for output in job.outputs))
         inputs = inputs.difference(outputs)
         depgraph.regenerate(inputs, outputs, jobs.values())
+
     def run(self, exec_queue):
         """ Run the pipeline """
         helpers.makedirs(self.db_dir)
@@ -288,6 +241,7 @@ class Scheduler(object):
             if failing:
                 self._logger.error('pipeline failed')
                 raise helpers.PipelineException('pipeline failed')
+
     @contextlib.contextmanager
     def PipelineLock(self):
         lock_directory = os.path.join(self.db_dir, 'lock')
@@ -299,6 +253,7 @@ class Scheduler(object):
             yield
         finally:
             os.rmdir(lock_directory)
+            
     def pretend(self):
         """ Pretend run the pipeline """
         depgraph = graph.DependencyGraph()
