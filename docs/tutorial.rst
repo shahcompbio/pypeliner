@@ -142,5 +142,6 @@ Add the job and run::
 
     pyp.sch.run()
 
-Running the script above with ``-h`` shows the command line options available to control a pipeline.  The options are described in the :py:mod:`pypeliner.app` api reference.
+Running the script above with ``-h`` shows the command line options available to control a pipeline.  The options are
+described in the :py:mod:`pypeliner.app` api reference.
 
