@@ -18,7 +18,7 @@ For example, suppose we are running the same analysis on 2 datasets, thus our fi
 and 'B'.  Each dataset is split by line, thus our second axis is 'line'.  Each dataset may have a different number of
 lines, and as such the number of chunks for the 'line' axis may be different between dataset 'A' and 'B'.  Thus if
 dataset 'A' has 2 lines nad 'B' has 1 line, a managed object defined on the axes 'dataset', 'line' will have the
-following instances: `{'dataset':'A', 'line':1}`, `{'dataset':'A', 'line':2}`, `{'dataset':'B', 'line':1}`.
+following instances: ``{'dataset':'A', 'line':1}``, ``{'dataset':'A', 'line':2}``, ``{'dataset':'B', 'line':1}``.
 
 A managed object will resolve to a function or command line argument dependent on whether it is a regular input/output,
 merge input or split output.  Regular inputs/outputs have the same axes as the job to which they are given.  Merge

@@ -10,7 +10,7 @@ Import pypeliner::
 
     import pypeliner
 
-Create an `argparse.ArgumentParser` object to handle command line arguments
+Create an ``argparse.ArgumentParser`` object to handle command line arguments
 including a config, then parse the arguments::
 
     argparser = argparse.ArgumentParser()
@@ -20,7 +20,7 @@ including a config, then parse the arguments::
     argparser.add_argument('arg2', help='Additional argument 2')
     args = vars(argparser.parse_args())
 
-Read in the config.  Here we are using a python script as a config::
+Read in the config.  Here we are using a python syntax style config::
 
     config = {}
     execfile(args['config'], config)
@@ -42,7 +42,7 @@ Add jobs and run::
 The following options are supported via the config dictionary argument to 
 :py:class:`pypeliner.app.Pypeline` or as command line arguments
 by calling :py:func:`pypeliner.app.add_arguments` on an
-`argparse.ArgumentParser` object and passing the argument dictionary to
+``argparse.ArgumentParser`` object and passing the argument dictionary to
 :py:class:`pypeliner.app.Pypeline`.
 
     tmpdir
@@ -125,13 +125,13 @@ def _add_argument(argparser, config_info):
 def add_arguments(argparser):
     """ Add pypeliner arguments to an argparser object
 
-    :param argparser: `argparse.ArgumentParser` object to which pypeliner specific 
+    :param argparser: ``argparse.ArgumentParser`` object to which pypeliner specific 
                       arguments should be added.  See
                       :py:mod:`pypeliner.app` for available options.
 
-    Add arguments to an `argparse.ArgumentParser` object to allow command line control
+    Add arguments to an ``argparse.ArgumentParser`` object to allow command line control
     of pypeliner.  The options should be extracted after calling 
-    `argparse.ArgumentParser.parse_args`, converted to a dictionary using `vars`
+    ``argparse.ArgumentParser.parse_args``, converted to a dictionary using `vars`
     and provided to the initializer of a :py:mod:`pypeliner.app.Pypeline`
     object.
 
