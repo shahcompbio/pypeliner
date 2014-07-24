@@ -16,7 +16,7 @@ if __name__ == '__main__':
     import bwaalign
 
     argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    pypeliner.easypypeliner.add_arguments(argparser)
+    pypeliner.app.add_arguments(argparser)
     argparser.add_argument('config', help='Configuration Filename')
     argparser.add_argument('fastq1', help='Fastq End 1 Filename')
     argparser.add_argument('fastq2', help='Fastq End 2 Filename')
@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.easypypeliner.EasyPypeliner([bwaalign], config)
+    pyp = pypeliner.app.Pypeline([bwaalign], config)
 
     lowmem = {'mem':1}
     medmem = {'mem':8}
