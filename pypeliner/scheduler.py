@@ -97,7 +97,7 @@ class Scheduler(object):
 
     def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
-        provided python function `func` to take input dependencies and create/update 
+        provided python function ``func`` to take input dependencies and create/update 
         output dependents.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -109,7 +109,7 @@ class Scheduler(object):
         :param ctx: context of the job as a dictionary of key, value pairs.  The context
                     is given to the exec queue and provides a way of communicating jobs
                     specific requirements such as memory and cpu usage.  Setting
-                    `ctx['local'] = True` will result in the job being run locally on
+                    ``ctx['local'] = True`` will result in the job being run locally on
                     the calling machine even when a cluster is being used.
         :param func: The function to call for this job.
         :param ret: The return value 
@@ -120,9 +120,9 @@ class Scheduler(object):
         :py:class:`pypeliner.managed.Managed` will be resolved to a pipeline managed
         file or object at runtime.  See :py:mod:`pypeliner.managed`.
 
-        Acceptable values given for `ret` are restricted to a subset of
+        Acceptable values given for ``ret`` are restricted to a subset of
         :py:class:`pypeliner.managed.Managed` derived classes that represent output
-        objects.  The return value of `func` will be stored and used by the pipelining
+        objects.  The return value of ``func`` will be stored and used by the pipelining
         system according to the specific details of the :py:class:`pypeliner.managed.Managed`
         derived class.
 

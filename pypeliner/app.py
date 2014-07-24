@@ -92,9 +92,13 @@ import helpers
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
+log_levels = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
+submit_types = ('local', 'qsub', 'asyncqsub', 'pbs', 'drmaa')
+
 config_infos = list()
 config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of intermediate pipeline files'))
-config_infos.append(ConfigInfo('submit', ('local', 'qsub', 'asyncqsub', 'pbs', 'drmaa'), 'local', 'job submission system'))
+config_infos.append(ConfigInfo('loglevel', log_levels, log_levels[2], 'logging level for console messages'))
+config_infos.append(ConfigInfo('submit', submit_types, submit_types[0], 'job submission system'))
 config_infos.append(ConfigInfo('nativespec', str, '', 'qsub native specification'))
 config_infos.append(ConfigInfo('maxjobs', int, 1, 'maximum number of parallel jobs'))
 config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporaries'))
@@ -104,7 +108,6 @@ config_infos.append(ConfigInfo('noprune', bool, False, 'do not prune unecessary 
 config_infos.append(ConfigInfo('pretend', bool, False, 'do nothing, report initial jobs to be run'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
-config_defaults['loglevel'] = logging.WARNING
 
 
 def _add_argument(argparser, config_info):
@@ -139,8 +142,6 @@ def add_arguments(argparser):
     group = argparser.add_argument_group('pypeliner arguments')
     for config_info in config_infos:
         _add_argument(group, config_info)
-    group.add_argument('--debug', help='Print debug info', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING)
-    group.add_argument('--verbose', help='Verbose', action="store_const", dest="loglevel", const=logging.INFO)
 
 
 class Pypeline(object):
@@ -152,7 +153,8 @@ class Pypeline(object):
     :param config: dictionary of configuration options.  See
                    :py:mod:`pypeliner.app` for available options.
 
-
+    The Pipeline class sets up logging, creates an execution queue, and creates
+    the scheduler with options provided by the conifg argument.
 
     """
     def __init__(self, modules, config):
