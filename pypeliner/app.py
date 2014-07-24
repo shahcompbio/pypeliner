@@ -48,6 +48,14 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
     tmpdir
         Location of pypeliner database, temporary files and logs.
 
+    loglevel
+        Logging level for console messages.  Valid logging levels are:
+            - CRITICAL
+            - ERROR
+            - WARNING
+            - INFO
+            - DEBUG
+
     submit
         Type of exec queue to use for job submission.
 

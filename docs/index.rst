@@ -26,6 +26,7 @@ Contents:
 
    installation
    quickstart
+   tutorial
    examples
    api
 
