@@ -1,8 +1,6 @@
 """
-pypeliner.scheduler
-~~~~~~~~~~~~~~~~~~~
+Job scheduling class
 
-Scheduling class.
 """
 
 import os.path
@@ -30,8 +28,8 @@ import jobs
 
 
 class Scheduler(object):
-    """ Main Pypeline class for queueing a set of jobs and running
-    those jobs according to their dependencies
+    """ Job scheduling class for queueing a set of jobs and running
+    those jobs according to their dependencies.
 
     """
     def __init__(self):
@@ -98,7 +96,9 @@ class Scheduler(object):
         self.transform(name, axes, ctx, commandline.execute, None, *args)
 
     def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
-        """ Add a transform to the pipeline
+        """ Add a transform to the pipeline.  A transform defines a job that uses the
+        provided python function `func` to take input dependencies and create/update 
+        output dependents.
 
         :param name: unique name of the job, used to identify the job in logs and when
                      submitting instances to the exec queue
@@ -132,7 +132,8 @@ class Scheduler(object):
         self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)
 
     def changeaxis(self, name, axes, var_name, old_axis, new_axis):
-        """ Change the axis for a managed variable
+        """ Change the axis for a managed variable.  This acts as a regular jobs with
+        input dependencies and output dependents as for jobs created using transform.
 
         :param name: unique name of the change axis job, used to identify the job in logs
                      and when submitting instances to the exec queue
@@ -170,7 +171,19 @@ class Scheduler(object):
         depgraph.regenerate(inputs, outputs, jobs.values())
 
     def run(self, exec_queue):
-        """ Run the pipeline """
+        """ Run the pipeline
+
+        :param exec_queue: queue to which jobs will be submitted.  The queues implemented
+                           in :py:mod:`pypeliner.execqueue` should suffice for most purposes
+
+        Call this function after adding jobs to the scheduler using
+        :py:func:`pypeliner.scheduler.Scheduler.transform` etc.  Jobs will be run locally or
+        remotely using the `exec_queue` provided until completion.  On failure, the function
+        will wait for the remaining jobs to finish but will not submit new ones.  The first
+        interrupt (control-C) in this function will result in the sessation of new job creation,
+        and the second interrupt will attempt to cleanly cancel all jobs.
+
+        """
         helpers.makedirs(self.db_dir)
         helpers.makedirs(self.nodes_dir)
         helpers.makedirs(self.temps_dir)
@@ -255,7 +268,12 @@ class Scheduler(object):
             os.rmdir(lock_directory)
             
     def pretend(self):
-        """ Pretend run the pipeline """
+        """ Pretend run the pipeline.
+
+        Print jobs that would be run, but do not actually run them.  May halt before completion of
+        the pipeline if some axes have not yet been defined.
+
+        """
         depgraph = graph.DependencyGraph()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)

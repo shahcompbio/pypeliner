@@ -1,7 +1,4 @@
 """
-pypeliner.managed
-~~~~~~~~~~~~~~~~~
-
 Interface classes used to describe objects managed by the pipeline system.
 
 Objects of each type can be used as placeholder arguments to :py:func:`pypeliner.scheduler.Scheduler.transform` or

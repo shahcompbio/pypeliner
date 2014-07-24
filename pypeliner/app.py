@@ -1,12 +1,49 @@
 """
-pypeliner.easypypeliner
------------------------
+Pipeline application functionality
+
+Provides classes and functions to help creation of a pipeline application.
+Using the code below it should be possible to create a pipeline application
+with the full functionality of pypeliner with only a few lines of code.
+Typically, the first few lines of a pipeline application would be as follows.
+
+Import pypeliner::
+
+    import pypeliner
+
+Create an `argparse.ArgumentParser` object to handle command line arguments
+including a config, then parse the arguments::
+
+    argparser = argparse.ArgumentParser()
+    pypeliner.app.add_arguments(argparser)
+    argparser.add_argument('config', help='Configuration Filename')
+    argparser.add_argument('arg1', help='Additional argument 1')
+    argparser.add_argument('arg2', help='Additional argument 2')
+    args = vars(argparser.parse_args())
+
+Read in the config.  Here we are using a python script as a config::
+
+    config = {}
+    execfile(args['config'], config)
+
+Override config options with command line arguments::
+
+    config.update(args)
+
+Create a :py:class:`pypeliner.app.Pypeline` object with the config::
+
+    pyp = pypeliner.app.Pypeline([], config)
+
+Add jobs and run::
+
+    pyp.sch.transform(...)
+    pyp.sch.commandline(...)
+    pyp.sch.run()
 
 The following options are supported via the config dictionary argument to 
-:py:class:`pypeliner.easypypeliner.EasyPypeliner` or as command line arguments
-by calling :py:func:`pypeliner.easypypeliner.add_arguments` on an
+:py:class:`pypeliner.app.Pypeline` or as command line arguments
+by calling :py:func:`pypeliner.app.add_arguments` on an
 `argparse.ArgumentParser` object and passing the argument dictionary to
-:py:class:`pypeliner.easypypeliner.EasyPypeliner`.
+:py:class:`pypeliner.app.Pypeline`.
 
     tmpdir
         Location of pypeliner database, temporary files and logs.
@@ -90,12 +127,12 @@ def add_arguments(argparser):
 
     :param argparser: `argparse.ArgumentParser` object to which pypeliner specific 
                       arguments should be added.  See
-                      :py:mod:`pypeliner.easypypeliner` for available options.
+                      :py:mod:`pypeliner.app` for available options.
 
     Add arguments to an `argparse.ArgumentParser` object to allow command line control
     of pypeliner.  The options should be extracted after calling 
     `argparse.ArgumentParser.parse_args`, converted to a dictionary using `vars`
-    and provided to the initializer of a :py:mod:`pypeliner.easypypeliner.EasyPypeliner`
+    and provided to the initializer of a :py:mod:`pypeliner.app.Pypeline`
     object.
 
     """
@@ -106,14 +143,16 @@ def add_arguments(argparser):
     group.add_argument('--verbose', help='Verbose', action="store_const", dest="loglevel", const=logging.INFO)
 
 
-class EasyPypeliner(object):
-    """ Helper class for easy logging, scheduler setup
+class Pypeline(object):
+    """ Pipeline application helper class
 
     :param modules: list of modules pypeliner must import before running functions
                     for this pipeline.  These modules will be imported prior to
                     calling any of the user functions added to the pipeline.
     :param config: dictionary of configuration options.  See
-                   :py:mod:`pypeliner.easypypeliner` for available options.
+                   :py:mod:`pypeliner.app` for available options.
+
+
 
     """
     def __init__(self, modules, config):
@@ -151,6 +190,9 @@ class EasyPypeliner(object):
             self.exec_queue = drmaaqueue.DrmaaJobQueue(self.modules, self.config['nativespec'])
 
         self.sch = pypeliner.scheduler.Scheduler()
+        """ :py:class:`pypeliner.scheduler.Scheduler` object to which jobs are added using 
+        :py:func:`pypeliner.scheduler.Scheduler.transform` etc. """
+
         self.sch.set_pipeline_dir(self.config['tmpdir'])
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])

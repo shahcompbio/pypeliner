@@ -1,7 +1,7 @@
 .. _api:
 
-API
-===
+API Reference
+=============
 
 Below we document the interface classes and functions of pypeliner.
 
@@ -32,12 +32,13 @@ Scheduler Object
 .. autoclass:: Scheduler
 	:members:
 
-Pypeliner Object
-----------------
+Pypeline Object
+---------------
 
-.. automodule:: pypeliner.easypypeliner
+.. automodule:: pypeliner.app
 
 .. autofunction:: add_arguments
 
-.. autoclass:: EasyPypeliner
+.. autoclass:: Pypeline
 	:members:
+
