@@ -138,10 +138,93 @@ Add the job and run::
         pypeliner.managed.TempInputFile('tmp.sai'),
         pypeliner.managed.InputFile(args['reads']),
         '>',
-        pypeliner.managed.TempOutputFile(args['alignments']))
+        pypeliner.managed.OutputFile(args['alignments']))
 
     pyp.sch.run()
 
 Running the script above with ``-h`` shows the command line options available to control a pipeline.  The options are
 described in the :py:mod:`pypeliner.app` api reference.
+
+Adding a python function
+------------------------
+
+At some point in your pipeline you may wish to transform your data using a small amount of python code.  With pypeliner
+you can add a python function to your pipeline in a similar way to adding command lines.
+
+For example, perhaps you have the following function that filters sam files (produced by ``bwa samse``) to remove
+unmapped reads::
+
+    def filter_unmapped(in_sam_filename, out_sam_filename):
+        with open(in_sam_filename, 'r') as in_sam_file, open(out_sam_filename, 'w') as out_sam_file:
+            for line in in_sam_file:
+                fields = line.split('\t')
+                if line.startswith('@') or not flag & 0x4:
+                    out_sam_file.write(line)
+
+We can add this function to the end of our pipeline and thus post-process the results of ``bwa samse`` using
+:py:func:`pypeliner.scheduler.Scheduler.transform` as follows::
+
+    pyp.sch.commandline('bwa_samse', (), {},
+        'bwa', 'samse',
+        pypeliner.managed.InputFile(args['genome']),
+        pypeliner.managed.TempInputFile('tmp.sai'),
+        pypeliner.managed.InputFile(args['reads']),
+        '>',
+        pypeliner.managed.TempOutputFile('raw.sam'))
+
+    pyp.sch.transform('filter_unmapped', (), {},
+        filter_unmapped,
+        None,
+        pypeliner.managed.TempInputFile('raw.sam'),
+        pypeliner.managed.OutputFile(args['alignments']))
+
+    pyp.sch.run()
+
+Note that we have made the output of ``bwa samse`` a temporary output file named ``raw.sam``, and given it as input to
+``filter_unmapped``.  The 4th argument to ``transform`` is the python function we wish to call.  The 5th can be
+``None``, or a managed object that stores the return value of the function.  The remaining arguments, as ``*args`` and
+``**kwargs`` are mapped directly to the ``*args`` and ``**kwargs`` of the specified function.
+
+Note that the function will be packaged up and called remotely on a node if a cluster is being used, so there is no harm
+in adding computationally intensive functionality to a transform.
+
+The function must be importable, and thus cannot be defined in the main script.  A workaround if you want to define the
+function in your main script is as follows::
+
+    if __name__ == '__main__':
+
+        import myscript
+
+        ...
+
+        pyp.sch.transform('filter_unmapped', (), {},
+            myscript.filter_unmapped,
+
+        ...
+
+    else:
+
+        def filter_unmapped(in_sam_filename, out_sam_filename):
+
+        ...
+
+If the function is defined in a separate module, you must add it to the module list given as the first argument of
+:py:class:`pypeliner.app.Pypeline`::
+
+    import mymod
+
+    pyp = pypeliner.app.Pypeline([mymod], config)
+
+    ...
+
+    pyp.sch.transform('filter_unmapped', (), {},
+        mymod.filter_unmapped,
+
+    ...
+
+
+
+
+
+
 
