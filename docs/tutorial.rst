@@ -63,7 +63,7 @@ Then run the jobs using an execution queue::
     with pypeliner.execqueue.LocalJobQueue([]) as exec_queue: 
         scheduler.run(exec_queue)
 
-Trivially, the syntax is slightly different for executing a command line.  The ``>`` argument will be familiar to `bash` users as a way of redirecting output to a file, and the meaning in pypeline is the same.
+Trivially, the syntax is slightly different for executing a command line.  The ``>`` argument will be familiar to `bash` users as a way of redirecting output to a file, and the meaning in pypeliner is the same.
 
 Additionally, we are wrapping input and output files using the following classes:
 
