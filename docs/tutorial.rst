@@ -25,7 +25,7 @@ Say we want to run the command line tool `bwa`, which involves 2 steps.  We can 
 There are a number of issues with the above code that seem minor in this context but become
 arduous when the size and complexity of the pipeline grows.
 
-    * if ``bwa samse`` fails and our script exits, ``bwa samse`` will be needlessly rerun despite
+    * if ``bwa samse`` fails and our script exits, ``bwa aln`` will be needlessly rerun despite
       valid results being available
     * ``tmp.sai`` is an intermediate file, and we dont really care where it resides, but it
       would be benefiical if it were cleaned up after the commands are run sucessfully
