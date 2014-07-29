@@ -2,7 +2,7 @@
 Pipeline application functionality
 
 Provides classes and functions to help creation of a pipeline application.
-Using the code below it should be possible to create a pipeline application
+Using this module, it should be possible to create a pipeline application
 with the full functionality of pypeliner with only a few lines of code.
 Typically, the first few lines of a pipeline application would be as follows.
 
