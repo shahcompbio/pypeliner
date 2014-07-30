@@ -4,6 +4,7 @@ import glob
 import os
 import time
 import logging
+import itertools
 
 import pypeliner
 import pypeliner.managed as mgd
@@ -861,36 +862,22 @@ else:
             self.some_string = some_string
 
     def read_stuff(filename):
-        time.sleep(1)
         with open(filename, 'r') as f:
             return stuff(''.join(f.readlines()).rstrip())
 
     def split_stuff(stf):
-        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
     def split_file_byline(in_filename, lines_per_file, out_filename_callback):
-        time.sleep(1)
         with open(in_filename, 'r') as in_file:
-            file_number = 0
-            out_file = None
-            out_file_lines = None
-            try:
-                for line in in_file:
-                    if out_file is None or out_file_lines == lines_per_file:
-                        if out_file is not None:
-                            out_file.close()
-                        out_file = open(out_filename_callback(file_number), 'w')
-                        out_file_lines = 0
-                        file_number += 1
-                    out_file.write(line)
-                    out_file_lines += 1
-            finally:
-                if out_file is not None:
-                    out_file.close()
+            def line_group(line, line_idx=itertools.count()):
+                return int(next(line_idx) / lines_per_file)
+            for file_idx, lines in itertools.groupby(in_file, key=line_group):
+                with open(out_filename_callback(file_idx), 'w') as out_file:
+                    for line in lines:
+                        out_file.write(line)
 
     def do_file_stuff(in_filename, out_filename, toadd):
-        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             line_number = 0
             for line in in_file:
@@ -898,7 +885,6 @@ else:
                 line_number += 1
 
     def merge_file_byline(in_filenames, out_filename):
-        time.sleep(1)
         with open(out_filename, 'w') as out_file:
             for id, in_filename in sorted(in_filenames.items()):
                 with open(in_filename, 'r') as in_file:
@@ -906,70 +892,57 @@ else:
                         out_file.write(line)
 
     def split_by_line(stf):
-        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(stf.some_string.split('\n'))])
 
     def split_by_char(stf):
-        time.sleep(1)
         return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
     def do_stuff(a):
-        time.sleep(1)
         return a + '-'
 
     def do_paired_stuff(output_filename, input1_filename, input2_filename):
-        time.sleep(1)
         os.system('cat ' + input1_filename + ' ' + input2_filename + ' > ' + output_filename)
 
     def merge_stuff(stfs):
-        time.sleep(1)
         merged = ''
         for split, stf in sorted(stfs.iteritems()):
             merged = merged + stf
         return merged
 
     def write_stuff(a, filename):
-        time.sleep(1)
         with open(filename, 'w') as f:
             f.write(a)
 
     def append_to_lines(in_filename, append, out_filename):
-        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line.rstrip() + append + '\n')
 
     def append_to_lines_instance(in_filename, instance, out_filename):
-        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line.rstrip() + str(instance) + '\n')
 
     def copy_file(in_filename, out_filename):
-        time.sleep(1)
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
             for line in in_file:
                 out_file.write(line)
 
     def write_list(in_list, out_filename):
-        time.sleep(1)
         with open(out_filename, 'w') as out_file:
             for a in sorted(in_list):
                 out_file.write(str(a))
 
     def do_nothing(*arg):
-        time.sleep(1)
         pass
 
     def do_assert(*arg):
         assert False
 
     def set_chunks():
-        time.sleep(1)
         return [1, 2]
 
     def file_transform(in_filename, out_filename, prefix, template_filename):
-        time.sleep(1)
         with open(template_filename, 'w'):
             pass
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
@@ -977,13 +950,11 @@ else:
                 out_file.write('{0}'.format(prefix) + line)
 
     def write_files(out_filename_callback):
-        time.sleep(1)
         for chunk in (1, 2):
             with open(out_filename_callback(chunk), 'w') as f:
                 f.write('file{0}\n'.format(chunk))
 
     def check_temp(output_filename, temp_filename):
-        time.sleep(1)
         with open(output_filename, 'w') as output_file:
             output_file.write(temp_filename)
 
