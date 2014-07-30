@@ -5,6 +5,13 @@ API Reference
 
 Below we document the interface classes and functions of pypeliner.
 
+Scheduler Object
+----------------
+
+.. automodule:: pypeliner.scheduler
+
+.. autoclass:: Scheduler
+    :members:
 
 Managed Objects
 ---------------
@@ -23,14 +30,6 @@ Managed Objects
 .. autoclass:: InputInstance
 .. autoclass:: InputChunks
 .. autoclass:: OutputChunks
-
-Scheduler Object
-----------------
-
-.. automodule:: pypeliner.scheduler
-
-.. autoclass:: Scheduler
-	:members:
 
 Pypeline Object
 ---------------
