@@ -40,8 +40,7 @@ object::
 
     scheduler = pypeliner.scheduler.Scheduler()
 
-Add the jobs to the scheduler by calling :py:func:`pypeliner.scheduler.Scheduler.commandline` (ignoring
-the first 3 arguments for now)::
+Add the jobs to the scheduler by calling :py:func:`pypeliner.scheduler.Scheduler.commandline`::
 
     scheduler.commandline('bwa_aln', (), {},
         'bwa', 'aln',
@@ -63,7 +62,9 @@ Then run the jobs using an execution queue::
     with pypeliner.execqueue.LocalJobQueue([]) as exec_queue: 
         scheduler.run(exec_queue)
 
-Trivially, the syntax is slightly different for executing a command line.  The ``>`` argument will be familiar to `bash` users as a way of redirecting output to a file, and the meaning in pypeliner is the same.
+Trivially, the syntax is slightly different for executing a command line.  The first argument gives a name to the
+command line job.  We will ignore the second and third argument for now.  The ``>`` argument will be familiar to `bash`
+users as a way of redirecting output to a file, and the meaning in pypeliner is the same.
 
 Additionally, we are wrapping input and output files using the following classes:
 
@@ -222,9 +223,85 @@ If the function is defined in a separate module, you must add it to the module l
 
     ...
 
+Splitting and Merging
+---------------------
 
+If, the input files to ``bwa aln`` and ``bwa samse`` are large, it may be beneficial to split these files into several
+chunks and run ``bwa aln`` and ``bwa samse`` on each chunk independently.  To do so we need 2 ingredients: a python
+function that splits the input file and a python function that merges the output file.
 
+With pypeliner, we do not need to decide where to store the split files, that is done automatically.  To facilitate
+this, we need to provide a splitting function that uses a callback function to determine the filename in which to store
+each chunk::
 
+    def split_file_byline(in_filename, lines_per_file, out_filename_callback):
+        with open(in_filename, 'r') as in_file:
+            def line_group(line, line_idx=itertools.count()):
+                return int(next(line_idx) / lines_per_file)
+            for file_idx, lines in itertools.groupby(in_file, key=line_group):
+                with open(out_filename_callback(file_idx), 'w') as out_file:
+                    for line in lines:
+                        out_file.write(line)
 
+For example, if our input file ``input.fastq`` has 2,500,000 reads (10,000,000 lines, 4 reads per line), calling
+``split_file_byline`` function with arguments ``'input.fastq', 4*1000000, func`` will call ``func`` 3 times with
+arguments ``0``, ``1`` and ``2``.
+
+We can add this function to our pipeline as follows::
+
+    pyp.sch.transform('split_fastq', (), {},
+        split_file_byline,
+        None,
+        pypeliner.managed.InputFile('input.fastq'),
+        4*1000000,
+        pypeliner.managed.TempOutputFile('input.fastq', 'reads'))
+
+Pypeliner will call ``split_file_byline``, providing a callback as the 3rd argument, and this callback will provide the
+filename for each chunk of ``input.fastq``.  For our input file with 2,500,000 reads (10,000,000 lines), 3 files will be
+created with chunk identifiers ``0``, ``1`` and ``2``.  This set of files are then refered to by the user as the temp
+file ``'input.fastq', 'reads'`` (in contrast to the original input which has identifier ``'input.fastq'``).  A split
+output of a job must have the same set of axes as the job, and one additional axis, the split axis.
+
+We can now use ``TempInputFile('input.fastq', 'reads')`` to refer to the files created by the split. The designator
+``'reads'`` identifies the splitting axis.  However, we also need to specify that the ``bwa_aln`` and ``bwa_samse`` jobs
+must be run once for each chunk of the ``'reads'`` splitting axis, inputting each chunk of ``'input.fastq', 'reads'``
+and outputting ``'tmp.sai', 'reads'`` and then ``'raw.sam', 'reads'``.  To do so we simply add ``'reads'`` to the second
+argument of each call to ``commandline`` or ``transform``, and to the appropriate managed objects::
+
+    pyp.sch.commandline('bwa_aln', ('reads',), {},
+        'bwa', 'aln',
+        pypeliner.managed.InputFile(args['genome']),
+        pypeliner.managed.TempInputFile('input.fastq', 'reads'),
+        '>',
+        pypeliner.managed.TempOutputFile('tmp.sai', 'reads'))
+
+    pyp.sch.commandline('bwa_samse', ('reads',), {},
+        'bwa', 'samse',
+        pypeliner.managed.InputFile(args['genome']),
+        pypeliner.managed.TempInputFile('tmp.sai', 'reads'),
+        pypeliner.managed.TempInputFile('input.fastq', 'reads'),
+        '>',
+        pypeliner.managed.TempOutputFile('raw.sam', 'reads'))
+
+Finally we require a merge function to create ``'raw.sam'`` from ``'raw.sam', 'reads'``.  A merge output of a job must
+have the same set of axes as the job, and one additional axis, the merge axis.  For a merge output, pypeliner provides a
+dictionary of the filenames (or objects) with chunk ids as keys.
+
+Merging by line is sufficient for sam files::
+
+    def merge_file_byline(in_filenames, out_filename):
+        with open(out_filename, 'w') as out_file:
+            for id, in_filename in sorted(in_filenames.items()):
+                with open(in_filename, 'r') as in_file:
+                    for line in in_file.readlines():
+                        out_file.write(line)
+
+We can add this merge job with an additional transform::
+
+    pyp.sch.transform('merge_fastq', (), {},
+        merge_file_byline,
+        None,
+        pypeliner.managed.TempInputFile('raw.sam', 'reads'),
+        pypeliner.managed.TempOutputFile('raw.sam'))
 
 
