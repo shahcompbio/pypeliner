@@ -226,12 +226,12 @@ If the function is defined in a separate module, you must add it to the module l
 Splitting and Merging
 ---------------------
 
-If, the input files to ``bwa aln`` and ``bwa samse`` are large, it may be beneficial to split these files into several
+If the input files to ``bwa aln`` and ``bwa samse`` are large, it may be beneficial to split these files into several
 chunks and run ``bwa aln`` and ``bwa samse`` on each chunk independently.  To do so we need 2 ingredients: a python
 function that splits the input file and a python function that merges the output file.
 
 With pypeliner, we do not need to decide where to store the split files, that is done automatically.  To facilitate
-this, we need to provide a splitting function that uses a callback function to determine the filename in which to store
+this, we need to provide a split function that uses a callback function to determine the filename in which to store
 each chunk::
 
     def split_file_byline(in_filename, lines_per_file, out_filename_callback):
@@ -259,12 +259,12 @@ We can add this function to our pipeline as follows::
 Pypeliner will call ``split_file_byline``, providing a callback as the 3rd argument, and this callback will provide the
 filename for each chunk of ``input.fastq``.  For our input file with 2,500,000 reads (10,000,000 lines), 3 files will be
 created with chunk identifiers ``0``, ``1`` and ``2``.  This set of files are then refered to by the user as the temp
-file ``'input.fastq', 'reads'`` (in contrast to the original input which has identifier ``'input.fastq'``).  A split
-output of a job must have the same set of axes as the job, and one additional axis, the split axis.
+file ``'input.fastq', 'reads'`` (in contrast to the original input which has identifier ``'input.fastq'``).  Note that a
+split output of a job must have the same set of axes as the job, and one additional axis, the split axis.
 
 We can now use ``TempInputFile('input.fastq', 'reads')`` to refer to the files created by the split. The designator
-``'reads'`` identifies the splitting axis.  However, we also need to specify that the ``bwa_aln`` and ``bwa_samse`` jobs
-must be run once for each chunk of the ``'reads'`` splitting axis, inputting each chunk of ``'input.fastq', 'reads'``
+``'reads'`` identifies the split axis.  However, we also need to specify that the ``bwa_aln`` and ``bwa_samse`` jobs
+must be run once for each chunk of the ``'reads'`` split axis, inputting each chunk of ``'input.fastq', 'reads'``
 and outputting ``'tmp.sai', 'reads'`` and then ``'raw.sam', 'reads'``.  To do so we simply add ``'reads'`` to the second
 argument of each call to ``commandline`` or ``transform``, and to the appropriate managed objects::
 
@@ -283,9 +283,9 @@ argument of each call to ``commandline`` or ``transform``, and to the appropriat
         '>',
         pypeliner.managed.TempOutputFile('raw.sam', 'reads'))
 
-Finally we require a merge function to create ``'raw.sam'`` from ``'raw.sam', 'reads'``.  A merge output of a job must
-have the same set of axes as the job, and one additional axis, the merge axis.  For a merge output, pypeliner provides a
-dictionary of the filenames (or objects) with chunk ids as keys.
+Finally we require a merge function to create ``'raw.sam'`` from the set ``'raw.sam', 'reads'`` files.  A merge output of
+a job must have the same set of axes as the job, and one additional axis, the merge axis.  For a merge output, pypeliner
+provides a dictionary of the filenames (or objects) with chunk ids as keys.
 
 Merging by line is sufficient for sam files::
 
