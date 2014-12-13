@@ -22,6 +22,15 @@ class delegator(object):
     def _saferemove(self, filename):
         try: os.remove(filename)
         except OSError: pass
+    def _waitfile(self, filename):
+        waittime = 1
+        while waittime < 100:
+            if os.path.exists(filename):
+                return
+            if waittime >= 4:
+                logging.getLogger('delegator').warn('waiting {0}s for {1} to appear'.format(waittime, filename))
+            time.sleep(waittime)
+            waittime *= 2
     def initialize(self):
         self.cleanup()
         with open(self.before_filename, 'wb') as before:
@@ -29,6 +38,7 @@ class delegator(object):
         command = [sys.executable, inspect.getabsfile(type(self)), self.before_filename, self.after_filename] + self.syspaths
         return command
     def finalize(self):
+        self._waitfile(self.after_filename)
         if not os.path.exists(self.after_filename):
             return None
         self.job = None
