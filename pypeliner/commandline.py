@@ -2,6 +2,13 @@ import subprocess
 import sys
 
 class CommandLineException(Exception):
+    """ A command produced a non-zero exit code.
+
+    :param args: full set of arguments in failed command line
+    :param command: command that failed
+    :param returncode: exit code of failed command
+
+    """
     def __init__(self, args, command, returncode):
         self.args = args
         self.command = command
@@ -10,6 +17,12 @@ class CommandLineException(Exception):
         return "Command '%s' with return code %d in command line `%s`" % (self.command, self.returncode, " ".join(self.args))
 
 class CommandNotFoundException(Exception):
+    """ A command was not found on the path.
+
+    :param args: full set of arguments in failed command line
+    :param command: command that could not be found
+        
+    """
     def __init__(self, args, command):
         self.args = args
         self.command = command
@@ -18,6 +31,17 @@ class CommandNotFoundException(Exception):
 
 
 def execute(*args):
+    """ Execute a command line
+
+    Execute a command line, and handle pipes between processes and to files.
+    The '|', '>' and '<' characters are interpretted as pipes between processes,
+    to files and from files in the same way as in bash.  Each process is checked
+    for successful completion, with a meaningful exception thrown in the case of
+    an error.
+
+    :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
+
+    """
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise Exception("Bad redirect to file")

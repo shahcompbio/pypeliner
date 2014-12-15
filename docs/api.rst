@@ -41,3 +41,9 @@ Pypeline Object
 .. autoclass:: Pypeline
 	:members:
 
+Command Line Helper
+-------------------
+
+.. automodule:: pypeliner.commandline
+    :members:
+
