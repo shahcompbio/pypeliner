@@ -87,7 +87,7 @@ class Scheduler(object):
         """ Set a managed temp object with a specified value.
 
         :param obj: managed object to be set with a given value
-        :type obj: TempOutputObj
+        :type obj: :py:class:`pypeliner.managed.TempOutputObj`
         :param value: value to set
 
         This function is most useful for tracking changes to small objects and parameters.
