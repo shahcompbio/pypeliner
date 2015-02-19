@@ -27,6 +27,10 @@ import nodes
 import jobs
 
 
+def _setobj_helper(value):
+    return value
+
+
 class Scheduler(object):
     """ Job scheduling class for queueing a set of jobs and running
     those jobs according to their dependencies.
@@ -79,6 +83,22 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
 
+    def setobj(self, obj, value):
+        """ Set a managed temp object with a specified value.
+
+        :param obj: managed object to be set with a given value
+        :type obj: TempOutputObj
+        :param value: value to set
+
+        This function is most useful for tracking changes to small objects and parameters.
+        Set the object to a given value using this function.  Then use the managed version
+        of the object in calls to transform, and pypeliner will only trigger a rerun if the
+        value of the object has changed in a subsequent run.
+
+        """
+        name = '_'.join(('setobj', obj.name) + obj.axes)
+        self.transform(name, (), {'local':True}, _setobj_helper, obj, value)
+
     def commandline(self, name, axes, ctx, *args):
         """ Add a command line based transform to the pipeline
 
@@ -89,10 +109,6 @@ class Scheduler(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-
-        if name in self._abstract_jobs:
-            raise ValueError('Job already defined')
-
         self.transform(name, axes, ctx, commandline.execute, None, *args)
 
     def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
