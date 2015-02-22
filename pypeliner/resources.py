@@ -81,12 +81,12 @@ class TempFileResource(Resource):
             os.rename(write_filename, self.filename)
         except OSError:
             raise OutputMissingException(write_filename)
+        self.resmgr.store_createtime(self.name, self.node, self.filename)
 
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, resmgr, name, node, filename):
-        self.resmgr = resmgr
+    def __init__(self, name, node, filename):
         self.name = name
         self.node = node
         self.filename = filename
@@ -95,7 +95,9 @@ class TempObjResource(Resource):
         return os.path.exists(self.filename)
     @property
     def createtime(self):
-        return self.resmgr.retrieve_createtime(self.name, self.node, self.filename)
+        if os.path.exists(self.filename):
+            return os.path.getmtime(self.filename)
+        return None
 
 
 def obj_equal(obj1, obj2):
@@ -124,10 +126,10 @@ class TempObjManager(object):
         self.output_filename = resmgr.get_filename(name, node) + '._o'
     @property
     def input(self):
-        return TempObjResource(self.resmgr, self.name, self.node, self.input_filename)
+        return TempObjResource(self.name, self.node, self.input_filename)
     @property
     def output(self):
-        return TempObjResource(self.resmgr, self.name, self.node, self.output_filename)
+        return TempObjResource(self.name, self.node, self.output_filename)
     @property
     def chunk(self):
         return self.node[-1][1]

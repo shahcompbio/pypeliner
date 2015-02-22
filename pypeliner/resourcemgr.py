@@ -2,6 +2,7 @@ import os
 import collections
 import shelve
 import pickle
+import logging
 
 import resources
 import nodes
@@ -33,6 +34,8 @@ class ResourceManager(object):
     @property
     def filename_creator(self):
         return FilenameCreator(self.temps_dir, self.temps_suffix)
+    def store_createtime(self, name, node, filename):
+        self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
     def retrieve_createtime(self, name, node, filename):
         if os.path.exists(filename):
             self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
@@ -62,6 +65,7 @@ class ResourceManager(object):
             if alias_ids.issubset(depgraph.obsolete):
                 for filename in self.disposable.get((name, node), ()):
                     if os.path.exists(filename):
+                        logging.getLogger('resourcemgr').debug('removing ' + filename)
                         os.remove(filename)
             depgraph.obsolete.remove((name, node))
 
