@@ -210,66 +210,77 @@ class Scheduler(object):
             jobs = self._create_jobs(resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             failing = False
-            while not depgraph.finished:
-                if not failing:
-                    try:
-                        while exec_queue.length < self.max_jobs and depgraph.jobs_ready:
-                            job_id = depgraph.next_job()
-                            job = jobs[job_id]
-                            if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
-                                job_callable = job.create_callable()
-                                if job_callable is None:
-                                    self._logger.info(job.displayname + ' executing')
-                                    job.finalize()
-                                    depgraph.notify_completed(job)
-                                else:
-                                    exec_queue.add(job_callable.ctx, job_callable)
-                                    self._logger.info(job_callable.displayname + ' executing')
-                                    self._logger.info(job_callable.displayname + ' -> ' + job_callable.displaycommand)
-                            else:
-                                depgraph.notify_completed(job)
-                                self._logger.info(job.displayname + ' skipped')
-                            self._logger.debug(job.displayname + ' explanation: ' + job.explain())
-                    except helpers.SubmitException as e:
-                        failing = True
-                    except:
-                        failing = True
-                        self._logger.error('exception\n' + traceback.format_exc())
-                if exec_queue.empty:
-                    break
+            try:
                 try:
-                    job_id, job_callable = exec_queue.wait()
-                    job = jobs[job_id]
-                    if job_callable is None:
-                        failing = True
-                        self._logger.error(job.displayname + ' failed execute')
-                        continue
-                    assert job_id == job_callable.id
-                    if job_callable.finished:
-                        job.finalize(job_callable)
-                        self._logger.info(job_callable.displayname + ' completed successfully')
-                    else:
-                        failing = True
-                        self._logger.error(job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
-                        continue
-                    self._logger.info(job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
-                    if jobs[job_callable.id].trigger_regenerate:
-                        jobs = self._create_jobs(resmgr, nodemgr)
-                        self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
-                    depgraph.notify_completed(jobs[job_callable.id])
-                    if self.cleanup:
-                        resmgr.cleanup(depgraph)
+                    while not depgraph.finished:
+                        self._add_jobs(jobs, exec_queue, depgraph)
+                        if exec_queue.empty:
+                            break
+                        if not self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr):
+                            failing = True
+                            break
                 except KeyboardInterrupt as e:
-                    if failing:
+                    raise e
+                except helpers.SubmitException as e:
+                    failing = True
+                except Exception:
+                    failing = True
+                    self._logger.error('exception\n' + traceback.format_exc())
+                while not exec_queue.empty:
+                    try:
+                        self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr)
+                    except KeyboardInterrupt as e:
                         raise e
-                    failing = True
-                    self._logger.error('exception\n' + traceback.format_exc())
-                except:
-                    failing = True
-                    self._logger.error('exception\n' + traceback.format_exc())
+                    except Exception:
+                        self._logger.error('exception\n' + traceback.format_exc())
+            except KeyboardInterrupt as e:
+                self._logger.error('interrupted')
+                raise e
             if failing:
                 self._logger.error('pipeline failed')
                 raise helpers.PipelineException('pipeline failed')
+
+    def _add_jobs(self, jobs, exec_queue, depgraph):
+        while exec_queue.length < self.max_jobs and depgraph.jobs_ready:
+            job_id = depgraph.next_job()
+            job = jobs[job_id]
+            if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                job_callable = job.create_callable()
+                if job_callable is None:
+                    self._logger.info(job.displayname + ' executing')
+                    job.finalize()
+                    depgraph.notify_completed(job)
+                else:
+                    exec_queue.add(job_callable.ctx, job_callable)
+                    self._logger.info(job_callable.displayname + ' executing')
+                    self._logger.info(job_callable.displayname + ' -> ' + job_callable.displaycommand)
+            else:
+                depgraph.notify_completed(job)
+                self._logger.info(job.displayname + ' skipped')
+            self._logger.debug(job.displayname + ' explanation: ' + job.explain())
+
+    def _wait_next_job(self, jobs, exec_queue, depgraph, nodemgr, resmgr):
+        job_id, job_callable = exec_queue.wait()
+        job = jobs[job_id]
+        if job_callable is None:
+            self._logger.error(job.displayname + ' failed execute')
+            return False
+        assert job_id == job_callable.id
+        if job_callable.finished:
+            job.finalize(job_callable)
+            self._logger.info(job_callable.displayname + ' completed successfully')
+        else:
+            self._logger.error(job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
+            return False
+        self._logger.info(job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
+        if jobs[job_callable.id].trigger_regenerate:
+            jobs.clear()
+            jobs.update(self._create_jobs(resmgr, nodemgr))
+            self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
+        depgraph.notify_completed(jobs[job_callable.id])
+        if self.cleanup:
+            resmgr.cleanup(depgraph)
+        return True
 
     @contextlib.contextmanager
     def PipelineLock(self):
