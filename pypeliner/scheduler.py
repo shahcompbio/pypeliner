@@ -27,6 +27,13 @@ import nodes
 import jobs
 
 
+class PipelineException(Exception):
+    pass
+
+class IncompleteJobException(Exception):
+    pass
+
+
 def _setobj_helper(value):
     return value
 
@@ -216,13 +223,9 @@ class Scheduler(object):
                         self._add_jobs(jobs, exec_queue, depgraph)
                         if exec_queue.empty:
                             break
-                        if not self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr):
-                            failing = True
-                            break
+                        self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr)
                 except KeyboardInterrupt as e:
                     raise e
-                except helpers.SubmitException as e:
-                    failing = True
                 except Exception:
                     failing = True
                     self._logger.error('exception\n' + traceback.format_exc())
@@ -238,7 +241,7 @@ class Scheduler(object):
                 raise e
             if failing:
                 self._logger.error('pipeline failed')
-                raise helpers.PipelineException('pipeline failed')
+                raise PipelineException('pipeline failed')
 
     def _add_jobs(self, jobs, exec_queue, depgraph):
         while exec_queue.length < self.max_jobs and depgraph.jobs_ready:
@@ -262,16 +265,14 @@ class Scheduler(object):
     def _wait_next_job(self, jobs, exec_queue, depgraph, nodemgr, resmgr):
         job_id, job_callable = exec_queue.wait()
         job = jobs[job_id]
-        if job_callable is None:
-            self._logger.error(job.displayname + ' failed execute')
-            return False
+        assert job_callable is not None
         assert job_id == job_callable.id
         if job_callable.finished:
             job.finalize(job_callable)
             self._logger.info(job_callable.displayname + ' completed successfully')
         else:
             self._logger.error(job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
-            return False
+            raise IncompleteJobException()
         self._logger.info(job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
         if jobs[job_callable.id].trigger_regenerate:
             jobs.clear()
@@ -280,7 +281,6 @@ class Scheduler(object):
         depgraph.notify_completed(jobs[job_callable.id])
         if self.cleanup:
             resmgr.cleanup(depgraph)
-        return True
 
     @contextlib.contextmanager
     def PipelineLock(self):

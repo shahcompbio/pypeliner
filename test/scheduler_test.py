@@ -583,7 +583,7 @@ if __name__ == '__main__':
                     mgd.OutputFile(self.output_filename))
 
                 self.sch.cleanup = False
-                self.assertRaises(pypeliner.helpers.PipelineException, self.sch.run, exec_queue)
+                self.assertRaises(pypeliner.scheduler.PipelineException, self.sch.run, exec_queue)
 
                 self.create_scheduler()
 
@@ -642,7 +642,7 @@ if __name__ == '__main__':
                     mgd.TempInputFile('appended_copy'),
                     mgd.OutputFile(self.output_filename))
 
-                self.assertRaises(pypeliner.helpers.PipelineException, self.sch.run, exec_queue)
+                self.assertRaises(pypeliner.scheduler.PipelineException, self.sch.run, exec_queue)
 
                 self.assertFalse(os.path.exists(os.path.join(pipeline_dir, 'tmp/appended')))
 
@@ -716,7 +716,7 @@ if __name__ == '__main__':
                     mgd.TempInputFile('output_data', 'byline_a'),
                     mgd.OutputFile(self.output_filename))
 
-                self.assertRaises(pypeliner.helpers.PipelineException, self.sch.run, exec_queue)
+                self.assertRaises(pypeliner.scheduler.PipelineException, self.sch.run, exec_queue)
 
                 self.create_scheduler()
 
@@ -754,7 +754,7 @@ if __name__ == '__main__':
                     mgd.TempInputFile('output_data', 'byline_a'),
                     mgd.OutputFile(self.output_filename))
 
-                self.assertRaises(pypeliner.helpers.PipelineException, self.sch.run, exec_queue)
+                self.assertRaises(pypeliner.scheduler.PipelineException, self.sch.run, exec_queue)
 
                 self.create_scheduler()
 

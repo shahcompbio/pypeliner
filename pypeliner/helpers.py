@@ -60,9 +60,3 @@ def symlink(source, link_name):
             raise
     os.symlink(source, link_name)
 
-class SubmitException(Exception):
-    pass
-
-class PipelineException(Exception):
-    pass
-

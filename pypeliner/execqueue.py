@@ -7,6 +7,12 @@ import helpers
 import delegator
 
 
+class SubmitException(Exception):
+    pass
+
+class ReceiveException(Exception):
+    pass
+
 def log_text(debug_filenames):
     text = ''
     for debug_type, debug_filename in debug_filenames.iteritems():
@@ -46,7 +52,7 @@ class LocalJob(object):
             error_text += str(e) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise helpers.SubmitException()
+            raise SubmitException()
     def close_debug_files(self):
         for file in self.debug_files:
             file.close()
@@ -60,6 +66,7 @@ class LocalJob(object):
             error_text += 'return code {0}\n'.format(returncode)
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
+            raise ReceiveException()
 
 class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
@@ -96,7 +103,7 @@ class QsubJob(object):
                 error_text += str(e) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise helpers.SubmitException()
+            raise SubmitException()
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += ['-sync', 'y', '-b', 'y']
@@ -121,6 +128,7 @@ class QsubJob(object):
             error_text += 'return code {0}\n'.format(returncode)
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
+            raise ReceiveException()
 
 class SubProcessJobQueue(object):
     """ Abstract class for a queue of jobs run using subprocesses.  Maintains
@@ -209,7 +217,7 @@ class AsyncQsubJob(object):
                 error_text += str(e) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise helpers.SubmitException()
+            raise SubmitException()
         with open(self.debug_filenames['submit stdout'], 'r') as submit_stdout:
             self.qsub_job_id = submit_stdout.readline().rstrip().replace('Your job ', '').split(' ')[0]
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
@@ -230,6 +238,7 @@ class AsyncQsubJob(object):
             error_text += ' '.join(self.submit_command) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
+            raise ReceiveException()
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
