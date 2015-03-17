@@ -103,7 +103,7 @@ class Scheduler(object):
         value of the object has changed in a subsequent run.
 
         """
-        name = '_'.join(('setobj', obj.name) + obj.axes)
+        name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         self.transform(name, (), {'local':True}, _setobj_helper, obj, value)
 
     def commandline(self, name, axes, ctx, *args):
