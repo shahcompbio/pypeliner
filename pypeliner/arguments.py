@@ -85,10 +85,15 @@ class MergeTemplateArg(Arg):
 
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
-    def __init__(self, suffix=''):
+    def __init__(self, suffix='', fnames=None):
         self.suffix = suffix
+        self.fnames = fnames
     def __call__(self, name, node):
-        return name.format(**dict(node)) + self.suffix
+        fname_key = tuple([a[1] for a in node])
+        if self.fnames is not None:
+            return self.fnames[fname_key]
+        else:
+            return name.format(**dict(node)) + self.suffix
     def __repr__(self):
         return '{0}.{1}({2})'.format(resourcemgr.FilenameCreator.__module__, resourcemgr.FilenameCreator.__name__, self.suffix)
 
@@ -100,10 +105,10 @@ class InputFileArg(Arg):
     dictionary.
 
     """
-    def __init__(self, resmgr, nodemgr, name, node):
+    def __init__(self, resmgr, nodemgr, name, node, fnames=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.resource = resources.UserResource(name, node)
+        self.resource = resources.UserResource(name, node, fnames)
     @property
     def inputs(self):
         yield self.resource
@@ -118,16 +123,17 @@ class MergeFileArg(Arg):
     the merge axis.  Each value is the filename formatted using the merge node dictonary.
 
     """
-    def __init__(self, resmgr, nodemgr, name, base_node, merge_axis):
+    def __init__(self, resmgr, nodemgr, name, base_node, merge_axis, fnames=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.base_node = base_node
         self.merge_axis = merge_axis
+        self.fnames = fnames
     @property
     def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield resources.UserResource(self.name, node)
+            yield resources.UserResource(self.name, node, self.fnames)
     @property
     def inputs(self):
         for resource in self.resources:
@@ -147,10 +153,10 @@ class OutputFileArg(Arg):
     dictionary, including the '.tmp' suffix.
 
     """
-    def __init__(self, resmgr, nodemgr, name, node):
+    def __init__(self, resmgr, nodemgr, name, node, fnames=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.resource = resources.UserResource(name, node)
+        self.resource = resources.UserResource(name, node, fnames=fnames)
     @property
     def outputs(self):
         yield self.resource
@@ -168,16 +174,17 @@ class SplitFileArg(Arg):
     involves removing the '.tmp' suffix for each file created by the job.
 
     """
-    def __init__(self, resmgr, nodemgr, name, base_node, split_axis):
+    def __init__(self, resmgr, nodemgr, name, base_node, split_axis, fnames=None):
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.name = name
         self.base_node = base_node
         self.split_axis = split_axis
+        self.fnames = fnames
     @property
     def resources(self):
         for node in self.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield resources.UserResource(self.name, node)
+            yield resources.UserResource(self.name, node, self.fnames)
     @property
     def outputs(self):
         for resource in self.resources:
@@ -187,7 +194,7 @@ class SplitFileArg(Arg):
     def is_split(self):
         return True
     def resolve(self):
-        return FilenameCallback(self.name, self.base_node, self.split_axis, UserFilenameCreator('.tmp'))
+        return FilenameCallback(self.name, self.base_node, self.split_axis, UserFilenameCreator('.tmp', self.fnames))
     def finalize(self, resolved):
         self.nodemgr.store_chunks(self.split_axis, self.base_node, resolved.filenames.keys())
         for resource in self.resources:
