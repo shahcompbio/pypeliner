@@ -91,7 +91,10 @@ class UserFilenameCreator(object):
     def __call__(self, name, node):
         fname_key = tuple([a[1] for a in node])
         if self.fnames is not None:
-            return self.fnames[fname_key]
+            if len(fname_key) == 1 and fname_key[0] in self.fnames:
+                return self.fnames[fname_key[0]]
+            else:
+                return self.fnames[fname_key]
         else:
             return name.format(**dict(node)) + self.suffix
     def __repr__(self):

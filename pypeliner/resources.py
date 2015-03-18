@@ -40,7 +40,10 @@ class UserResource(Resource):
             if None in fname_key:
                 self.filename = name
             else:
-                self.filename = fnames[fname_key]
+                if len(fname_key) == 1 and fname_key[0] in fnames:
+                    self.filename = fnames[fname_key[0]]
+                else:
+                    self.filename = fnames[fname_key]
         else:
             self.filename = name.format(**dict(node))
     @property

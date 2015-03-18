@@ -157,9 +157,10 @@ if __name__ == '__main__':
 
                 self.create_scheduler()
 
+                # For single axis, tuple or value should work
                 input_filenames = {
                     (1,):self.input_n_filename.format(byfile=1),
-                    (2,):self.input_n_filename.format(byfile=2),
+                    2:self.input_n_filename.format(byfile=2),
                 }
 
                 # Merge a set of input files indexed by axis `byfile`
@@ -180,8 +181,9 @@ if __name__ == '__main__':
 
                 self.create_scheduler()
 
+                # For single axis, tuple or value should work
                 output_filenames = {
-                    (1,):self.output_n_filename.format(byfile=1),
+                    1:self.output_n_filename.format(byfile=1),
                     (2,):self.output_n_filename.format(byfile=2),
                 }
 
