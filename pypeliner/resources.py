@@ -32,10 +32,20 @@ class Resource(Dependency):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node):
+    def __init__(self, name, node, fnames):
         self.name = name
         self.node = node
-        self.filename = name.format(**dict(node))
+        fname_key = tuple([a[1] for a in node])
+        if fnames is not None:
+            if None in fname_key:
+                self.filename = name
+            else:
+                if len(fname_key) == 1 and fname_key[0] in fnames:
+                    self.filename = fnames[fname_key[0]]
+                else:
+                    self.filename = fnames[fname_key]
+        else:
+            self.filename = name.format(**dict(node))
     @property
     def exists(self):
         return os.path.exists(self.filename)

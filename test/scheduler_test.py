@@ -153,6 +153,52 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
 
+            def test_specify_input_filename(self):
+
+                self.create_scheduler()
+
+                # For single axis, tuple or value should work
+                input_filenames = {
+                    (1,):self.input_n_filename.format(byfile=1),
+                    2:self.input_n_filename.format(byfile=2),
+                }
+
+                # Merge a set of input files indexed by axis `byfile`
+                self.sch.setobj(mgd.OutputChunks('byfile'), (1, 2))
+                self.sch.transform('merge_files', (), self.ctx, merge_file_byline,
+                    None,
+                    mgd.InputFile('input_files', 'byfile', fnames=input_filenames),
+                    mgd.OutputFile(self.output_filename))
+
+                self.sch.run(exec_queue)
+
+                with open(self.output_filename, 'r') as output_file:
+                    output = output_file.readlines()
+
+                self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n', 'line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n'])
+
+            def test_specify_output_filename(self):
+
+                self.create_scheduler()
+
+                # For single axis, tuple or value should work
+                output_filenames = {
+                    1:self.output_n_filename.format(byfile=1),
+                    (2,):self.output_n_filename.format(byfile=2),
+                }
+
+                # Write a set of output files indexed by axis `byfile`
+                self.sch.transform('write_files', (), self.ctx, write_files,
+                    None,
+                    mgd.OutputFile('output_files', 'byfile', fnames=output_filenames))
+
+                self.sch.run(exec_queue)
+
+                for chunk in ('1', '2'):
+                    with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
+                        output = output_file.readlines()
+                        self.assertEqual(output, ['file{0}\n'.format(chunk)])
+
             def test_tempfile(self):
 
                 self.create_scheduler()

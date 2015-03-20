@@ -47,13 +47,14 @@ def create_arg(resmgr, nodemgr, mgd, node):
 
 class Managed(object):
     """ Interface class used to represent a managed data """
-    def __init__(self, name, *axes):
+    def __init__(self, name, *axes, **kwargs):
         if name is not None and type(name) != str:
             raise ValueError('name of argument must be string')
         if type(axes) != tuple:
             raise ValueError('axes must be a tuple')
         self.name = name
         self.axes = axes
+        self.kwargs = kwargs
     def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
         common = 0
         for node_axis, axis in zip((a[0] for a in node), self.axes):
@@ -129,7 +130,7 @@ class InputFile(Managed):
 
     """
     def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg)
+        return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg, **self.kwargs)
 
 class OutputFile(Managed):
     """ Interface class used to represent a user specified managed file output
@@ -153,7 +154,7 @@ class OutputFile(Managed):
 
     """
     def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg)
+        return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg, **self.kwargs)
 
 class TempInputObj(Managed):
     """ Interface class used to represent a managed object input
