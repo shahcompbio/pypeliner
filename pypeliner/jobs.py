@@ -246,7 +246,7 @@ class JobCallable(object):
             text += job_stderr.read()
         return text
     def __call__(self):
-        with open(self.stdout_filename, 'w') as stdout_file, open(self.stderr_filename, 'w') as stderr_file:
+        with open(self.stdout_filename, 'w', 0) as stdout_file, open(self.stderr_filename, 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
