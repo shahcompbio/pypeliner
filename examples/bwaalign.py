@@ -2,7 +2,6 @@ import csv
 import sys
 import logging
 import os
-import ConfigParser
 import itertools
 import argparse
 import string

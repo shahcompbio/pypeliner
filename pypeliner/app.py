@@ -89,7 +89,6 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
 import sys
 import logging
 import os
-import ConfigParser
 import argparse
 import string
 import datetime
