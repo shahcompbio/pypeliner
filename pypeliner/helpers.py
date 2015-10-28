@@ -44,6 +44,7 @@ def overwrite_if_different(new_filename, existing_filename):
         os.rename(new_filename, existing_filename)
 
 def makedirs(dirname):
+    dirname = abspath(dirname)
     try:
         os.makedirs(dirname)
     except OSError as e:
