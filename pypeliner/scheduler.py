@@ -90,12 +90,18 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
 
-    def setobj(self, obj, value):
+    def setobj(self, obj, value, axes=()):
         """ Set a managed temp object with a specified value.
 
         :param obj: managed object to be set with a given value
         :type obj: :py:class:`pypeliner.managed.TempOutputObj`
         :param value: value to set
+        :param axes: axes on which to perform operation.  If the axes argument is identical
+                     to the axes of the object, the setting of the object occurs once per
+                     axis chunk.  If the axes argument has length one less than the axes of
+                     of obj, this setobj is a split operation that defines the additional
+                     axis in obj.
+        :type axes: tuple
 
         This function is most useful for tracking changes to small objects and parameters.
         Set the object to a given value using this function.  Then use the managed version
@@ -104,7 +110,7 @@ class Scheduler(object):
 
         """
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
-        self.transform(name, (), {'local':True}, _setobj_helper, obj, value)
+        self.transform(name, axes, {'local':True}, _setobj_helper, obj, value)
 
     def commandline(self, name, axes, ctx, *args):
         """ Add a command line based transform to the pipeline
