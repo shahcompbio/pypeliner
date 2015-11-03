@@ -96,10 +96,14 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, filename):
+    def __init__(self, resmgr, name, node, is_input=True):
+        self.resmgr = resmgr
         self.name = name
         self.node = node
-        self.filename = filename
+        self.is_input = is_input
+    @property
+    def filename(self):
+        return self.resmgr.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
     @property
     def exists(self):
         return os.path.exists(self.filename)
@@ -132,30 +136,28 @@ class TempObjManager(object):
         self.resmgr = resmgr
         self.name = name
         self.node = node
-        self.input_filename = resmgr.get_filename(name, node) + '._i'
-        self.output_filename = resmgr.get_filename(name, node) + '._o'
     @property
     def input(self):
-        return TempObjResource(self.name, self.node, self.input_filename)
+        return TempObjResource(self.resmgr, self.name, self.node, is_input=True)
     @property
     def output(self):
-        return TempObjResource(self.name, self.node, self.output_filename)
+        return TempObjResource(self.resmgr, self.name, self.node, is_input=False)
     @property
     def chunk(self):
         return self.node[-1][1]
     @property
     def obj(self):
         try:
-            with open(self.input_filename, 'rb') as f:
+            with open(self.input.filename, 'rb') as f:
                 return pickle.load(f)
         except IOError as e:
             if e.errno == 2:
                 pass
     def finalize(self, obj):
-        with open(self.output_filename, 'wb') as f:
+        with open(self.output.filename, 'wb') as f:
             pickle.dump(obj, f)
         if not obj_equal(obj, self.obj):
-            with open(self.input_filename, 'wb') as f:
+            with open(self.input.filename, 'wb') as f:
                 pickle.dump(obj, f)
 
 
