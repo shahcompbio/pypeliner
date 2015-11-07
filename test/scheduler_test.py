@@ -510,7 +510,8 @@ if __name__ == '__main__':
                     None,
                     mgd.InputFile(self.input_filename),
                     2,
-                    mgd.TempOutputFile('input_filename', 'byline'))
+                    mgd.TempOutputFile('input_filename', 'byline'),
+                    max_files=2)
                 
                 # Do an identical split on `mod_input_filename`
                 workflow.transform('splitbyline2', (), self.ctx, split_file_byline,
@@ -520,7 +521,7 @@ if __name__ == '__main__':
                     mgd.TempOutputFile('mod_input_filename', 'byline2'))
                 
                 # Change the `mod_input_filename` split file to have the same axis as the first split
-                workflow.changeaxis('changeaxis', (), 'mod_input_filename', 'byline2', 'byline')
+                workflow.changeaxis('changeaxis', (), 'mod_input_filename', 'byline2', 'byline', exact=False)
 
                 # Modify split versions of `input_filename` and `mod_input_filename` in tandem, 
                 # concatenate both files together
@@ -543,7 +544,16 @@ if __name__ == '__main__':
                 with open(self.output_filename, 'r') as output_file:
                     output = output_file.readlines()
 
-                self.assertEqual(output, ['line1\n', 'line2\n', '0mline1\n', '1mline2\n', 'line3\n', 'line4\n', '2mline3\n', '3mline4\n', 'line5\n', 'line6\n', '4mline5\n', '5mline6\n', 'line7\n', 'line8\n', '6mline7\n', '7mline8\n'])
+                expected = [
+                    'line1\n',
+                    'line2\n',
+                    '0mline1\n',
+                    '1mline2\n',
+                    'line3\n',
+                    'line4\n',
+                    '2mline3\n',
+                    '3mline4\n']
+                self.assertEqual(output, expected)
 
             def test_split_getinstance(self):
 
@@ -1059,11 +1069,13 @@ else:
     def split_stuff(stf):
         return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
-    def split_file_byline(in_filename, lines_per_file, out_filename_callback):
+    def split_file_byline(in_filename, lines_per_file, out_filename_callback, max_files=None):
         with open(in_filename, 'r') as in_file:
             def line_group(line, line_idx=itertools.count()):
                 return int(next(line_idx) / lines_per_file)
             for file_idx, lines in itertools.groupby(in_file, key=line_group):
+                if max_files is not None and file_idx >= max_files:
+                    break
                 with open(out_filename_callback(file_idx), 'w') as out_file:
                     for line in lines:
                         out_file.write(line)

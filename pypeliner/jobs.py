@@ -287,15 +287,16 @@ class SubWorkflowInstance(JobInstance):
 
 class ChangeAxisDefinition(object):
     """ Represents an abstract aliasing """
-    def __init__(self, name, axes, var_name, old_axis, new_axis):
+    def __init__(self, name, axes, var_name, old_axis, new_axis, exact=True):
         self.name = name
         self.axes = axes
         self.var_name = var_name
         self.old_axis = old_axis
         self.new_axis = new_axis
+        self.exact = exact
     def create_job_instances(self, workflow, db, logs_dir):
         for node in db.nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxisInstance(self, workflow, db, node)
+            yield ChangeAxisInstance(self, workflow, db, node, exact=self.exact)
 
 class ChangeAxisException(Exception):
     def __init__(self, old, new):
@@ -306,11 +307,12 @@ class ChangeAxisException(Exception):
 
 class ChangeAxisInstance(JobInstance):
     """ Creates an alias of a managed object """
-    def __init__(self, job_def, workflow, db, node):
+    def __init__(self, job_def, workflow, db, node, exact=True):
         self.job_def = job_def
         self.workflow = workflow
         self.db = db
         self.node = node
+        self.exact = exact
         self.is_subworkflow = False
         self.is_immediate = True
         self.trigger_regenerate = False
@@ -334,7 +336,7 @@ class ChangeAxisInstance(JobInstance):
     def finalize(self):
         old_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.old_axis,), self.node))
         new_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.new_axis,), self.node))
-        if (old_chunks != new_chunks):
+        if self.exact and new_chunks != old_chunks or not self.exact and not new_chunks.issubset(old_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
         for chunks in old_chunks:
             if len(chunks) > 1:

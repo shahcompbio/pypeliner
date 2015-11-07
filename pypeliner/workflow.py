@@ -107,7 +107,7 @@ class Workflow(object):
             raise ValueError('Job already defined')
         self.job_definitions[name] = jobs.SubWorkflowDefinition(name, axes, func, jobs.CallSet(None, args, kwargs))
 
-    def changeaxis(self, name, axes, var_name, old_axis, new_axis):
+    def changeaxis(self, name, axes, var_name, old_axis, new_axis, exact=True):
         """ Change the axis for a managed variable.  This acts as a regular jobs with
         input dependencies and output dependents as for jobs created using transform.
 
@@ -120,11 +120,12 @@ class Workflow(object):
         :param old_axis: previous axis on which the managed object is defined.
         :param new_axis: new axis for the new managed object.  The new object will be defined
                          on this axis and will be equivalent to the previous object.
+        :param exact: if true chunks must match, otherwise new must be a subset of old
 
         """
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis)
+        self.job_definitions[name] = jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis, exact=exact)
 
     def _create_job_instances(self, graph, db, logs_dir):
         """ Create job instances from job definitions given resource and node managers,
