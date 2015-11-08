@@ -1,5 +1,6 @@
 import os
 import pickle
+import nodes
 
 
 class OutputMissingException(Exception):
@@ -17,6 +18,9 @@ class Dependency(object):
     @property
     def id(self):
         return (self.name, self.node)
+    @property
+    def displayname(self):
+        return nodes.name_node_displayname(self.name, self.node)
 
 
 class Resource(Dependency):
@@ -57,6 +61,9 @@ class UserResource(Resource):
     @property
     def id(self):
         return (self.filename, ())
+    @property
+    def displayname(self):
+        return self.filename
     @property
     def chunk(self):
         return self.node[-1][1]
@@ -163,18 +170,18 @@ class TempObjManager(object):
 
 class ChunksResource(Resource):
     """ A resource representing a list of chunks for an axis """
-    def __init__(self, nodemgr, axis, node):
+    def __init__(self, nodemgr, name, node):
         self.nodemgr = nodemgr
-        self.axis = axis
+        self.name = name
         self.node = node
     @property
     def id(self):
-        return (self.axis, self.node)
+        return (self.name, self.node)
     @property
     def exists(self):
-        return os.path.exists(self.nodemgr.get_chunks_filename(self.axis, self.node))
+        return os.path.exists(self.nodemgr.get_chunks_filename(self.name, self.node))
     @property
     def createtime(self):
         if self.exists:
-            return os.path.getmtime(self.nodemgr.get_chunks_filename(self.axis, self.node))
+            return os.path.getmtime(self.nodemgr.get_chunks_filename(self.name, self.node))
 

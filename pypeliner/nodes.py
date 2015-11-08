@@ -14,7 +14,8 @@ def name_node_filename(name, node):
     return os.path.join(node_subdir(node), name)
 
 def name_node_displayname(name, node):
-    return name + '<' + ','.join(':'.join((str(axis), str(chunk))) for axis, chunk in node) + '>'
+    parts = ['_'.join((str(axis), str(chunk))) for axis, chunk in node] + [name]
+    return '/' + '/'.join(parts)
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """

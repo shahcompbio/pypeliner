@@ -160,7 +160,7 @@ class Job(object):
             status = ''
             if oldest_output_date is not None and input.createtime > oldest_output_date:
                 status = 'new'
-            explanation.append('input {0} {1} {2}'.format(input.id, input.createtime, status))
+            explanation.append('input {0} {1} {2}'.format(input.displayname, input.createtime, status))
         for output in self.output_resources:
             status = ''
             if output.createtime is None:
@@ -169,7 +169,7 @@ class Job(object):
                 status = '{0} old'.format(output.createtime)
             else:
                 status = '{0}'.format(output.createtime)
-            explanation.append('output {0} {1}'.format(output.id, status))
+            explanation.append('output {0} {1}'.format(output.displayname, status))
         return '\n'.join(explanation)
     @property
     def output_missing(self):

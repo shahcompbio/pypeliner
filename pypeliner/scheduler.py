@@ -256,17 +256,17 @@ class Scheduler(object):
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                 job_callable = job.create_callable()
                 if job_callable is None:
-                    self._logger.info(job.displayname + ' executing')
+                    self._logger.info('job ' + job.displayname + ' executing')
                     job.finalize()
                     depgraph.notify_completed(job)
                 else:
                     exec_queue.add(job_callable.ctx, job_callable)
-                    self._logger.info(job_callable.displayname + ' executing')
-                    self._logger.info(job_callable.displayname + ' -> ' + job_callable.displaycommand)
+                    self._logger.info('job ' + job_callable.displayname + ' executing')
+                    self._logger.info('job ' + job_callable.displayname + ' -> ' + job_callable.displaycommand)
             else:
                 depgraph.notify_completed(job)
-                self._logger.info(job.displayname + ' skipped')
-            self._logger.debug(job.displayname + ' explanation: ' + job.explain())
+                self._logger.info('job ' + job.displayname + ' skipped')
+            self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
     def _wait_next_job(self, jobs, exec_queue, depgraph, nodemgr, resmgr):
         job_id, job_callable = exec_queue.wait()
@@ -275,11 +275,11 @@ class Scheduler(object):
         assert job_id == job_callable.id
         if job_callable.finished:
             job.finalize(job_callable)
-            self._logger.info(job_callable.displayname + ' completed successfully')
+            self._logger.info('job ' + job_callable.displayname + ' completed successfully')
         else:
-            self._logger.error(job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
+            self._logger.error('job ' + job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
             raise IncompleteJobException()
-        self._logger.info(job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
+        self._logger.info('job ' + job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
         if jobs[job_callable.id].trigger_regenerate:
             jobs.clear()
             jobs.update(self._create_jobs(resmgr, nodemgr))
@@ -316,12 +316,12 @@ class Scheduler(object):
                 job_id = depgraph.next_job()
                 job = jobs[job_id]
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
-                    self._logger.info(job.displayname + ' executing')
+                    self._logger.info('job ' + job.displayname + ' executing')
                     if not job.trigger_regenerate:
                         depgraph.notify_completed(job)
                 else:
-                    self._logger.info(job.displayname + ' skipped')
+                    self._logger.info('job ' + job.displayname + ' skipped')
                     depgraph.notify_completed(job)
-                self._logger.debug(job.displayname + ' explanation: ' + job.explain())
+                self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
         return True
 
