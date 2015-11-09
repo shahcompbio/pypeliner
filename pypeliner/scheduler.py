@@ -45,7 +45,6 @@ class Scheduler(object):
     """
     def __init__(self):
         self._logger = logging.getLogger('scheduler')
-        self._abstract_jobs = dict()
         self.max_jobs = 1
         self.rerun = False
         self.repopulate = False
@@ -90,103 +89,10 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
 
-    def setobj(self, obj, value, axes=()):
-        """ Set a managed temp object with a specified value.
-
-        :param obj: managed object to be set with a given value
-        :type obj: :py:class:`pypeliner.managed.TempOutputObj`
-        :param value: value to set
-        :param axes: axes on which to perform operation.  If the axes argument is identical
-                     to the axes of the object, the setting of the object occurs once per
-                     axis chunk.  If the axes argument has length one less than the axes of
-                     of obj, this setobj is a split operation that defines the additional
-                     axis in obj.
-        :type axes: tuple
-
-        This function is most useful for tracking changes to small objects and parameters.
-        Set the object to a given value using this function.  Then use the managed version
-        of the object in calls to transform, and pypeliner will only trigger a rerun if the
-        value of the object has changed in a subsequent run.
-
+    def _create_jobs(self, workflow, resmgr, nodemgr):
+        """ Create job instances from workflow given resource and node managers.
         """
-        name = '_'.join(('setobj', str(obj.name)) + obj.axes)
-        self.transform(name, axes, {'local':True}, _setobj_helper, obj, value)
-
-    def commandline(self, name, axes, ctx, *args):
-        """ Add a command line based transform to the pipeline
-
-        This call is equivalent to::
-
-            self.transform(name, axes, ctx, commandline.execute, None, *args)
-
-        See :py:func:`pypeliner.scheduler.transform`
-
-        """
-        self.transform(name, axes, ctx, commandline.execute, None, *args)
-
-    def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
-        """ Add a transform to the pipeline.  A transform defines a job that uses the
-        provided python function ``func`` to take input dependencies and create/update 
-        output dependents.
-
-        :param name: unique name of the job, used to identify the job in logs and when
-                     submitting instances to the exec queue
-        :param axes: axes of the job.  defines the axes on which the job will operate.  A
-                     job with an empty list for the axes has a single instance.  A job with
-                     one axis in the axes list will have as many instances as were defined
-                     for that axis by the split that is responsible for that axis.
-        :param ctx: context of the job as a dictionary of key, value pairs.  The context
-                    is given to the exec queue and provides a way of communicating jobs
-                    specific requirements such as memory and cpu usage.  Setting
-                    ``ctx['local'] = True`` will result in the job being run locally on
-                    the calling machine even when a cluster is being used.
-        :param func: The function to call for this job.
-        :param ret: The return value 
-        :param args: The list of positional arguments to be used for the function call.
-        :param kwargs: The list of keyword arguments to be used for the function call.
-
-        Any value in args or kwargs that is an instance of
-        :py:class:`pypeliner.managed.Managed` will be resolved to a pipeline managed
-        file or object at runtime.  See :py:mod:`pypeliner.managed`.
-
-        Acceptable values given for ``ret`` are restricted to a subset of
-        :py:class:`pypeliner.managed.Managed` derived classes that represent output
-        objects.  The return value of ``func`` will be stored and used by the pipelining
-        system according to the specific details of the :py:class:`pypeliner.managed.Managed`
-        derived class.
-
-        """
-        if name in self._abstract_jobs:
-            raise ValueError('Job already defined')
-        self._abstract_jobs[name] = jobs.AbstractJob(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs), self.logs_dir)
-
-    def changeaxis(self, name, axes, var_name, old_axis, new_axis):
-        """ Change the axis for a managed variable.  This acts as a regular jobs with
-        input dependencies and output dependents as for jobs created using transform.
-
-        :param name: unique name of the change axis job, used to identify the job in logs
-                     and when submitting instances to the exec queue
-        :param axes: base axes of the managed object for which the axis change is requested.
-                     only the last axis may be changed, thus all previous axes should be
-                     given here as a list
-        :param var_name: name of the managed object for which the axis change is requested.
-        :param old_axis: previous axis on which the managed object is defined.
-        :param new_axis: new axis for the new managed object.  The new object will be defined
-                         on this axis and will be equivalent to the previous object.
-
-        """
-        if name in self._abstract_jobs:
-            raise ValueError('Job already defined')
-        self._abstract_jobs[name] = jobs.AbstractChangeAxis(name, axes, var_name, old_axis, new_axis)
-
-    def _create_jobs(self, resmgr, nodemgr):
-        """ Create concrete jobs from abstract jobs given resource and
-        node managers
-        """
-        jobs = dict()
-        for abstract_job in self._abstract_jobs.itervalues():
-            for job in abstract_job.create_jobs(resmgr, nodemgr):
-                jobs[job.id] = job
+        jobs = dict([(j.id, j) for j in workflow._create_job_instances(resmgr, nodemgr, self.logs_dir)])
         return jobs
 
     def _depgraph_regenerate(self, resmgr, nodemgr, jobs, depgraph):
@@ -199,13 +105,14 @@ class Scheduler(object):
         inputs = inputs.difference(outputs)
         depgraph.regenerate(inputs, outputs, jobs.values())
 
-    def run(self, exec_queue):
+    def run(self, workflow, exec_queue):
         """ Run the pipeline
 
+        :param workflow: workflow of jobs to be submitted.
         :param exec_queue: queue to which jobs will be submitted.  The queues implemented
                            in :py:mod:`pypeliner.execqueue` should suffice for most purposes
 
-        Call this function after adding jobs to the scheduler using
+        Call this function after adding jobs to a workflow using
         :py:func:`pypeliner.scheduler.Scheduler.transform` etc.  Jobs will be run locally or
         remotely using the `exec_queue` provided until completion.  On failure, the function
         will wait for the remaining jobs to finish but will not submit new ones.  The first
@@ -220,7 +127,7 @@ class Scheduler(object):
         depgraph = graph.DependencyGraph()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            jobs = self._create_jobs(resmgr, nodemgr)
+            jobs = self._create_jobs(workflow, resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             failing = False
             try:
@@ -229,7 +136,7 @@ class Scheduler(object):
                         self._add_jobs(jobs, exec_queue, depgraph)
                         if exec_queue.empty:
                             break
-                        self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr)
+                        self._wait_next_job(workflow, jobs, exec_queue, depgraph, nodemgr, resmgr)
                 except KeyboardInterrupt as e:
                     raise e
                 except Exception:
@@ -237,7 +144,7 @@ class Scheduler(object):
                     self._logger.error('exception\n' + traceback.format_exc())
                 while not exec_queue.empty:
                     try:
-                        self._wait_next_job(jobs, exec_queue, depgraph, nodemgr, resmgr)
+                        self._wait_next_job(workflow, jobs, exec_queue, depgraph, nodemgr, resmgr)
                     except KeyboardInterrupt as e:
                         raise e
                     except Exception:
@@ -254,13 +161,13 @@ class Scheduler(object):
             job_id = depgraph.next_job()
             job = jobs[job_id]
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
-                job_callable = job.create_callable()
-                if job_callable is None:
+                if job.is_immediate:
                     self._logger.info('job ' + job.displayname + ' executing')
                     job.finalize()
                     depgraph.notify_completed(job)
                 else:
-                    exec_queue.add(job_callable.ctx, job_callable)
+                    job_callable = job.create_callable()
+                    exec_queue.add(job.ctx, job_callable)
                     self._logger.info('job ' + job_callable.displayname + ' executing')
                     self._logger.info('job ' + job_callable.displayname + ' -> ' + job_callable.displaycommand)
             else:
@@ -268,7 +175,7 @@ class Scheduler(object):
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
-    def _wait_next_job(self, jobs, exec_queue, depgraph, nodemgr, resmgr):
+    def _wait_next_job(self, workflow, jobs, exec_queue, depgraph, nodemgr, resmgr):
         job_id, job_callable = exec_queue.wait()
         job = jobs[job_id]
         assert job_callable is not None
@@ -283,7 +190,7 @@ class Scheduler(object):
         self._logger.info('job ' + job_callable.displayname + ' host name ' + str(job_callable.hostname) + 's')
         if jobs[job_callable.id].trigger_regenerate:
             jobs.clear()
-            jobs.update(self._create_jobs(resmgr, nodemgr))
+            jobs.update(self._create_jobs(workflow, resmgr, nodemgr))
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
         depgraph.notify_completed(jobs[job_callable.id])
         if self.cleanup:
@@ -301,7 +208,7 @@ class Scheduler(object):
         finally:
             os.rmdir(lock_directory)
             
-    def pretend(self):
+    def pretend(self, workflow):
         """ Pretend run the pipeline.
 
         Print jobs that would be run, but do not actually run them.  May halt before completion of
@@ -311,7 +218,7 @@ class Scheduler(object):
         depgraph = graph.DependencyGraph()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            jobs = self._create_jobs(resmgr, nodemgr)
+            jobs = self._create_jobs(workflow, resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             while depgraph.jobs_ready:
                 job_id = depgraph.next_job()

@@ -34,18 +34,17 @@ class CallSet(object):
         for key, arg in sorted(self.kwargs.iteritems()):
             yield arg
 
-class AbstractJob(object):
+class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
-    def __init__(self, name, axes, ctx, func, callset, logs_dir):
+    def __init__(self, name, axes, ctx, func, callset):
         self.name = name
         self.axes = axes
         self.ctx = ctx
         self.func = func
         self.callset = callset
-        self.logs_dir = logs_dir
-    def create_jobs(self, resmgr, nodemgr):
+    def create_job_instances(self, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield Job(resmgr, nodemgr, self.name, node, self.ctx, self.func, self.callset, self.logs_dir)
+            yield JobInstance(self, resmgr, nodemgr, node, logs_dir)
 
 class InputMissingException(Exception):
     def __init__(self, input, job):
@@ -54,27 +53,29 @@ class InputMissingException(Exception):
     def __str__(self):
         return 'input {0} missing for job {1}'.format(self.input, self.job)
 
-class Job(object):
+class JobInstance(object):
     """ Represents a job including function and arguments """
-    def __init__(self, resmgr, nodemgr, name, node, ctx, func, callset, logs_dir):
+    def __init__(self, job_def, resmgr, nodemgr, node, logs_dir):
+        self.job_def = job_def
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
         self.node = node
-        self.ctx = ctx
-        self.func = func
         try:
-            self.argset = callset.transform(lambda arg: managed.create_arg(resmgr, nodemgr, arg, node))
+            self.argset = self.job_def.callset.transform(lambda arg: managed.create_arg(resmgr, nodemgr, arg, node))
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, nodes.node_subdir(node), name)
+        self.logs_dir = os.path.join(logs_dir, node.subdir, self.job_def.name)
+        self.is_immediate = False
     @property
     def id(self):
-        return (self.name, self.node)
+        return (self.job_def.name, self.node)
+    @property
+    def ctx(self):
+        return self.job_def.ctx
     @property
     def displayname(self):
-        return nodes.name_node_displayname(self.name, self.node)
+        return nodes.name_node_displayname(self.job_def.name, self.node)
     @property
     def _inputs(self):
         for arg in self.argset.iteritems():
@@ -184,7 +185,7 @@ class Job(object):
         return False
     def create_callable(self):
         resolved_args = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
-        return JobCallable(self.name, self.node, self.ctx, self.func, resolved_args, self.logs_dir)
+        return JobCallable(self.job_def.name, self.node, self.job_def.func, resolved_args, self.logs_dir)
     def finalize(self, callable):
         for arg, resolved in zip(self.argset.iteritems(), callable.argset.iteritems()):
             if isinstance(arg, arguments.Arg):
@@ -207,10 +208,9 @@ class JobTimer(object):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, name, node, ctx, func, argset, logs_dir):
+    def __init__(self, name, node, func, argset, logs_dir):
         self.name = name
         self.node = node
-        self.ctx = ctx
         self.func = func
         self.argset = argset
         self.finished = False
@@ -261,7 +261,7 @@ class JobCallable(object):
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
 
-class AbstractChangeAxis(object):
+class ChangeAxisDefinition(object):
     """ Represents an abstract aliasing """
     def __init__(self, name, axes, var_name, old_axis, new_axis):
         self.name = name
@@ -269,9 +269,9 @@ class AbstractChangeAxis(object):
         self.var_name = var_name
         self.old_axis = old_axis
         self.new_axis = new_axis
-    def create_jobs(self, resmgr, nodemgr):
+    def create_job_instances(self, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxis(resmgr, nodemgr, self.name, node, self.var_name, self.old_axis, self.new_axis)
+            yield ChangeAxisInstance(self, resmgr, nodemgr, node)
 
 class ChangeAxisException(Exception):
     def __init__(self, old, new):
@@ -280,43 +280,39 @@ class ChangeAxisException(Exception):
     def __str__(self):
         return 'axis change from {0} to {1}'.format(self.old, self.new)
 
-class ChangeAxis(Job):
+class ChangeAxisInstance(JobInstance):
     """ Creates an alias of a managed object """
-    def __init__(self, resmgr, nodemgr, name, node, var_name, old_axis, new_axis):
+    def __init__(self, job_def, resmgr, nodemgr, node):
+        self.job_def = job_def
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.name = name
         self.node = node
-        self.var_name = var_name
-        self.old_axis = old_axis
-        self.new_axis = new_axis
+        self.is_immediate = True
     @property
     def _inputs(self):
-        for node in self.nodemgr.retrieve_nodes((self.old_axis,), self.node):
-            yield resources.Dependency(self.var_name, node)
-        yield self.nodemgr.get_merge_input(self.old_axis, self.node)
-        yield self.nodemgr.get_merge_input(self.new_axis, self.node)
+        for node in self.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
+            yield resources.Dependency(self.job_def.var_name, node)
+        yield self.nodemgr.get_merge_input(self.job_def.old_axis, self.node)
+        yield self.nodemgr.get_merge_input(self.job_def.new_axis, self.node)
         for node_input in self.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
     def _outputs(self):
-        for node in self.nodemgr.retrieve_nodes((self.new_axis,), self.node):
-            yield resources.Dependency(self.var_name, node)
+        for node in self.nodemgr.retrieve_nodes((self.job_def.new_axis,), self.node):
+            yield resources.Dependency(self.job_def.var_name, node)
     @property
     def out_of_date(self):
         return True
     @property
     def trigger_regenerate(self):
         return True
-    def create_callable(self):
-        return None
     def finalize(self):
-        old_chunks = set(self.nodemgr.retrieve_chunks(self.old_axis, self.node))
-        new_chunks = set(self.nodemgr.retrieve_chunks(self.new_axis, self.node))
+        old_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.old_axis, self.node))
+        new_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.new_axis, self.node))
         if (old_chunks != new_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
         for chunk in old_chunks:
-            old_node = self.node + ((self.old_axis, chunk),)
-            new_node = self.node + ((self.new_axis, chunk),)
-            self.resmgr.add_alias(self.var_name, old_node, self.var_name, new_node)
+            old_node = self.node + nodes.AxisChunk(self.job_def.old_axis, chunk)
+            new_node = self.node + nodes.AxisChunk(self.job_def.new_axis, chunk)
+            self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
 

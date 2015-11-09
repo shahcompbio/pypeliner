@@ -4,14 +4,36 @@ import pickle
 import helpers
 import resources
 
-def node_subdir(node):
-    if len(node) == 0:
-        return ''
-    return os.path.join(*([os.path.join(*(str(axis), str(chunk))) for axis, chunk in node]))
+class AxisChunk(tuple):
+    def __new__ (cls, axis, chunk):
+        return super(AxisChunk, cls).__new__(cls, tuple([axis, chunk]))
+    @property
+    def subdir(self):
+        return os.path.join(str(self[0]), str(self[1]))
+
+class Node(tuple):
+    def __add__(self, a):
+        if isinstance(a, AxisChunk):
+            return Node(self + Node([a]))
+        elif isinstance(a, Node):
+            return super(Node, self).__add__(a)
+        else:
+            raise ValueError('Invalid type ' + str(type(a)) + ' for addition')
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return Node(super(Node, self).__getitem__(key))
+        return super(Node, self).__getitem__(key)
+    def __getslice__(self, i, j):
+        return self.__getitem__(slice(i, j))
+    @property
+    def subdir(self):
+        if len(self) == 0:
+            return ''
+        return os.path.join(*([a.subdir for a in self]))
 
 def name_node_filename(name, node):
     assert not os.path.isabs(name)
-    return os.path.join(node_subdir(node), name)
+    return os.path.join(node.subdir, name)
 
 def name_node_displayname(name, node):
     parts = ['_'.join((str(axis), str(chunk))) for axis, chunk in node] + [name]
@@ -23,15 +45,16 @@ class NodeManager(object):
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
-    def retrieve_nodes(self, axes, base_node=()):
+    def retrieve_nodes(self, axes, base_node=Node()):
+        assert isinstance(base_node, Node)
         if len(axes) == 0:
             yield base_node
         else:
             for chunk in self.retrieve_chunks(axes[0], base_node):
-                for node in self.retrieve_nodes(axes[1:], base_node + ((axes[0], chunk),)):
+                for node in self.retrieve_nodes(axes[1:], base_node + AxisChunk(axes[0], chunk)):
                     yield node
     def get_chunks_filename(self, axis, node):
-        return os.path.join(self.nodes_dir, node_subdir(node), axis+'_chunks')
+        return os.path.join(self.nodes_dir, node.subdir, axis+'_chunks')
     def retrieve_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             chunks_filename = self.get_chunks_filename(axis, node)
@@ -43,7 +66,8 @@ class NodeManager(object):
         return self.cached_chunks[(axis, node)]
     def store_chunks(self, axis, node, chunks):
         for chunk in chunks:
-            helpers.makedirs(os.path.join(self.temps_dir, node_subdir(node + ((axis, chunk),))))
+            new_node = node + AxisChunk(axis, chunk)
+            helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         chunks_filename = self.get_chunks_filename(axis, node)
