@@ -3,6 +3,7 @@ import sys
 import itertools
 import time
 import traceback
+import socket
 
 import helpers
 import arguments
@@ -219,6 +220,7 @@ class JobCallable(object):
         self.exc_dir = os.path.join(logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
         self.job_timer = JobTimer()
+        self.hostname = None
     @property
     def id(self):
         return (self.name, self.node)
@@ -250,6 +252,7 @@ class JobCallable(object):
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
+                self.hostname = socket.gethostname()
                 with self.job_timer:
                     self.argset.ret = self.func(*self.argset.args, **self.argset.kwargs)
                 self.finished = True

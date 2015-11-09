@@ -280,6 +280,7 @@ class Scheduler(object):
             self._logger.error('job ' + job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
             raise IncompleteJobException()
         self._logger.info('job ' + job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
+        self._logger.info('job ' + job_callable.displayname + ' host name ' + str(job_callable.hostname) + 's')
         if jobs[job_callable.id].trigger_regenerate:
             jobs.clear()
             jobs.update(self._create_jobs(resmgr, nodemgr))
