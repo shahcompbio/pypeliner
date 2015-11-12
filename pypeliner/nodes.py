@@ -16,7 +16,7 @@ class Node(tuple):
         if isinstance(a, AxisChunk):
             return Node(self + Node([a]))
         elif isinstance(a, Node):
-            return super(Node, self).__add__(a)
+            return Node(super(Node, self).__add__(a))
         else:
             raise ValueError('Invalid type ' + str(type(a)) + ' for addition')
     def __getitem__(self, key):
