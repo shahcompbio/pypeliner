@@ -81,8 +81,9 @@ class DependencyGraph:
         """ Return the id of the next job that is ready for execution.
         """
         job_id = self.ready.pop()
+        job_node = ('job', job_id)
         self.running.add(job_id)
-        return job_id
+        return self.G.node[job_node]['job']
 
     def notify_completed(self, job):
         """ A job was completed, advance current state.

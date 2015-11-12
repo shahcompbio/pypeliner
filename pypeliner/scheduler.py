@@ -158,8 +158,7 @@ class Scheduler(object):
 
     def _add_jobs(self, jobs, exec_queue, depgraph):
         while exec_queue.length < self.max_jobs and depgraph.jobs_ready:
-            job_id = depgraph.next_job()
-            job = jobs[job_id]
+            job = depgraph.next_job()
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                 if job.is_immediate:
                     self._logger.info('job ' + job.displayname + ' executing')
@@ -221,8 +220,7 @@ class Scheduler(object):
             jobs = self._create_jobs(workflow, resmgr, nodemgr)
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
             while depgraph.jobs_ready:
-                job_id = depgraph.next_job()
-                job = jobs[job_id]
+                job = depgraph.next_job()
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                     self._logger.info('job ' + job.displayname + ' executing')
                     if not job.trigger_regenerate:
