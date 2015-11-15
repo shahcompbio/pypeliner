@@ -34,7 +34,7 @@ class LocalJob(object):
     def __init__(self, ctx, job, modules):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
@@ -75,7 +75,7 @@ class QsubJob(object):
     def __init__(self, ctx, job, modules, qsub_bin, native_spec):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
@@ -159,7 +159,7 @@ class SubProcessJobQueue(object):
                 submitted = self.jobs[process_id]
                 del self.jobs[process_id]
                 submitted.finalize(returncode)
-                return submitted.job.id, submitted.received
+                return submitted.job, submitted.received
     @property
     def length(self):
         return len(self.jobs)
@@ -192,7 +192,7 @@ class AsyncQsubJob(object):
     def __init__(self, ctx, job, modules, qsub_bin, native_spec):
         self.job = job
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
@@ -332,7 +332,7 @@ class AsyncQsubJobQueue(object):
                         submitted = self.jobs[qsub_job_id]
                         del self.jobs[qsub_job_id]
                         submitted.finalize()
-                        return submitted.job.id, submitted.received
+                        return submitted.job, submitted.received
             time.sleep(self.poll_time)
     def delete_job(self, qsub_job_id):
         try:

@@ -165,33 +165,31 @@ class Scheduler(object):
                     job.finalize()
                     depgraph.notify_completed(job)
                 else:
-                    job_callable = job.create_callable()
-                    exec_queue.add(job.ctx, job_callable)
-                    self._logger.info('job ' + job_callable.displayname + ' executing')
-                    self._logger.info('job ' + job_callable.displayname + ' -> ' + job_callable.displaycommand)
+                    exec_queue.add(job.ctx, job)
+                    self._logger.info('job ' + job.displayname + ' executing')
+                    self._logger.info('job ' + job.displayname + ' -> ' + job.displaycommand)
             else:
                 depgraph.notify_completed(job)
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
     def _wait_next_job(self, workflow, jobs, exec_queue, depgraph, nodemgr, resmgr):
-        job_id, job_callable = exec_queue.wait()
-        job = jobs[job_id]
-        assert job_callable is not None
-        assert job_id == job_callable.id
-        if job_callable.finished:
-            job.finalize(job_callable)
-            self._logger.info('job ' + job_callable.displayname + ' completed successfully')
+        job, received = exec_queue.wait()
+        assert job is not None
+        assert job.id == received.id
+        if received.finished:
+            job.finalize(received)
+            self._logger.info('job ' + job.displayname + ' completed successfully')
         else:
-            self._logger.error('job ' + job_callable.displayname + ' failed to complete\n' + job_callable.log_text())
+            self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
             raise IncompleteJobException()
-        self._logger.info('job ' + job_callable.displayname + ' time ' + str(job_callable.duration) + 's')
-        self._logger.info('job ' + job_callable.displayname + ' host name ' + str(job_callable.hostname) + 's')
-        if jobs[job_callable.id].trigger_regenerate:
+        self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's')
+        self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's')
+        if job.trigger_regenerate:
             jobs.clear()
             jobs.update(self._create_jobs(workflow, resmgr, nodemgr))
             self._depgraph_regenerate(resmgr, nodemgr, jobs, depgraph)
-        depgraph.notify_completed(jobs[job_callable.id])
+        depgraph.notify_completed(job)
         if self.cleanup:
             resmgr.cleanup(depgraph)
 

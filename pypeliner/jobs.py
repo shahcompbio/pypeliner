@@ -66,6 +66,9 @@ class JobInstance(object):
             e.job_name = name
             raise
         self.logs_dir = os.path.join(logs_dir, node.subdir, self.job_def.name)
+        helpers.makedirs(self.logs_dir)
+        self.exc_dir = os.path.join(self.logs_dir, 'exc')
+        helpers.makedirs(self.exc_dir)
         self.is_immediate = False
     @property
     def id(self):
@@ -74,8 +77,17 @@ class JobInstance(object):
     def ctx(self):
         return self.job_def.ctx
     @property
+    def temps_dir(self):
+        return self.exc_dir
+    @property
     def displayname(self):
         return nodes.name_node_displayname(self.job_def.name, self.node)
+    @property
+    def displaycommand(self):
+        if self.job_def.func == commandline.execute:
+            return '"' + ' '.join(str(arg) for arg in self.argset.args) + '"'
+        else:
+            return self.job_def.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
     @property
     def _inputs(self):
         for arg in self.argset.iteritems():
@@ -183,7 +195,8 @@ class JobInstance(object):
                 if arg.is_split:
                     return True
         return False
-    def create_callable(self):
+    @property
+    def callable(self):
         resolved_args = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
         return JobCallable(self.job_def.name, self.node, self.job_def.func, resolved_args, self.logs_dir)
     def finalize(self, callable):
@@ -214,28 +227,13 @@ class JobCallable(object):
         self.func = func
         self.argset = argset
         self.finished = False
-        helpers.makedirs(logs_dir)
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
-        self.exc_dir = os.path.join(logs_dir, 'exc')
-        helpers.makedirs(self.exc_dir)
         self.job_timer = JobTimer()
         self.hostname = None
     @property
     def id(self):
         return (self.name, self.node)
-    @property
-    def temps_dir(self):
-        return self.exc_dir
-    @property
-    def displayname(self):
-        return nodes.name_node_displayname(self.name, self.node)
-    @property
-    def displaycommand(self):
-        if self.func == commandline.execute:
-            return '"' + ' '.join(str(arg) for arg in self.argset.args) + '"'
-        else:
-            return self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
     @property
     def duration(self):
         return self.job_timer.duration
