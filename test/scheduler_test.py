@@ -158,6 +158,43 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
 
+            def test_simple_sub_workflow(self):
+
+                workflow = pypeliner.workflow.Workflow()
+
+                workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
+
+                workflow.transform('append_to_lines', ('byfile',), self.ctx,
+                    append_to_lines,
+                    None,
+                    mgd.InputFile(self.input_n_filename, 'byfile'),
+                    '#',
+                    mgd.TempOutputFile('intermediate1', 'byfile'))
+
+                workflow.subworkflow('sub_workflow_1', ('byfile',),
+                    create_workflow,
+                    mgd.TempInputFile('intermediate1', 'byfile'),
+                    mgd.TempOutputFile('intermediate2', 'byfile'))
+
+                workflow.transform('merge_files', (), self.ctx,
+                    merge_file_byline,
+                    None,
+                    mgd.TempInputFile('intermediate2', 'byfile'),
+                    mgd.OutputFile(self.output_filename))
+
+                scheduler = self.create_scheduler()
+                scheduler.run(workflow, exec_queue)
+
+                with open(self.output_filename, 'r') as output_file:
+                    output = output_file.readlines()
+
+                expected = ['line1#\n', 'line2#\n', 'line3#\n', 'line4#\n',
+                    'line5#\n', 'line6#\n', 'line7#\n', 'line8#-line1#\n',
+                    'line2#\n', 'line3#\n', 'line4#\n', 'line5#\n',
+                    'line6#\n', 'line7#\n', 'line8#-']
+
+                self.assertEqual(output, expected)
+
             def test_specify_input_filename(self):
 
                 workflow = pypeliner.workflow.Workflow()
@@ -1031,7 +1068,27 @@ else:
         with open(output_filename, 'w') as output_file:
             output_file.write(temp_filename)
 
+    def create_workflow(input_filename, output_filename):
+        workflow = pypeliner.workflow.Workflow()
+        ctx = dict({'mem':1})
 
+        # Read data into a managed object
+        workflow.transform('read', (), ctx, read_stuff,
+            mgd.TempOutputObj('input_data'),
+            mgd.InputFile(input_filename))
 
+        # Extract a property of the managed object, modify it
+        # and store the result in another managed object
+        workflow.transform('do', (), ctx, do_stuff,
+            mgd.TempOutputObj('output_data'),
+            mgd.TempInputObj('input_data').prop('some_string'))
+
+        # Write the object to an output file
+        workflow.transform('write', (), ctx, write_stuff,
+            None,
+            mgd.TempInputObj('output_data'),
+            mgd.OutputFile(output_filename))
+
+        return workflow
 
 

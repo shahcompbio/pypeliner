@@ -1,6 +1,9 @@
 import collections
 import networkx
 import itertools
+import logging
+
+import nodes
 
 class AmbiguousInputException(Exception):
     def __init__(self, id):
@@ -20,6 +23,9 @@ class DependencyCycleException(Exception):
         self.cycle = cycle
     def __str__(self):
         return 'dependency cycle {0}'.format(self.cycle)
+
+class NoJobs(Exception):
+    pass
 
 class DependencyGraph:
     """ Graph of dependencies between jobs.
@@ -77,12 +83,17 @@ class DependencyGraph:
                 if job.id not in self.running and job.id not in self.completed:
                     self.ready.add(job.id)
 
-    def next_job(self):
+    def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
+        if len(self.ready) == 0:
+            raise NoJobs()
+
         job_id = self.ready.pop()
         job_node = ('job', job_id)
+
         self.running.add(job_id)
+
         return self.G.node[job_node]['job']
 
     def notify_completed(self, job):
@@ -109,10 +120,87 @@ class DependencyGraph:
                     self.ready.add(job.id)
 
     @property
-    def jobs_ready(self):
-        return len(self.ready) > 0
+    def finished(self):
+        return all([output in self.created for output in self.outputs])
+
+
+class WorkflowGraph(object):
+    def __init__(self, workflow, resmgr, nodemgr, logs_dir, name='main', node=nodes.Node(), prune=False, cleanup=False):
+        self._logger = logging.getLogger('workflowgraph')
+        self.workflow = workflow
+        self.resmgr = resmgr
+        self.nodemgr = nodemgr
+        self.logs_dir = logs_dir
+        self.name = name
+        self.node = node
+        self.graph = DependencyGraph()
+        self.subgraphs = list()
+        self.prune = prune
+        self.cleanup = cleanup
+        self.regenerate()
+
+    def regenerate(self):
+        """ Regenerate dependency graph based on job instances.
+        """
+
+        prefix = self.node# + asdf
+
+        jobs = dict()
+        for job_inst in self.workflow._create_job_instances(self, self.resmgr, self.nodemgr, self.logs_dir):
+            if job_inst.id in jobs:
+                raise ValueError('Duplicate job ' + job_inst.displayname)
+            jobs[job_inst.id] = job_inst
+
+        inputs = set((input for job in jobs.itervalues() for input in job.pipeline_inputs))
+        if self.prune:
+            outputs = set((output for job in jobs.itervalues() for output in job.pipeline_outputs))
+        else:
+            outputs = set((output for job in jobs.itervalues() for output in job.outputs))
+        inputs = inputs.difference(outputs)
+
+        self.graph.regenerate(inputs, outputs, jobs.values())
+
+    def pop_next_job(self):
+        """ Pop the next job from the top of this or a subgraph.
+        """
+        
+        while True:
+            # Check if subgraphs have ready jobs, or have finished
+            for job, graph in self.subgraphs:
+                try:
+                    return graph.pop_next_job()
+                except NoJobs:
+                    pass
+                if graph.finished:
+                    job.finalize()
+                    job.complete()
+
+            # Remove finished subgraphs
+            self.subgraphs = filter(lambda (job, graph): not graph.finished, self.subgraphs)
+
+            # Remove from self graph if no subgraph jobs
+            job = self.graph.pop_next_job()
+
+            if job.is_subworkflow:
+                self._logger.info('creating subworkflow ' + job.displayname)
+                workflow = job.create_subworkflow()
+                graph = WorkflowGraph(workflow, self.resmgr, self.nodemgr, self.logs_dir, name=job.job_def.name, node=job.node, prune=self.prune, cleanup=self.cleanup)
+                self.subgraphs.append((job, graph))
+                continue
+            elif job.is_immediate:
+                job.finalize()
+                job.complete()
+                continue
+            else:
+                return job
+
+    def notify_completed(self, job):
+        self.graph.notify_completed(job)
+        if self.cleanup:
+            self.resmgr.cleanup(self.graph)
 
     @property
     def finished(self):
-        return all([output in self.created for output in self.outputs])
+        return self.graph.finished
+
 

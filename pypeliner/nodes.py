@@ -3,6 +3,7 @@ import pickle
 
 import helpers
 import resources
+import managed
 
 class AxisChunk(tuple):
     def __new__ (cls, axis, chunk):
@@ -45,7 +46,9 @@ class NodeManager(object):
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
-    def retrieve_nodes(self, axes, base_node=Node()):
+    def retrieve_nodes(self, axes, base_node=None):
+        if base_node is None:
+            base_node = Node()
         assert isinstance(base_node, Node)
         if len(axes) == 0:
             yield base_node

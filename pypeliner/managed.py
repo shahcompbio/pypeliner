@@ -27,7 +27,15 @@ axis, the split axis.
 
 """
 
+import collections
+
 import arguments
+
+class Axis(str):
+    pass
+
+class Namespace(str):
+    pass
 
 class JobArgMismatchException(Exception):
     def __init__(self, name, axes, node):
@@ -53,7 +61,7 @@ class Managed(object):
         if type(axes) != tuple:
             raise ValueError('axes must be a tuple')
         self.name = name
-        self.axes = axes
+        self.axes = tuple([Axis(axis) for axis in axes])
         self.kwargs = kwargs
     def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
         common = 0

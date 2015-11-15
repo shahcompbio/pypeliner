@@ -42,9 +42,9 @@ class JobDefinition(object):
         self.ctx = ctx
         self.func = func
         self.callset = callset
-    def create_job_instances(self, resmgr, nodemgr, logs_dir):
+    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield JobInstance(self, resmgr, nodemgr, node, logs_dir)
+            yield JobInstance(self, graph, resmgr, nodemgr, node, logs_dir)
 
 class InputMissingException(Exception):
     def __init__(self, input, job):
@@ -55,8 +55,9 @@ class InputMissingException(Exception):
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
-    def __init__(self, job_def, resmgr, nodemgr, node, logs_dir):
+    def __init__(self, job_def, graph, resmgr, nodemgr, node, logs_dir):
         self.job_def = job_def
+        self.graph = graph
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.node = node
@@ -65,14 +66,15 @@ class JobInstance(object):
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, node.subdir, self.job_def.name)
+        self.logs_dir = os.path.join(logs_dir, self.graph.node.subdir, self.graph.name, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
         self.exc_dir = os.path.join(self.logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
+        self.is_subworkflow = False
         self.is_immediate = False
     @property
     def id(self):
-        return (self.job_def.name, self.node)
+        return (self.node, self.job_def.name)
     @property
     def ctx(self):
         return self.job_def.ctx
@@ -81,7 +83,7 @@ class JobInstance(object):
         return self.exc_dir
     @property
     def displayname(self):
-        return nodes.name_node_displayname(self.job_def.name, self.node)
+        return nodes.name_node_displayname(self.graph.name, self.graph.node) + nodes.name_node_displayname(self.job_def.name, self.node)
     @property
     def displaycommand(self):
         if self.job_def.func == commandline.execute:
@@ -188,8 +190,7 @@ class JobInstance(object):
     @property
     def output_missing(self):
         return not all([output.exists for output in self.output_resources])
-    @property
-    def trigger_regenerate(self):
+    def check_require_regenerate(self):
         for arg in self.argset.iteritems():
             if isinstance(arg, arguments.Arg):
                 if arg.is_split:
@@ -198,11 +199,15 @@ class JobInstance(object):
     @property
     def callable(self):
         resolved_args = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
-        return JobCallable(self.job_def.name, self.node, self.job_def.func, resolved_args, self.logs_dir)
+        return JobCallable(self.id, self.job_def.func, resolved_args, self.logs_dir)
     def finalize(self, callable):
         for arg, resolved in zip(self.argset.iteritems(), callable.argset.iteritems()):
             if isinstance(arg, arguments.Arg):
                 arg.finalize(resolved)
+        if self.check_require_regenerate():
+            self.graph.regenerate()
+    def complete(self):
+        self.graph.notify_completed(self)
 
 class JobTimer(object):
     """ Timer using a context manager """
@@ -221,9 +226,8 @@ class JobTimer(object):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, name, node, func, argset, logs_dir):
-        self.name = name
-        self.node = node
+    def __init__(self, id, func, argset, logs_dir):
+        self.id = id
         self.func = func
         self.argset = argset
         self.finished = False
@@ -231,9 +235,6 @@ class JobCallable(object):
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
         self.job_timer = JobTimer()
         self.hostname = None
-    @property
-    def id(self):
-        return (self.name, self.node)
     @property
     def duration(self):
         return self.job_timer.duration
@@ -259,6 +260,40 @@ class JobCallable(object):
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
 
+class SubWorkflowDefinition(JobDefinition):
+    def __init__(self, name, axes, func, callset):
+        self.name = name
+        self.axes = axes
+        self.func = func
+        self.callset = callset
+    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
+        for node in nodemgr.retrieve_nodes(self.axes):
+            yield SubWorkflowInstance(self, graph, resmgr, nodemgr, node, logs_dir)
+
+class SubWorkflowInstance(JobInstance):
+    """ Represents a sub workflow. """
+    def __init__(self, job_def, graph, resmgr, nodemgr, node, logs_dir):
+        self.job_def = job_def
+        self.graph = graph
+        self.resmgr = resmgr
+        self.nodemgr = nodemgr
+        self.node = node
+        try:
+            self.argset = self.job_def.callset.transform(lambda arg: managed.create_arg(resmgr, nodemgr, arg, node))
+        except managed.JobArgMismatchException as e:
+            e.job_name = name
+            raise
+        self.logs_dir = os.path.join(logs_dir, node.subdir, self.job_def.name)
+        self.is_subworkflow = True
+        self.is_immediate = False
+        self.trigger_regenerate = False
+    def create_subworkflow(self):
+        argset = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
+        workflow = self.job_def.func(*argset.args, **argset.kwargs)
+        return workflow
+    def finalize(self):
+        super(SubWorkflowInstance, self).finalize(self.callable)
+
 class ChangeAxisDefinition(object):
     """ Represents an abstract aliasing """
     def __init__(self, name, axes, var_name, old_axis, new_axis):
@@ -267,9 +302,9 @@ class ChangeAxisDefinition(object):
         self.var_name = var_name
         self.old_axis = old_axis
         self.new_axis = new_axis
-    def create_job_instances(self, resmgr, nodemgr, logs_dir):
+    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxisInstance(self, resmgr, nodemgr, node)
+            yield ChangeAxisInstance(self, graph, resmgr, nodemgr, node)
 
 class ChangeAxisException(Exception):
     def __init__(self, old, new):
@@ -280,12 +315,15 @@ class ChangeAxisException(Exception):
 
 class ChangeAxisInstance(JobInstance):
     """ Creates an alias of a managed object """
-    def __init__(self, job_def, resmgr, nodemgr, node):
+    def __init__(self, job_def, graph, resmgr, nodemgr, node):
         self.job_def = job_def
+        self.graph = graph
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.node = node
+        self.is_subworkflow = False
         self.is_immediate = True
+        self.trigger_regenerate = False
     @property
     def _inputs(self):
         for node in self.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
@@ -301,9 +339,6 @@ class ChangeAxisInstance(JobInstance):
     @property
     def out_of_date(self):
         return True
-    @property
-    def trigger_regenerate(self):
-        return True
     def finalize(self):
         old_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.old_axis, self.node))
         new_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.new_axis, self.node))
@@ -313,4 +348,6 @@ class ChangeAxisInstance(JobInstance):
             old_node = self.node + nodes.AxisChunk(self.job_def.old_axis, chunk)
             new_node = self.node + nodes.AxisChunk(self.job_def.new_axis, chunk)
             self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
+    def complete(self):
+        self.graph.notify_completed(self)
 
