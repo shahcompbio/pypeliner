@@ -42,9 +42,9 @@ class JobDefinition(object):
         self.ctx = ctx
         self.func = func
         self.callset = callset
-    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
+    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield JobInstance(self, graph, resmgr, nodemgr, node, logs_dir)
+            yield JobInstance(self, workflow, resmgr, nodemgr, node, logs_dir)
 
 class InputMissingException(Exception):
     def __init__(self, input, job):
@@ -55,9 +55,9 @@ class InputMissingException(Exception):
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
-    def __init__(self, job_def, graph, resmgr, nodemgr, node, logs_dir):
+    def __init__(self, job_def, workflow, resmgr, nodemgr, node, logs_dir):
         self.job_def = job_def
-        self.graph = graph
+        self.workflow = workflow
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.node = node
@@ -66,7 +66,7 @@ class JobInstance(object):
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, self.graph.node.subdir, self.node.subdir, self.job_def.name)
+        self.logs_dir = os.path.join(logs_dir, self.workflow.node.subdir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
         self.exc_dir = os.path.join(self.logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
@@ -83,7 +83,12 @@ class JobInstance(object):
         return self.exc_dir
     @property
     def displayname(self):
-        return '/'.join([self.graph.node.displayname, self.node.displayname, self.job_def.name])
+        name = '/' + self.job_def.name
+        if self.node.displayname != '':
+            name = '/' + self.node.displayname + name
+        if self.workflow.node.displayname != '':
+            name = '/' + self.workflow.node.displayname + name
+        return name
     @property
     def displaycommand(self):
         if self.job_def.func == commandline.execute:
@@ -205,9 +210,9 @@ class JobInstance(object):
             if isinstance(arg, arguments.Arg):
                 arg.finalize(resolved)
         if self.check_require_regenerate():
-            self.graph.regenerate()
+            self.workflow.regenerate()
     def complete(self):
-        self.graph.notify_completed(self)
+        self.workflow.notify_completed(self)
 
 class JobTimer(object):
     """ Timer using a context manager """
@@ -266,15 +271,15 @@ class SubWorkflowDefinition(JobDefinition):
         self.axes = axes
         self.func = func
         self.callset = callset
-    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
+    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield SubWorkflowInstance(self, graph, resmgr, nodemgr, node, logs_dir)
+            yield SubWorkflowInstance(self, workflow, resmgr, nodemgr, node, logs_dir)
 
 class SubWorkflowInstance(JobInstance):
     """ Represents a sub workflow. """
-    def __init__(self, job_def, graph, resmgr, nodemgr, node, logs_dir):
+    def __init__(self, job_def, workflow, resmgr, nodemgr, node, logs_dir):
         self.job_def = job_def
-        self.graph = graph
+        self.workflow = workflow
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.node = node
@@ -302,9 +307,9 @@ class ChangeAxisDefinition(object):
         self.var_name = var_name
         self.old_axis = old_axis
         self.new_axis = new_axis
-    def create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
+    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
         for node in nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxisInstance(self, graph, resmgr, nodemgr, node)
+            yield ChangeAxisInstance(self, workflow, resmgr, nodemgr, node)
 
 class ChangeAxisException(Exception):
     def __init__(self, old, new):
@@ -315,9 +320,9 @@ class ChangeAxisException(Exception):
 
 class ChangeAxisInstance(JobInstance):
     """ Creates an alias of a managed object """
-    def __init__(self, job_def, graph, resmgr, nodemgr, node):
+    def __init__(self, job_def, workflow, resmgr, nodemgr, node):
         self.job_def = job_def
-        self.graph = graph
+        self.workflow = workflow
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.node = node
@@ -349,5 +354,5 @@ class ChangeAxisInstance(JobInstance):
             new_node = self.node + nodes.AxisInstance(self.job_def.new_axis, chunk)
             self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
-        self.graph.notify_completed(self)
+        self.workflow.notify_completed(self)
 

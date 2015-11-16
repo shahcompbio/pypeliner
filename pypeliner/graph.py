@@ -181,7 +181,7 @@ class WorkflowGraph(object):
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
                 workflow = job.create_subworkflow()
-                node = job.graph.node + job.node + nodes.Namespace(job.job_def.name)
+                node = job.workflow.node + job.node + nodes.Namespace(job.job_def.name)
                 graph = WorkflowGraph(workflow, self.resmgr, self.nodemgr, self.logs_dir, node=node, prune=self.prune, cleanup=self.cleanup)
                 self.subgraphs.append((job, graph))
                 continue
