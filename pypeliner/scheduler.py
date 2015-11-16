@@ -50,7 +50,7 @@ class Scheduler(object):
         self.repopulate = False
         self.cleanup = True
         self.prune = True
-        self.set_pipeline_dir('./')
+        self.workflow_dir = './'
         self.freeze = True
 
     def __setattr__(self, attr, value):
@@ -58,37 +58,6 @@ class Scheduler(object):
             raise AttributeError("Setting new attribute")
         super(Scheduler, self).__setattr__(attr, value)
  
-    def set_pipeline_dir(self, pipeline_dir):
-        pipeline_dir = helpers.abspath(pipeline_dir)
-        self.db_dir = os.path.join(pipeline_dir, 'db')
-        self.temps_dir = os.path.join(pipeline_dir, 'tmp')
-        self.logs_dir = os.path.join(pipeline_dir, 'log')
- 
-    @property
-    def db_dir(self):
-        return self._db_dir
-    @db_dir.setter
-    def db_dir(self, value):
-        self._db_dir = helpers.abspath(value)
-
-    @property
-    def nodes_dir(self):
-        return os.path.join(self.db_dir, 'nodes')
-
-    @property
-    def temps_dir(self):
-        return self._temps_dir
-    @temps_dir.setter
-    def temps_dir(self, value):
-        self._temps_dir = helpers.abspath(value)
-
-    @property
-    def logs_dir(self):
-        return self._logs_dir
-    @logs_dir.setter
-    def logs_dir(self, value):
-        self._logs_dir = helpers.abspath(value)
-
     def run(self, workflow_def, exec_queue):
         """ Run the pipeline
 
@@ -104,23 +73,17 @@ class Scheduler(object):
         and the second interrupt will attempt to cleanly cancel all jobs.
 
         """
-        helpers.makedirs(self.db_dir)
-        helpers.makedirs(self.nodes_dir)
-        helpers.makedirs(self.temps_dir)
-        helpers.makedirs(self.logs_dir)
         self._job_temps_dirs = set()
-        with self.PipelineLock():
-            resmgr = resourcemgr.ResourceManager(self.temps_dir, self.db_dir)
-            nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            workflow = graph.WorkflowInstance(workflow_def, resmgr, nodemgr, self.logs_dir, prune=self.prune, cleanup=self.cleanup)
+        with helpers.DirectoryLock() as dir_lock:
+            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, dir_lock, prune=self.prune, cleanup=self.cleanup)
             failing = False
             try:
                 try:
                     while True:
-                        self._add_jobs(exec_queue, workflow, nodemgr, resmgr)
+                        self._add_jobs(exec_queue, workflow)
                         if exec_queue.empty:
                             break
-                        self._wait_next_job(exec_queue, workflow, nodemgr, resmgr)
+                        self._wait_next_job(exec_queue, workflow)
                 except KeyboardInterrupt as e:
                     raise e
                 except Exception:
@@ -128,7 +91,7 @@ class Scheduler(object):
                     self._logger.error('exception\n' + traceback.format_exc())
                 while not exec_queue.empty:
                     try:
-                        self._wait_next_job(exec_queue, workflow, nodemgr, resmgr)
+                        self._wait_next_job(exec_queue, workflow)
                     except KeyboardInterrupt as e:
                         raise e
                     except Exception:
@@ -140,7 +103,7 @@ class Scheduler(object):
                 self._logger.error('pipeline failed')
                 raise PipelineException('pipeline failed')
 
-    def _add_jobs(self, exec_queue, workflow, nodemgr, resmgr):
+    def _add_jobs(self, exec_queue, workflow):
         while exec_queue.length < self.max_jobs:
             try:
                 job = workflow.pop_next_job()
@@ -158,7 +121,7 @@ class Scheduler(object):
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
-    def _wait_next_job(self, exec_queue, workflow, nodemgr, resmgr):
+    def _wait_next_job(self, exec_queue, workflow):
         job, received = exec_queue.wait()
         assert job is not None
         assert job.id == received.id
@@ -171,18 +134,6 @@ class Scheduler(object):
         self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's')
         self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's')
 
-    @contextlib.contextmanager
-    def PipelineLock(self):
-        lock_directory = os.path.join(self.db_dir, 'lock')
-        try:
-            os.mkdir(lock_directory)
-        except OSError:
-            raise Exception('Pipeline already running, remove {0} to override'.format(lock_directory))
-        try:
-            yield
-        finally:
-            os.rmdir(lock_directory)
-            
     def pretend(self, workflow_def):
         """ Pretend run the pipeline.
 

@@ -4,7 +4,9 @@ import networkx
 import itertools
 import logging
 
+import helpers
 import nodes
+import resourcemgr
 
 class AmbiguousInputException(Exception):
     def __init__(self, id):
@@ -126,12 +128,25 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, resmgr, nodemgr, logs_dir, node=nodes.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow_def, workflow_dir, dir_lock, node=nodes.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
-        self.resmgr = resmgr
-        self.nodemgr = nodemgr
-        self.logs_dir = os.path.join(logs_dir, node.subdir)
+        self.workflow_dir = os.path.realpath(workflow_dir)
+        self.dir_lock = dir_lock
+
+        db_dir = os.path.join(workflow_dir, 'db')
+        nodes_dir = os.path.join(db_dir, 'nodes')
+        temps_dir = os.path.join(workflow_dir, 'tmp')
+        self.logs_dir = os.path.join(workflow_dir, 'log')
+
+        helpers.makedirs(db_dir)
+        helpers.makedirs(nodes_dir)
+        helpers.makedirs(temps_dir)
+        helpers.makedirs(self.logs_dir)
+
+        self.dir_lock.add_lock(os.path.join(self.workflow_dir, '_lock'))
+        self.resmgr = resourcemgr.ResourceManager(temps_dir, db_dir)
+        self.nodemgr = nodes.NodeManager(nodes_dir, temps_dir)
         self.node = node
         self.graph = DependencyGraph()
         self.subworkflows = list()
@@ -182,8 +197,9 @@ class WorkflowInstance(object):
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
                 workflow_def = job.create_subworkflow()
-                node = job.workflow.node + job.node + nodes.Namespace(job.job_def.name)
-                workflow = WorkflowInstance(workflow_def, self.resmgr, self.nodemgr, self.logs_dir, node=node, prune=self.prune, cleanup=self.cleanup)
+                node = job.node + nodes.Namespace(job.job_def.name)
+                workflow_dir = os.path.join(self.workflow_dir, node.subdir)
+                workflow = WorkflowInstance(workflow_def, workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup)
                 self.subworkflows.append((job, workflow))
                 continue
             elif job.is_immediate:

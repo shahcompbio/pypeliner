@@ -72,7 +72,7 @@ if __name__ == '__main__':
             def create_scheduler(self):
 
                 scheduler = pypeliner.scheduler.Scheduler()
-                scheduler.set_pipeline_dir(pipeline_dir)
+                scheduler.workflow_dir = pipeline_dir
                 scheduler.max_jobs = 10
                 return scheduler
 
@@ -188,10 +188,10 @@ if __name__ == '__main__':
                 with open(self.output_filename, 'r') as output_file:
                     output = output_file.readlines()
 
-                expected = ['line1#\n', 'line2#\n', 'line3#\n', 'line4#\n',
-                    'line5#\n', 'line6#\n', 'line7#\n', 'line8#-line1#\n',
-                    'line2#\n', 'line3#\n', 'line4#\n', 'line5#\n',
-                    'line6#\n', 'line7#\n', 'line8#-']
+                expected = ['0b0aline1#\n', '1b1aline2#\n', '2b2aline3#\n', '3b3aline4#\n',
+                    '4b4aline5#\n', '5b5aline6#\n', '6b6aline7#\n', '7b7aline8#-\n',
+                    '0b0aline1#\n', '1b1aline2#\n', '2b2aline3#\n', '3b3aline4#\n',
+                    '4b4aline5#\n', '5b5aline6#\n', '6b6aline7#\n', '7b7aline8#-\n']
 
                 self.assertEqual(output, expected)
 
@@ -1076,13 +1076,13 @@ else:
             None,
             mgd.InputFile(input_filename),
             mgd.TempOutputFile('intermediate1'),
-            'm')
+            'a')
 
         workflow.transform('dofilestuff2', (), ctx, do_file_stuff,
             None,
             mgd.TempInputFile('intermediate1'),
             mgd.OutputFile(output_filename),
-            'm')
+            'b')
 
         return workflow
 
