@@ -1,3 +1,4 @@
+import os
 import collections
 import networkx
 import itertools
@@ -130,7 +131,7 @@ class WorkflowGraph(object):
         self.workflow = workflow
         self.resmgr = resmgr
         self.nodemgr = nodemgr
-        self.logs_dir = logs_dir
+        self.logs_dir = os.path.join(logs_dir, node.subdir)
         self.node = node
         self.graph = DependencyGraph()
         self.subgraphs = list()

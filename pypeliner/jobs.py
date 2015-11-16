@@ -66,7 +66,7 @@ class JobInstance(object):
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, self.workflow.node.subdir, self.node.subdir, self.job_def.name)
+        self.logs_dir = os.path.join(logs_dir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
         self.exc_dir = os.path.join(self.logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
