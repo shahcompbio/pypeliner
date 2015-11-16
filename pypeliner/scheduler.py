@@ -58,6 +58,13 @@ class Scheduler(object):
             raise AttributeError("Setting new attribute")
         super(Scheduler, self).__setattr__(attr, value)
  
+    @property
+    def workflow_dir(self):
+        return self._workflow_dir
+    @workflow_dir.setter
+    def workflow_dir(self, value):
+        self._workflow_dir = helpers.abspath(value)
+
     def run(self, workflow_def, exec_queue):
         """ Run the pipeline
 
