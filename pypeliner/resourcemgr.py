@@ -13,7 +13,7 @@ class FilenameCreator(object):
         self.file_dir = file_dir
         self.file_suffix = file_suffix
     def __call__(self, name, node):
-        return os.path.join(self.file_dir, nodes.name_node_filename(name, node) + self.file_suffix)
+        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
     def __repr__(self):
         return '{0}.{1}({2})'.format(FilenameCreator.__module__, FilenameCreator.__name__, ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
 
@@ -44,7 +44,7 @@ class ResourceManager(object):
         if (name, node) in self.aliases:
             return self.get_filename(*self.aliases[(name, node)])
         else:
-            return os.path.join(self.temps_dir, nodes.name_node_filename(name, node))
+            return os.path.join(self.temps_dir, node.subdir, name)
     def add_alias(self, name, node, alias_name, alias_node):
         self.aliases[(alias_name, alias_node)] = (name, node)
         self.rev_alias[(name, node)].append((alias_name, alias_node))

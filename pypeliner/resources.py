@@ -20,7 +20,7 @@ class Dependency(object):
         return (self.name, self.node)
     @property
     def displayname(self):
-        return nodes.name_node_displayname(self.name, self.node)
+        return '/'.join([self.node.displayname, self.name])
 
 
 class Resource(Dependency):

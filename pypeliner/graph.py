@@ -125,13 +125,12 @@ class DependencyGraph:
 
 
 class WorkflowGraph(object):
-    def __init__(self, workflow, resmgr, nodemgr, logs_dir, name='main', node=nodes.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow, resmgr, nodemgr, logs_dir, node=nodes.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow = workflow
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.logs_dir = logs_dir
-        self.name = name
         self.node = node
         self.graph = DependencyGraph()
         self.subgraphs = list()
@@ -142,8 +141,6 @@ class WorkflowGraph(object):
     def regenerate(self):
         """ Regenerate dependency graph based on job instances.
         """
-
-        prefix = self.node# + asdf
 
         jobs = dict()
         for job_inst in self.workflow._create_job_instances(self, self.resmgr, self.nodemgr, self.logs_dir):
@@ -184,7 +181,8 @@ class WorkflowGraph(object):
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
                 workflow = job.create_subworkflow()
-                graph = WorkflowGraph(workflow, self.resmgr, self.nodemgr, self.logs_dir, name=job.job_def.name, node=job.node, prune=self.prune, cleanup=self.cleanup)
+                node = job.graph.node + job.node + nodes.Namespace(job.job_def.name)
+                graph = WorkflowGraph(workflow, self.resmgr, self.nodemgr, self.logs_dir, node=node, prune=self.prune, cleanup=self.cleanup)
                 self.subgraphs.append((job, graph))
                 continue
             elif job.is_immediate:

@@ -1,3 +1,4 @@
+import collections
 import os
 import pickle
 
@@ -5,16 +6,27 @@ import helpers
 import resources
 import managed
 
-class AxisChunk(tuple):
-    def __new__ (cls, axis, chunk):
-        return super(AxisChunk, cls).__new__(cls, tuple([axis, chunk]))
+AxisInstanceBase = collections.namedtuple('AxisInstanceBase', ['axis', 'chunk'])
+
+class AxisInstance(AxisInstanceBase):
     @property
     def subdir(self):
-        return os.path.join(str(self[0]), str(self[1]))
+        return os.path.join(str(self.axis), str(self.chunk))
+    @property
+    def displayname(self):
+        return ':'.join([str(self.axis), str(self.chunk)])
+
+class Namespace(str):
+    @property
+    def subdir(self):
+        return self
+    @property
+    def displayname(self):
+        return self
 
 class Node(tuple):
     def __add__(self, a):
-        if isinstance(a, AxisChunk):
+        if isinstance(a, (AxisInstance, Namespace)):
             return Node(self + Node([a]))
         elif isinstance(a, Node):
             return Node(super(Node, self).__add__(a))
@@ -31,14 +43,9 @@ class Node(tuple):
         if len(self) == 0:
             return ''
         return os.path.join(*([a.subdir for a in self]))
-
-def name_node_filename(name, node):
-    assert not os.path.isabs(name)
-    return os.path.join(node.subdir, name)
-
-def name_node_displayname(name, node):
-    parts = ['_'.join((str(axis), str(chunk))) for axis, chunk in node] + [name]
-    return '/' + '/'.join(parts)
+    @property
+    def displayname(self):
+        return '/'.join([a.displayname for a in self])
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
@@ -54,7 +61,7 @@ class NodeManager(object):
             yield base_node
         else:
             for chunk in self.retrieve_chunks(axes[0], base_node):
-                for node in self.retrieve_nodes(axes[1:], base_node + AxisChunk(axes[0], chunk)):
+                for node in self.retrieve_nodes(axes[1:], base_node + AxisInstance(axes[0], chunk)):
                     yield node
     def get_chunks_filename(self, axis, node):
         return os.path.join(self.nodes_dir, node.subdir, axis+'_chunks')
@@ -69,7 +76,7 @@ class NodeManager(object):
         return self.cached_chunks[(axis, node)]
     def store_chunks(self, axis, node, chunks):
         for chunk in chunks:
-            new_node = node + AxisChunk(axis, chunk)
+            new_node = node + AxisInstance(axis, chunk)
             helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks

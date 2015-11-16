@@ -66,7 +66,7 @@ class JobInstance(object):
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
-        self.logs_dir = os.path.join(logs_dir, self.graph.node.subdir, self.graph.name, self.node.subdir, self.job_def.name)
+        self.logs_dir = os.path.join(logs_dir, self.graph.node.subdir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
         self.exc_dir = os.path.join(self.logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
@@ -83,7 +83,7 @@ class JobInstance(object):
         return self.exc_dir
     @property
     def displayname(self):
-        return nodes.name_node_displayname(self.graph.name, self.graph.node) + nodes.name_node_displayname(self.job_def.name, self.node)
+        return '/'.join([self.graph.node.displayname, self.node.displayname, self.job_def.name])
     @property
     def displaycommand(self):
         if self.job_def.func == commandline.execute:
@@ -345,8 +345,8 @@ class ChangeAxisInstance(JobInstance):
         if (old_chunks != new_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
         for chunk in old_chunks:
-            old_node = self.node + nodes.AxisChunk(self.job_def.old_axis, chunk)
-            new_node = self.node + nodes.AxisChunk(self.job_def.new_axis, chunk)
+            old_node = self.node + nodes.AxisInstance(self.job_def.old_axis, chunk)
+            new_node = self.node + nodes.AxisInstance(self.job_def.new_axis, chunk)
             self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
         self.graph.notify_completed(self)
