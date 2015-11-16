@@ -40,13 +40,6 @@ class JobArgMismatchException(Exception):
     def __str__(self):
         return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(self.name, self.axes, self.job_name, tuple(a[0] for a in self.node))
 
-def create_arg(resmgr, nodemgr, mgd, node):
-    """ Translate a managed user argument into an internally used Arg object """
-    if isinstance(mgd, Managed):
-        return mgd.create_arg(resmgr, nodemgr, node)
-    else:
-        return mgd
-
 class Managed(object):
     """ Interface class used to represent a managed data """
     def __init__(self, name, *axes, **kwargs):
@@ -57,19 +50,23 @@ class Managed(object):
         self.name = name
         self.axes = axes
         self.kwargs = kwargs
-    def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
+    def create_arg(self, job):
         common = 0
-        for node_axis, axis in zip((a[0] for a in node), self.axes):
+        for node_axis, axis in zip((a[0] for a in job.node), self.axes):
             if node_axis != axis:
                 break
             common += 1
         axes_specific = self.axes[common:]
-        if len(axes_specific) == 0 and normal is not None:
-            return normal(resmgr, nodemgr, self.name, node[:common], **kwargs)
-        elif len(axes_specific) == 1 and splitmerge is not None:
-            return splitmerge(resmgr, nodemgr, self.name, node[:common], axes_specific[0], **kwargs)
+        if len(axes_specific) == 0 and self.normal is not None:
+            arg = self.normal(job.db, self.name, job.node[:common], **self.kwargs)
+        elif len(axes_specific) == 1 and self.splitmerge is not None:
+            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific[0], **self.kwargs)
         else:
-            raise JobArgMismatchException(self.name, self.axes, node)
+            raise JobArgMismatchException(self.name, self.axes, job.node)
+        job.args.append(arg)
+        return arg
+    def __deepcopy__(self, memo):
+        return self.create_arg(memo['_job'])
 
 class Template(Managed):
     """ Represents a name templated by axes 
@@ -88,8 +85,8 @@ class Template(Managed):
     :param axes: The axes to use to resolve `name`.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TemplateArg, splitmerge=arguments.MergeTemplateArg)
+    normal = arguments.TemplateArg
+    splitmerge = arguments.MergeTemplateArg
 
 class TempFile(Managed):
     """ Represents a temp file the can be written to but is not a dependency
@@ -107,8 +104,8 @@ class TempFile(Managed):
                  axes of the referencing job.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempFileArg)
+    normal = arguments.TempFileArg
+    splitmerge = None
 
 class InputFile(Managed):
     """ Interface class used to represent a user specified managed file input
@@ -131,8 +128,8 @@ class InputFile(Managed):
     as specified above, with chunks of the merge axis as keys.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.InputFileArg, splitmerge=arguments.MergeFileArg, **self.kwargs)
+    normal = arguments.InputFileArg
+    splitmerge = arguments.MergeFileArg
 
 class OutputFile(Managed):
     """ Interface class used to represent a user specified managed file output
@@ -155,8 +152,8 @@ class OutputFile(Managed):
     for that chunk.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.OutputFileArg, splitmerge=arguments.SplitFileArg, **self.kwargs)
+    normal = arguments.OutputFileArg
+    splitmerge = arguments.SplitFileArg
 
 class TempInputObj(Managed):
     """ Interface class used to represent a managed object input
@@ -172,6 +169,8 @@ class TempInputObj(Managed):
     with chunks of the merge axis as keys.
 
     """
+    normal = arguments.TempInputObjArg
+    splitmerge = arguments.TempMergeObjArg
     def prop(self, prop_name):
         """
         Resolve to a property of the object instead of the object itself.
@@ -194,8 +193,6 @@ class TempInputObj(Managed):
             performs a fixed calculation.
         """
         return TempInputObjExtract(self.name, self.axes, func)
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg)
 
 class TempOutputObj(Managed):
     """ Interface class used to represent a managed object output
@@ -217,17 +214,17 @@ class TempOutputObj(Managed):
     with chunks of the split axis as keys.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputObjArg, splitmerge=arguments.TempSplitObjArg)
+    normal = arguments.TempOutputObjArg
+    splitmerge = arguments.TempSplitObjArg
 
 class TempInputObjExtract(Managed):
     """ Interface class used to represent a property of a managed
     input object """
+    normal = arguments.TempInputObjArg
+    splitmerge = arguments.TempMergeObjArg
     def __init__(self, name, axes, func):
         Managed.__init__(self, name, *axes)
-        self.func = func
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputObjArg, splitmerge=arguments.TempMergeObjArg, func=self.func)
+        self.kwargs['func'] = func
 
 class TempInputFile(Managed):
     """ Interface class used to represent a managed temporary file input
@@ -243,8 +240,8 @@ class TempInputFile(Managed):
     with chunks of the merge axis as keys.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempInputFileArg, splitmerge=arguments.TempMergeFileArg)
+    normal = arguments.TempInputFileArg
+    splitmerge = arguments.TempMergeFileArg
 
 class TempOutputFile(Managed):
     """ Interface class used to represent a managed temporary file output
@@ -261,8 +258,8 @@ class TempOutputFile(Managed):
     for that chunk.
 
     """
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=arguments.TempOutputFileArg, splitmerge=arguments.TempSplitFileArg)
+    normal = arguments.TempOutputFileArg
+    splitmerge = arguments.TempSplitFileArg
 
 class InputInstance(Managed):
     """ Interface class used to represent an input chunk associated with the
@@ -275,8 +272,10 @@ class InputInstance(Managed):
     """
     def __init__(self, axis):
         self.axis = axis
-    def create_arg(self, resmgr, nodemgr, node):
-        return arguments.InputInstanceArg(resmgr, nodemgr, node, self.axis)
+    def create_arg(self, job):
+        arg = arguments.InputInstanceArg(job.db, job.node, self.axis)
+        job.args.append(arg)
+        return arg
 
 class InputChunks(Managed):
     """ Interface class used to represent an input chunk list for a specific axis
@@ -288,10 +287,10 @@ class InputChunks(Managed):
     Resolves to a list of chunks for the given 'merge' axis.
 
     """
+    normal = None
+    splitmerge = arguments.InputChunksArg
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=None, splitmerge=arguments.InputChunksArg)
 
 class OutputChunks(Managed):
     """ Interface class used to represent an output that defines the list of
@@ -307,8 +306,8 @@ class OutputChunks(Managed):
     interpreted as the list of chunks for the given 'split' axis.
 
     """
+    normal = None
+    splitmerge = arguments.OutputChunksArg
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
-    def create_arg(self, resmgr, nodemgr, node):
-        return self._create_arg(resmgr, nodemgr, node, normal=None, splitmerge=arguments.OutputChunksArg)
 

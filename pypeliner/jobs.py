@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 import itertools
@@ -18,15 +19,6 @@ class CallSet(object):
         self.ret = ret
         self.args = args
         self.kwargs = kwargs
-    def transform(self, func):
-        ret = func(self.ret)
-        args = list()
-        for arg in self.args:
-            args.append(func(arg))
-        kwargs = dict()
-        for key, arg in sorted(self.kwargs.iteritems()):
-            kwargs[key] = func(arg)
-        return CallSet(ret, args, kwargs)
     def iteritems(self):
         yield self.ret
         for arg in self.args:
@@ -36,15 +28,15 @@ class CallSet(object):
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
-    def __init__(self, name, axes, ctx, func, callset):
+    def __init__(self, name, axes, ctx, func, argset):
         self.name = name
         self.axes = axes
         self.ctx = ctx
         self.func = func
-        self.callset = callset
-    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
-        for node in nodemgr.retrieve_nodes(self.axes):
-            yield JobInstance(self, workflow, resmgr, nodemgr, node, logs_dir)
+        self.argset = argset
+    def create_job_instances(self, workflow, db, logs_dir):
+        for node in db.nodemgr.retrieve_nodes(self.axes):
+            yield JobInstance(self, workflow, db, node, logs_dir)
 
 class InputMissingException(Exception):
     def __init__(self, input, job):
@@ -55,14 +47,14 @@ class InputMissingException(Exception):
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
-    def __init__(self, job_def, workflow, resmgr, nodemgr, node, logs_dir):
+    def __init__(self, job_def, workflow, db, node, logs_dir):
         self.job_def = job_def
         self.workflow = workflow
-        self.resmgr = resmgr
-        self.nodemgr = nodemgr
+        self.db = db
         self.node = node
+        self.args = list()
         try:
-            self.argset = self.job_def.callset.transform(lambda arg: managed.create_arg(resmgr, nodemgr, arg, node))
+            self.argset = copy.deepcopy(self.job_def.argset, {'_job':self})
         except managed.JobArgMismatchException as e:
             e.job_name = name
             raise
@@ -97,17 +89,17 @@ class JobInstance(object):
             return self.job_def.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
     @property
     def _inputs(self):
-        for arg in self.argset.iteritems():
+        for arg in self.args:
             if isinstance(arg, arguments.Arg):
-                for input in arg.inputs:
+                for input in arg.get_inputs(self.db):
                     yield input
-        for node_input in self.nodemgr.get_node_inputs(self.node):
+        for node_input in self.db.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
     def _outputs(self):
-        for arg in self.argset.iteritems():
+        for arg in self.args:
             if isinstance(arg, arguments.Arg):
-                for output in arg.outputs:
+                for output in arg.get_outputs(self.db):
                     yield output
     @property
     def input_resources(self):
@@ -141,13 +133,13 @@ class JobInstance(object):
         return (dep.id for dep in self.output_dependencies)
     def check_inputs(self):
         for input in self.input_resources:
-            if input.createtime is None:
+            if input.get_createtime(self.db) is None:
                 raise InputMissingException(input.id, self.id)
     @property
     def out_of_date(self):
         self.check_inputs()
-        input_dates = [input.createtime for input in self.input_resources]
-        output_dates = [output.createtime for output in self.output_resources]
+        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
+        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
         if len(input_dates) == 0 or len(output_dates) == 0:
             return True
         if None in output_dates:
@@ -155,8 +147,8 @@ class JobInstance(object):
         return max(input_dates) > min(output_dates)
     def explain(self):
         self.check_inputs()
-        input_dates = [input.createtime for input in self.input_resources]
-        output_dates = [output.createtime for output in self.output_resources]
+        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
+        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
         try:
             newest_input_date = max(input_dates)
         except ValueError:
@@ -179,36 +171,33 @@ class JobInstance(object):
             explanation = ['up to date']
         for input in self.input_resources:
             status = ''
-            if oldest_output_date is not None and input.createtime > oldest_output_date:
+            if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
                 status = 'new'
-            explanation.append('input {0} {1} {2}'.format(input.build_displayname(self.workflow.node), input.createtime, status))
+            explanation.append('input {0} {1} {2}'.format(input.build_displayname(self.workflow.node), input.get_createtime(self.db), status))
         for output in self.output_resources:
             status = ''
-            if output.createtime is None:
+            if output.get_createtime(self.db) is None:
                 status = 'missing'
-            elif newest_input_date is not None and output.createtime < newest_input_date:
-                status = '{0} old'.format(output.createtime)
+            elif newest_input_date is not None and output.get_createtime(self.db) < newest_input_date:
+                status = '{0} old'.format(output.get_createtime(self.db))
             else:
-                status = '{0}'.format(output.createtime)
+                status = '{0}'.format(output.get_createtime(self.db))
             explanation.append('output {0} {1}'.format(output.build_displayname(self.workflow.node), status))
         return '\n'.join(explanation)
     @property
     def output_missing(self):
         return not all([output.exists for output in self.output_resources])
     def check_require_regenerate(self):
-        for arg in self.argset.iteritems():
+        for arg in self.args:
             if isinstance(arg, arguments.Arg):
                 if arg.is_split:
                     return True
         return False
     @property
     def callable(self):
-        resolved_args = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
-        return JobCallable(self.id, self.job_def.func, resolved_args, self.logs_dir)
+        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir)
     def finalize(self, callable):
-        for arg, resolved in zip(self.argset.iteritems(), callable.argset.iteritems()):
-            if isinstance(arg, arguments.Arg):
-                arg.finalize(resolved)
+        callable.finalize(self.db)
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
@@ -231,10 +220,11 @@ class JobTimer(object):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, logs_dir):
+    def __init__(self, db, id, func, argset, logs_dir):
         self.id = id
         self.func = func
-        self.argset = argset
+        self.callargs = list()
+        self.callset = copy.deepcopy(argset, {'_db':db, '_args':self.callargs})
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -258,46 +248,48 @@ class JobCallable(object):
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
-                    self.argset.ret = self.func(*self.argset.args, **self.argset.kwargs)
+                    ret_value = self.func(*self.callset.args, **self.callset.kwargs)
+                    if self.callset.ret is not None:
+                        self.callset.ret.value = ret_value
                 self.finished = True
             except:
                 sys.stderr.write(traceback.format_exc())
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
+    def finalize(self, db):
+        for arg in self.callargs:
+            arg.updatedb(db)
+        for arg in self.callargs:
+            arg.finalize(db)
 
 class SubWorkflowDefinition(JobDefinition):
-    def __init__(self, name, axes, func, callset):
+    def __init__(self, name, axes, func, argset):
         self.name = name
         self.axes = axes
         self.func = func
-        self.callset = callset
-    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
-        for node in nodemgr.retrieve_nodes(self.axes):
-            yield SubWorkflowInstance(self, workflow, resmgr, nodemgr, node, logs_dir)
+        self.argset = argset
+    def create_job_instances(self, workflow, db, logs_dir):
+        for node in db.nodemgr.retrieve_nodes(self.axes):
+            yield SubWorkflowInstance(self, workflow, db, node, logs_dir)
 
 class SubWorkflowInstance(JobInstance):
     """ Represents a sub workflow. """
-    def __init__(self, job_def, workflow, resmgr, nodemgr, node, logs_dir):
-        self.job_def = job_def
-        self.workflow = workflow
-        self.resmgr = resmgr
-        self.nodemgr = nodemgr
-        self.node = node
-        try:
-            self.argset = self.job_def.callset.transform(lambda arg: managed.create_arg(resmgr, nodemgr, arg, node))
-        except managed.JobArgMismatchException as e:
-            e.job_name = name
-            raise
-        self.logs_dir = os.path.join(logs_dir, node.subdir, self.job_def.name)
+    def __init__(self, job_def, workflow, db, node, logs_dir):
+        super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node, logs_dir)
         self.is_subworkflow = True
         self.is_immediate = False
-        self.trigger_regenerate = False
-    def create_subworkflow(self):
-        argset = self.argset.transform(lambda arg: arguments.resolve_arg(arg))
-        workflow = self.job_def.func(*argset.args, **argset.kwargs)
+    def create_subworkflow(self, db):
+        self.callargs = list()
+        resolved = copy.deepcopy(self.argset, {'_db':db, '_args':self.callargs})
+        workflow = self.job_def.func(*resolved.args, **resolved.kwargs)
         return workflow
     def finalize(self):
-        super(SubWorkflowInstance, self).finalize(self.callable)
+        for arg in self.callargs:
+            arg.updatedb(self.db)
+        for arg in self.callargs:
+            arg.finalize(self.db)
+        if self.check_require_regenerate():
+            self.workflow.regenerate()
 
 class ChangeAxisDefinition(object):
     """ Represents an abstract aliasing """
@@ -307,9 +299,9 @@ class ChangeAxisDefinition(object):
         self.var_name = var_name
         self.old_axis = old_axis
         self.new_axis = new_axis
-    def create_job_instances(self, workflow, resmgr, nodemgr, logs_dir):
-        for node in nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxisInstance(self, workflow, resmgr, nodemgr, node)
+    def create_job_instances(self, workflow, db, logs_dir):
+        for node in db.nodemgr.retrieve_nodes(self.axes):
+            yield ChangeAxisInstance(self, workflow, db, node)
 
 class ChangeAxisException(Exception):
     def __init__(self, old, new):
@@ -320,39 +312,38 @@ class ChangeAxisException(Exception):
 
 class ChangeAxisInstance(JobInstance):
     """ Creates an alias of a managed object """
-    def __init__(self, job_def, workflow, resmgr, nodemgr, node):
+    def __init__(self, job_def, workflow, db, node):
         self.job_def = job_def
         self.workflow = workflow
-        self.resmgr = resmgr
-        self.nodemgr = nodemgr
+        self.db = db
         self.node = node
         self.is_subworkflow = False
         self.is_immediate = True
         self.trigger_regenerate = False
     @property
     def _inputs(self):
-        for node in self.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
+        for node in self.db.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
             yield resources.Dependency(self.job_def.var_name, node)
-        yield self.nodemgr.get_merge_input(self.job_def.old_axis, self.node)
-        yield self.nodemgr.get_merge_input(self.job_def.new_axis, self.node)
-        for node_input in self.nodemgr.get_node_inputs(self.node):
+        yield self.db.nodemgr.get_merge_input(self.job_def.old_axis, self.node)
+        yield self.db.nodemgr.get_merge_input(self.job_def.new_axis, self.node)
+        for node_input in self.db.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
     def _outputs(self):
-        for node in self.nodemgr.retrieve_nodes((self.job_def.new_axis,), self.node):
+        for node in self.db.nodemgr.retrieve_nodes((self.job_def.new_axis,), self.node):
             yield resources.Dependency(self.job_def.var_name, node)
     @property
     def out_of_date(self):
         return True
     def finalize(self):
-        old_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.old_axis, self.node))
-        new_chunks = set(self.nodemgr.retrieve_chunks(self.job_def.new_axis, self.node))
+        old_chunks = set(self.db.nodemgr.retrieve_chunks(self.job_def.old_axis, self.node))
+        new_chunks = set(self.db.nodemgr.retrieve_chunks(self.job_def.new_axis, self.node))
         if (old_chunks != new_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
         for chunk in old_chunks:
             old_node = self.node + identifiers.AxisInstance(self.job_def.old_axis, chunk)
             new_node = self.node + identifiers.AxisInstance(self.job_def.new_axis, chunk)
-            self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
+            self.db.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
         self.workflow.notify_completed(self)
 

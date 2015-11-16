@@ -29,11 +29,9 @@ class Dependency(object):
 class Resource(Dependency):
     """ Abstract input/output in the dependency graph
     associated with a file tracked using creation time """
-    @property
-    def exists(self):
+    def get_exists(self, db):
         raise NotImplementedError
-    @property
-    def createtime(self):
+    def get_createtime(self, db):
         raise NotImplementedError
 
 
@@ -53,11 +51,9 @@ class UserResource(Resource):
                     self.filename = fnames[fname_key]
         else:
             self.filename = name.format(**dict(node))
-    @property
-    def exists(self):
+    def get_exists(self, db):
         return os.path.exists(self.filename)
-    @property
-    def createtime(self):
+    def get_createtime(self, db):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
@@ -69,7 +65,7 @@ class UserResource(Resource):
     @property
     def chunk(self):
         return self.node[-1][1]
-    def finalize(self, write_filename):
+    def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.filename)
         except OSError:
@@ -78,48 +74,40 @@ class UserResource(Resource):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, resmgr, name, node):
-        self.resmgr = resmgr
+    def __init__(self, name, node, db):
         self.name = name
         self.node = node
-        self.resmgr.register_disposable(name, node, self.filename)
-    @property
-    def filename(self):
-        return self.resmgr.get_filename(self.name, self.node)
-    @property
-    def exists(self):
-        return os.path.exists(self.filename)
-    @property
-    def createtime(self):
-        return self.resmgr.retrieve_createtime(self.name, self.node, self.filename)
+        db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
+    def get_filename(self, db):
+        return db.resmgr.get_filename(self.name, self.node)
+    def get_exists(self, db):
+        return os.path.exists(self.get_filename(db))
+    def get_createtime(self, db):
+        return db.resmgr.retrieve_createtime(self.name, self.node, self.get_filename(db))
     @property
     def chunk(self):
         return self.node[-1][1]
-    def finalize(self, write_filename):
+    def finalize(self, write_filename, db):
         try:
-            os.rename(write_filename, self.filename)
+            os.rename(write_filename, self.get_filename(db))
         except OSError:
             raise OutputMissingException(write_filename)
-        self.resmgr.store_createtime(self.name, self.node, self.filename)
+        db.resmgr.store_createtime(self.name, self.node, self.get_filename(db))
 
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, resmgr, name, node, is_input=True):
-        self.resmgr = resmgr
+    def __init__(self, name, node, is_input=True):
         self.name = name
         self.node = node
         self.is_input = is_input
-    @property
-    def filename(self):
-        return self.resmgr.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
-    @property
-    def exists(self):
-        return os.path.exists(self.filename)
-    @property
-    def createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
+    def get_filename(self, db):
+        return db.resmgr.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
+    def get_exists(self, db):
+        return os.path.exists(self.get_filename(db))
+    def get_createtime(self, db):
+        if os.path.exists(self.get_filename(db)):
+            return os.path.getmtime(self.get_filename(db))
         return None
 
 
@@ -141,32 +129,30 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, resmgr, name, node):
-        self.resmgr = resmgr
+    def __init__(self, name, node):
         self.name = name
         self.node = node
     @property
     def input(self):
-        return TempObjResource(self.resmgr, self.name, self.node, is_input=True)
+        return TempObjResource(self.name, self.node, is_input=True)
     @property
     def output(self):
-        return TempObjResource(self.resmgr, self.name, self.node, is_input=False)
+        return TempObjResource(self.name, self.node, is_input=False)
     @property
     def chunk(self):
         return self.node[-1][1]
-    @property
-    def obj(self):
+    def get_obj(self, db):
         try:
-            with open(self.input.filename, 'rb') as f:
+            with open(self.input.get_filename(db), 'rb') as f:
                 return pickle.load(f)
         except IOError as e:
             if e.errno == 2:
                 pass
-    def finalize(self, obj):
-        with open(self.output.filename, 'wb') as f:
+    def finalize(self, obj, db):
+        with open(self.output.get_filename(db), 'wb') as f:
             pickle.dump(obj, f)
-        if not obj_equal(obj, self.obj):
-            with open(self.input.filename, 'wb') as f:
+        if not obj_equal(obj, self.get_obj(db)):
+            with open(self.input.get_filename(db), 'wb') as f:
                 pickle.dump(obj, f)
 
 
@@ -179,11 +165,9 @@ class ChunksResource(Resource):
     @property
     def id(self):
         return (self.name, self.node)
-    @property
-    def exists(self):
+    def get_exists(self, db):
         return os.path.exists(self.nodemgr.get_chunks_filename(self.name, self.node))
-    @property
-    def createtime(self):
-        if self.exists:
+    def get_createtime(self, db):
+        if self.get_exists(db):
             return os.path.getmtime(self.nodemgr.get_chunks_filename(self.name, self.node))
 

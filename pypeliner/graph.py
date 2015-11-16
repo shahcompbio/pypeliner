@@ -5,9 +5,8 @@ import itertools
 import logging
 
 import helpers
-import nodes
-import resourcemgr
 import identifiers
+import database
 
 class AmbiguousInputException(Exception):
     def __init__(self, id):
@@ -134,20 +133,10 @@ class WorkflowInstance(object):
         self.workflow_def = workflow_def
         self.workflow_dir = workflow_dir
         self.dir_lock = dir_lock
-
-        db_dir = os.path.join(workflow_dir, 'db', node.subdir)
-        nodes_dir = os.path.join(workflow_dir, 'nodes', node.subdir)
-        temps_dir = os.path.join(workflow_dir, 'tmp', node.subdir)
         self.logs_dir = os.path.join(workflow_dir, 'log', node.subdir)
-
-        helpers.makedirs(db_dir)
-        helpers.makedirs(nodes_dir)
-        helpers.makedirs(temps_dir)
         helpers.makedirs(self.logs_dir)
-
-        self.dir_lock.add_lock(os.path.join(db_dir, '_lock'))
-        self.resmgr = resourcemgr.ResourceManager(temps_dir, db_dir)
-        self.nodemgr = nodes.NodeManager(nodes_dir, temps_dir)
+        self.dir_lock.add_lock(os.path.join(workflow_dir, node.subdir, '_lock'))
+        self.db = database.WorkflowDatabase(workflow_dir, node.subdir)
         self.node = node
         self.graph = DependencyGraph()
         self.subworkflows = list()
@@ -160,7 +149,7 @@ class WorkflowInstance(object):
         """
 
         jobs = dict()
-        for job_inst in self.workflow_def._create_job_instances(self, self.resmgr, self.nodemgr, self.logs_dir):
+        for job_inst in self.workflow_def._create_job_instances(self, self.db, self.logs_dir):
             if job_inst.id in jobs:
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
@@ -197,7 +186,7 @@ class WorkflowInstance(object):
 
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
-                workflow_def = job.create_subworkflow()
+                workflow_def = job.create_subworkflow(self.db)
                 node = self.node + job.node + identifiers.Namespace(job.job_def.name)
                 workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup)
                 self.subworkflows.append((job, workflow))
@@ -212,7 +201,7 @@ class WorkflowInstance(object):
     def notify_completed(self, job):
         self.graph.notify_completed(job)
         if self.cleanup:
-            self.resmgr.cleanup(self.graph)
+            self.db.resmgr.cleanup(self.graph)
 
     @property
     def finished(self):

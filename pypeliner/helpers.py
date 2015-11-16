@@ -68,6 +68,7 @@ class DirectoryLock(object):
         self.locked_directories = list()
     def add_lock(self, lock_directory):
         try:
+            makedirs(os.path.join(lock_directory, os.path.pardir))
             os.mkdir(lock_directory)
         except OSError as e:
             if e.errno == errno.EEXIST:

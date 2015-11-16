@@ -126,11 +126,11 @@ class Workflow(object):
             raise ValueError('Job already defined')
         self.job_definitions[name] = jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis)
 
-    def _create_job_instances(self, graph, resmgr, nodemgr, logs_dir):
+    def _create_job_instances(self, graph, db, logs_dir):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.
         """
         for job_def in self.job_definitions.itervalues():
-            for job_inst in job_def.create_job_instances(graph, resmgr, nodemgr, logs_dir):
+            for job_inst in job_def.create_job_instances(graph, db, logs_dir):
                 yield job_inst
 

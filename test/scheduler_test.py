@@ -30,6 +30,12 @@ if __name__ == '__main__':
             output_n_filename = os.path.join(script_directory, 'scheduler_test.{byfile}.output')
             output_n_template = os.path.join(script_directory, 'scheduler_test.{byfile}.template')
 
+            input_1_filename = input_n_filename.format(byfile=1)
+            input_2_filename = input_n_filename.format(byfile=2)
+
+            output_1_filename = output_n_filename.format(byfile=1)
+            output_2_filename = output_n_filename.format(byfile=2)
+
             log_filename = os.path.join(script_directory, './scheduler_test.log')
 
             try:
@@ -157,6 +163,26 @@ if __name__ == '__main__':
                     output = output_file.readlines()
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
+
+            def test_dict_args(self):
+
+                workflow = pypeliner.workflow.Workflow()
+
+                workflow.transform('dict_arg_stuff', (), self.ctx, dict_arg_stuff,
+                    None,
+                    {'1':mgd.OutputFile(self.output_1_filename),
+                     '2':mgd.OutputFile(self.output_2_filename)},
+                    {'1':mgd.InputFile(self.input_1_filename),
+                     '2':mgd.InputFile(self.input_2_filename)})
+
+                scheduler = self.create_scheduler()
+                scheduler.run(workflow, exec_queue)
+
+                for file_num in (1, 2):
+                    with open(self.output_n_filename.format(byfile=file_num), 'r') as output_file:
+                        output = output_file.read()
+                    expected = 'line1{0}\nline2{0}\nline3{0}\nline4{0}\nline5{0}\nline6{0}\nline7{0}\nline8{0}\n'.format(file_num)
+                    self.assertEqual(output, expected)
 
             def test_simple_sub_workflow(self):
 
@@ -1012,6 +1038,10 @@ else:
 
     def do_paired_stuff(output_filename, input1_filename, input2_filename):
         os.system('cat ' + input1_filename + ' ' + input2_filename + ' > ' + output_filename)
+
+    def dict_arg_stuff(output_filenames, input_filenames):
+        append_to_lines(input_filenames['1'], '1', output_filenames['1'])
+        append_to_lines(input_filenames['2'], '2', output_filenames['2'])
 
     def merge_stuff(stfs):
         merged = ''
