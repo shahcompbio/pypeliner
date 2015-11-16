@@ -125,16 +125,16 @@ class DependencyGraph:
         return all([output in self.created for output in self.outputs])
 
 
-class WorkflowGraph(object):
-    def __init__(self, workflow, resmgr, nodemgr, logs_dir, node=nodes.Node(), prune=False, cleanup=False):
+class WorkflowInstance(object):
+    def __init__(self, workflow_def, resmgr, nodemgr, logs_dir, node=nodes.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
-        self.workflow = workflow
+        self.workflow_def = workflow_def
         self.resmgr = resmgr
         self.nodemgr = nodemgr
         self.logs_dir = os.path.join(logs_dir, node.subdir)
         self.node = node
         self.graph = DependencyGraph()
-        self.subgraphs = list()
+        self.subworkflows = list()
         self.prune = prune
         self.cleanup = cleanup
         self.regenerate()
@@ -144,7 +144,7 @@ class WorkflowGraph(object):
         """
 
         jobs = dict()
-        for job_inst in self.workflow._create_job_instances(self, self.resmgr, self.nodemgr, self.logs_dir):
+        for job_inst in self.workflow_def._create_job_instances(self, self.resmgr, self.nodemgr, self.logs_dir):
             if job_inst.id in jobs:
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
@@ -163,8 +163,8 @@ class WorkflowGraph(object):
         """
         
         while True:
-            # Check if subgraphs have ready jobs, or have finished
-            for job, graph in self.subgraphs:
+            # Check if sub workflows have ready jobs, or have finished
+            for job, graph in self.subworkflows:
                 try:
                     return graph.pop_next_job()
                 except NoJobs:
@@ -173,18 +173,18 @@ class WorkflowGraph(object):
                     job.finalize()
                     job.complete()
 
-            # Remove finished subgraphs
-            self.subgraphs = filter(lambda (job, graph): not graph.finished, self.subgraphs)
+            # Remove finished sub workflows
+            self.subworkflows = filter(lambda (job, graph): not graph.finished, self.subworkflows)
 
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
-                workflow = job.create_subworkflow()
+                workflow_def = job.create_subworkflow()
                 node = job.workflow.node + job.node + nodes.Namespace(job.job_def.name)
-                graph = WorkflowGraph(workflow, self.resmgr, self.nodemgr, self.logs_dir, node=node, prune=self.prune, cleanup=self.cleanup)
-                self.subgraphs.append((job, graph))
+                workflow = WorkflowInstance(workflow_def, self.resmgr, self.nodemgr, self.logs_dir, node=node, prune=self.prune, cleanup=self.cleanup)
+                self.subworkflows.append((job, workflow))
                 continue
             elif job.is_immediate:
                 job.finalize()

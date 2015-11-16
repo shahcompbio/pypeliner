@@ -89,10 +89,10 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
 
-    def run(self, workflow, exec_queue):
+    def run(self, workflow_def, exec_queue):
         """ Run the pipeline
 
-        :param workflow: workflow of jobs to be submitted.
+        :param workflow_def: workflow of jobs to be submitted.
         :param exec_queue: queue to which jobs will be submitted.  The queues implemented
                            in :py:mod:`pypeliner.execqueue` should suffice for most purposes
 
@@ -111,15 +111,15 @@ class Scheduler(object):
         self._job_temps_dirs = set()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            workflow_graph = graph.WorkflowGraph(workflow, resmgr, nodemgr, self.logs_dir, prune=self.prune, cleanup=self.cleanup)
+            workflow = graph.WorkflowInstance(workflow_def, resmgr, nodemgr, self.logs_dir, prune=self.prune, cleanup=self.cleanup)
             failing = False
             try:
                 try:
                     while True:
-                        self._add_jobs(exec_queue, workflow_graph, nodemgr, resmgr)
+                        self._add_jobs(exec_queue, workflow, nodemgr, resmgr)
                         if exec_queue.empty:
                             break
-                        self._wait_next_job(exec_queue, workflow_graph, nodemgr, resmgr)
+                        self._wait_next_job(exec_queue, workflow, nodemgr, resmgr)
                 except KeyboardInterrupt as e:
                     raise e
                 except Exception:
@@ -127,7 +127,7 @@ class Scheduler(object):
                     self._logger.error('exception\n' + traceback.format_exc())
                 while not exec_queue.empty:
                     try:
-                        self._wait_next_job(exec_queue, workflow_graph, nodemgr, resmgr)
+                        self._wait_next_job(exec_queue, workflow, nodemgr, resmgr)
                     except KeyboardInterrupt as e:
                         raise e
                     except Exception:
@@ -139,10 +139,10 @@ class Scheduler(object):
                 self._logger.error('pipeline failed')
                 raise PipelineException('pipeline failed')
 
-    def _add_jobs(self, exec_queue, workflow_graph, nodemgr, resmgr):
+    def _add_jobs(self, exec_queue, workflow, nodemgr, resmgr):
         while exec_queue.length < self.max_jobs:
             try:
-                job = workflow_graph.pop_next_job()
+                job = workflow.pop_next_job()
             except graph.NoJobs:
                 return
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
@@ -157,7 +157,7 @@ class Scheduler(object):
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
-    def _wait_next_job(self, exec_queue, workflow_graph, nodemgr, resmgr):
+    def _wait_next_job(self, exec_queue, workflow, nodemgr, resmgr):
         job, received = exec_queue.wait()
         assert job is not None
         assert job.id == received.id
@@ -182,27 +182,27 @@ class Scheduler(object):
         finally:
             os.rmdir(lock_directory)
             
-    def pretend(self, workflow):
+    def pretend(self, workflow_def):
         """ Pretend run the pipeline.
 
         Print jobs that would be run, but do not actually run them.  May halt before completion of
         the pipeline if some axes have not yet been defined.
 
         """
-        workflow_graph = graph.DependencyGraph()
+        workflow = graph.DependencyGraph()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            jobs = self._create_jobs(workflow, resmgr, nodemgr)
-            self._workflow_graph_regenerate(resmgr, nodemgr, jobs, workflow_graph)
-            while workflow_graph.jobs_ready:
-                job = workflow_graph.next_job()
+            jobs = self._create_jobs(workflow_def, resmgr, nodemgr)
+            self._workflow_regenerate(resmgr, nodemgr, jobs, workflow)
+            while workflow.jobs_ready:
+                job = workflow.next_job()
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                     self._logger.info('job ' + job.displayname + ' executing')
                     if not job.trigger_regenerate:
-                        workflow_graph.notify_completed(job)
+                        workflow.notify_completed(job)
                 else:
                     self._logger.info('job ' + job.displayname + ' skipped')
-                    workflow_graph.notify_completed(job)
+                    workflow.notify_completed(job)
                 self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
         return True
 
