@@ -54,7 +54,7 @@ class Scheduler(object):
         self.freeze = True
 
     def __setattr__(self, attr, value):
-        if getattr(self, "freeze", False) and not hasattr(self, attr):
+        if not attr.startswith('_') and getattr(self, "freeze", False) and not hasattr(self, attr):
             raise AttributeError("Setting new attribute")
         super(Scheduler, self).__setattr__(attr, value)
  
@@ -108,6 +108,7 @@ class Scheduler(object):
         helpers.makedirs(self.nodes_dir)
         helpers.makedirs(self.temps_dir)
         helpers.makedirs(self.logs_dir)
+        self._job_temps_dirs = set()
         with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
             workflow_graph = graph.WorkflowGraph(workflow, resmgr, nodemgr, self.logs_dir, prune=self.prune, cleanup=self.cleanup)
@@ -145,6 +146,9 @@ class Scheduler(object):
             except graph.NoJobs:
                 return
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                if job.temps_dir in self._job_temps_dirs:
+                    raise ValueError('duplicate temps directory ' + job.temps_dir)
+                self._job_temps_dirs.add(job.temps_dir)
                 exec_queue.add(job.ctx, job)
                 self._logger.info('job ' + job.displayname + ' executing')
                 self._logger.info('job ' + job.displayname + ' -> ' + job.displaycommand)
