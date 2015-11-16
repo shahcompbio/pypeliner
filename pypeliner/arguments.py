@@ -1,9 +1,9 @@
 import os
 
 import helpers
-import nodes
 import resources
 import resourcemgr
+import identifiers
 
 
 def resolve_arg(arg):
@@ -381,7 +381,7 @@ class FilenameCallback(object):
         self.filename_creator = filename_creator
         self.filenames = dict()
     def __call__(self, chunk):
-        node = self.base_node + nodes.AxisInstance(self.split_axis, chunk)
+        node = self.base_node + identifiers.AxisInstance(self.split_axis, chunk)
         filename = self.filename_creator(self.name, node)
         self.filenames[chunk] = filename
         helpers.makedirs(os.path.dirname(filename))

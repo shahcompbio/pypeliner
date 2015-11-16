@@ -3,28 +3,11 @@ Job scheduling class
 
 """
 
-import os.path
-import copy
-import pickle
 import logging
-import shelve
-import sys
 import traceback
-import time
-import subprocess
-import contextlib
-import collections
-import itertools
 
 import helpers
-import commandline
 import graph
-import managed
-import arguments
-import resources
-import resourcemgr
-import nodes
-import jobs
 
 
 class PipelineException(Exception):

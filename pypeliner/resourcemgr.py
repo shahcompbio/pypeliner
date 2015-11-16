@@ -6,7 +6,6 @@ import pickle
 import logging
 
 import resources
-import nodes
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """

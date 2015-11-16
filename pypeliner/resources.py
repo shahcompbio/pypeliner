@@ -1,6 +1,7 @@
 import os
 import pickle
-import nodes
+
+import identifiers
 
 
 class OutputMissingException(Exception):
@@ -18,9 +19,11 @@ class Dependency(object):
     @property
     def id(self):
         return (self.name, self.node)
-    @property
-    def displayname(self):
-        return '/'.join([self.node.displayname, self.name])
+    def build_displayname(self, base_node=identifiers.Node()):
+        name = '/' + self.name
+        if base_node.displayname != '':
+            name = '/' + base_node.displayname + name
+        return name
 
 
 class Resource(Dependency):
@@ -61,8 +64,7 @@ class UserResource(Resource):
     @property
     def id(self):
         return (self.filename, ())
-    @property
-    def displayname(self):
+    def build_displayname(self, base_node=identifiers.Node()):
         return self.filename
     @property
     def chunk(self):

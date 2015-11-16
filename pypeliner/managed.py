@@ -31,12 +31,6 @@ import collections
 
 import arguments
 
-class Axis(str):
-    pass
-
-class Namespace(str):
-    pass
-
 class JobArgMismatchException(Exception):
     def __init__(self, name, axes, node):
         self.name = name
@@ -61,7 +55,7 @@ class Managed(object):
         if type(axes) != tuple:
             raise ValueError('axes must be a tuple')
         self.name = name
-        self.axes = tuple([Axis(axis) for axis in axes])
+        self.axes = axes
         self.kwargs = kwargs
     def _create_arg(self, resmgr, nodemgr, node, normal=None, splitmerge=None, **kwargs):
         common = 0

@@ -9,8 +9,8 @@ import helpers
 import arguments
 import commandline
 import managed
-import nodes
 import resources
+import identifiers
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -181,7 +181,7 @@ class JobInstance(object):
             status = ''
             if oldest_output_date is not None and input.createtime > oldest_output_date:
                 status = 'new'
-            explanation.append('input {0} {1} {2}'.format(input.displayname, input.createtime, status))
+            explanation.append('input {0} {1} {2}'.format(input.build_displayname(self.workflow.node), input.createtime, status))
         for output in self.output_resources:
             status = ''
             if output.createtime is None:
@@ -190,7 +190,7 @@ class JobInstance(object):
                 status = '{0} old'.format(output.createtime)
             else:
                 status = '{0}'.format(output.createtime)
-            explanation.append('output {0} {1}'.format(output.displayname, status))
+            explanation.append('output {0} {1}'.format(output.build_displayname(self.workflow.node), status))
         return '\n'.join(explanation)
     @property
     def output_missing(self):
@@ -350,8 +350,8 @@ class ChangeAxisInstance(JobInstance):
         if (old_chunks != new_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
         for chunk in old_chunks:
-            old_node = self.node + nodes.AxisInstance(self.job_def.old_axis, chunk)
-            new_node = self.node + nodes.AxisInstance(self.job_def.new_axis, chunk)
+            old_node = self.node + identifiers.AxisInstance(self.job_def.old_axis, chunk)
+            new_node = self.node + identifiers.AxisInstance(self.job_def.new_axis, chunk)
             self.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
         self.workflow.notify_completed(self)

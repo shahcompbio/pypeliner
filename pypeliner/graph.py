@@ -7,6 +7,7 @@ import logging
 import helpers
 import nodes
 import resourcemgr
+import identifiers
 
 class AmbiguousInputException(Exception):
     def __init__(self, id):
@@ -128,7 +129,7 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, workflow_dir, dir_lock, node=nodes.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow_def, workflow_dir, dir_lock, node=identifiers.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.workflow_dir = workflow_dir
@@ -197,7 +198,7 @@ class WorkflowInstance(object):
             if job.is_subworkflow:
                 self._logger.info('creating subworkflow ' + job.displayname)
                 workflow_def = job.create_subworkflow()
-                node = self.node + job.node + nodes.Namespace(job.job_def.name)
+                node = self.node + job.node + identifiers.Namespace(job.job_def.name)
                 workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup)
                 self.subworkflows.append((job, workflow))
                 continue
