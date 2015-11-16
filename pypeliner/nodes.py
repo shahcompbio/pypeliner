@@ -14,7 +14,7 @@ class AxisInstance(AxisInstanceBase):
         return os.path.join(str(self.axis), str(self.chunk))
     @property
     def displayname(self):
-        return ':'.join([str(self.axis), str(self.chunk)])
+        return ':'.join([str(self.axis), str((self.chunk, '?')[self.chunk is None])])
 
 class Namespace(str):
     @property
