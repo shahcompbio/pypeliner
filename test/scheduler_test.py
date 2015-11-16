@@ -172,7 +172,7 @@ if __name__ == '__main__':
                     mgd.TempOutputFile('intermediate1', 'byfile'))
 
                 workflow.subworkflow('sub_workflow_1', ('byfile',),
-                    create_workflow,
+                    create_workflow_1,
                     mgd.TempInputFile('intermediate1', 'byfile'),
                     mgd.TempOutputFile('intermediate2', 'byfile'))
 
@@ -1068,7 +1068,25 @@ else:
         with open(output_filename, 'w') as output_file:
             output_file.write(temp_filename)
 
-    def create_workflow(input_filename, output_filename):
+    def create_workflow_2(input_filename, output_filename):
+        workflow = pypeliner.workflow.Workflow()
+        ctx = dict({'mem':1})
+
+        workflow.transform('dofilestuff1', (), ctx, do_file_stuff,
+            None,
+            mgd.InputFile(input_filename),
+            mgd.TempOutputFile('intermediate1'),
+            'm')
+
+        workflow.transform('dofilestuff2', (), ctx, do_file_stuff,
+            None,
+            mgd.TempInputFile('intermediate1'),
+            mgd.OutputFile(output_filename),
+            'm')
+
+        return workflow
+
+    def create_workflow_1(input_filename, output_filename):
         workflow = pypeliner.workflow.Workflow()
         ctx = dict({'mem':1})
 
@@ -1087,6 +1105,11 @@ else:
         workflow.transform('write', (), ctx, write_stuff,
             None,
             mgd.TempInputObj('output_data'),
+            mgd.TempOutputFile('output_file'))
+
+        # Recursive workflow
+        workflow.subworkflow('sub_workflow_2', (), create_workflow_2,
+            mgd.TempInputFile('output_file'),
             mgd.OutputFile(output_filename))
 
         return workflow
