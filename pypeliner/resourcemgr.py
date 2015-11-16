@@ -1,3 +1,4 @@
+import atexit
 import os
 import collections
 import shelve
@@ -26,11 +27,8 @@ class ResourceManager(object):
         self.disposable = collections.defaultdict(set)
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
-    def __enter__(self):
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
-        return self
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.createtimes_shelf.close()
+        atexit.register(lambda : self.createtimes_shelf.close())
     @property
     def filename_creator(self):
         return FilenameCreator(self.temps_dir, self.temps_suffix)

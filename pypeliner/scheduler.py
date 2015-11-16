@@ -109,7 +109,8 @@ class Scheduler(object):
         helpers.makedirs(self.temps_dir)
         helpers.makedirs(self.logs_dir)
         self._job_temps_dirs = set()
-        with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
+        with self.PipelineLock():
+            resmgr = resourcemgr.ResourceManager(self.temps_dir, self.db_dir)
             nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
             workflow = graph.WorkflowInstance(workflow_def, resmgr, nodemgr, self.logs_dir, prune=self.prune, cleanup=self.cleanup)
             failing = False
