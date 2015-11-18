@@ -50,7 +50,7 @@ class NodeManager(object):
             pickle.dump(chunks, f)
         helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
     def get_merge_input(self, axis, node):
-        return resources.ChunksResource(self, axis, node)
+        return resources.ChunksResource(axis, node)
     def get_split_output(self, axis, node):
         return resources.Dependency(axis, node)
     def get_node_inputs(self, node):

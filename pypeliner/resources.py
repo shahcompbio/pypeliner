@@ -157,16 +157,15 @@ class TempObjManager(object):
 
 class ChunksResource(Resource):
     """ A resource representing a list of chunks for an axis """
-    def __init__(self, nodemgr, name, node):
-        self.nodemgr = nodemgr
+    def __init__(self, name, node):
         self.name = name
         self.node = node
     @property
     def id(self):
         return (self.name, self.node)
     def get_exists(self, db):
-        return os.path.exists(self.nodemgr.get_chunks_filename(self.name, self.node))
+        return os.path.exists(db.nodemgr.get_chunks_filename(self.name, self.node))
     def get_createtime(self, db):
         if self.get_exists(db):
-            return os.path.getmtime(self.nodemgr.get_chunks_filename(self.name, self.node))
+            return os.path.getmtime(db.nodemgr.get_chunks_filename(self.name, self.node))
 
