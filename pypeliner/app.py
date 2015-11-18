@@ -209,9 +209,9 @@ class Pypeline(object):
         self.sch.cleanup = not self.config['nocleanup']
         self.sch.prune = not self.config['noprune']
 
-    def run(self):
+    def run(self, workflow):
         if self.config['pretend']:
             return self.sch.pretend()
         else:
             with self.exec_queue:
-                return self.sch.run(self.exec_queue)
+                return self.sch.run(workflow, self.exec_queue)
