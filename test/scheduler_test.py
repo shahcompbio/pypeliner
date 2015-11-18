@@ -246,6 +246,25 @@ if __name__ == '__main__':
 
                 self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n', 'line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n'])
 
+            def test_specify_input_filename_template(self):
+
+                workflow = pypeliner.workflow.Workflow()
+
+                # Merge a set of input files indexed by axis `byfile`
+                workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
+                workflow.transform('merge_files', (), self.ctx, merge_file_byline,
+                    None,
+                    mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                    mgd.OutputFile(self.output_filename))
+
+                scheduler = self.create_scheduler()
+                scheduler.run(workflow, exec_queue)
+
+                with open(self.output_filename, 'r') as output_file:
+                    output = output_file.readlines()
+
+                self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n', 'line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n'])
+
             def test_specify_output_filename(self):
 
                 workflow = pypeliner.workflow.Workflow()
@@ -260,6 +279,23 @@ if __name__ == '__main__':
                 workflow.transform('write_files', (), self.ctx, write_files,
                     None,
                     mgd.OutputFile('output_files', 'byfile', fnames=output_filenames))
+
+                scheduler = self.create_scheduler()
+                scheduler.run(workflow, exec_queue)
+
+                for chunk in ('1', '2'):
+                    with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
+                        output = output_file.readlines()
+                        self.assertEqual(output, ['file{0}\n'.format(chunk)])
+
+            def test_specify_output_filename_template(self):
+
+                workflow = pypeliner.workflow.Workflow()
+
+                # Write a set of output files indexed by axis `byfile`
+                workflow.transform('write_files', (), self.ctx, write_files,
+                    None,
+                    mgd.OutputFile('output_files', 'byfile', template=self.output_n_filename))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)

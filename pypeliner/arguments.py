@@ -79,18 +79,13 @@ class MergeTemplateArg(Arg):
 
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
-    def __init__(self, suffix='', fnames=None):
+    def __init__(self, suffix='', fnames=None, template=None):
         self.suffix = suffix
         self.fnames = fnames
+        self.template = template
     def __call__(self, name, node):
-        fname_key = tuple([a[1] for a in node])
-        if self.fnames is not None:
-            if len(fname_key) == 1 and fname_key[0] in self.fnames:
-                return self.fnames[fname_key[0]]
-            else:
-                return self.fnames[fname_key]
-        else:
-            return name.format(**dict(node)) + self.suffix
+        resource = resources.UserResource(name, node, fnames=self.fnames, template=self.template)
+        return resource.filename + self.suffix
     def __repr__(self):
         return '{0}.{1}({2})'.format(resourcemgr.FilenameCreator.__module__, resourcemgr.FilenameCreator.__name__, self.suffix)
 
@@ -102,8 +97,8 @@ class InputFileArg(Arg):
     dictionary.
 
     """
-    def __init__(self, db, name, node, fnames=None):
-        self.resource = resources.UserResource(name, node, fnames)
+    def __init__(self, db, name, node, fnames=None, template=None):
+        self.resource = resources.UserResource(name, node, fnames=fnames, template=template)
     def get_inputs(self, db):
         yield self.resource
     def resolve(self, db):
@@ -117,14 +112,15 @@ class MergeFileArg(Arg):
     the merge axis.  Each value is the filename formatted using the merge node dictonary.
 
     """
-    def __init__(self, db, name, base_node, merge_axis, fnames=None):
+    def __init__(self, db, name, base_node, merge_axis, fnames=None, template=None):
         self.name = name
         self.base_node = base_node
         self.merge_axis = merge_axis
         self.fnames = fnames
+        self.template = template
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            yield resources.UserResource(self.name, node, self.fnames)
+            yield resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource
@@ -143,8 +139,8 @@ class OutputFileArg(Arg):
     dictionary, including the '.tmp' suffix.
 
     """
-    def __init__(self, db, name, node, fnames=None):
-        self.resource = resources.UserResource(name, node, fnames=fnames)
+    def __init__(self, db, name, node, fnames=None, template=None):
+        self.resource = resources.UserResource(name, node, fnames=fnames, template=template)
     def get_outputs(self, db):
         yield self.resource
     def resolve(self, db):
@@ -162,14 +158,15 @@ class SplitFileArg(Arg):
     involves removing the '.tmp' suffix for each file created by the job.
 
     """
-    def __init__(self, db, name, base_node, split_axis, fnames=None):
+    def __init__(self, db, name, base_node, split_axis, fnames=None, template=None):
         self.name = name
         self.base_node = base_node
         self.split_axis = split_axis
         self.fnames = fnames
+        self.template = template
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
-            yield resources.UserResource(self.name, node, self.fnames)
+            yield resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
@@ -178,7 +175,7 @@ class SplitFileArg(Arg):
     def is_split(self):
         return True
     def resolve(self, db):
-        self.resolved = FilenameCallback(self, UserFilenameCreator('.tmp', self.fnames))
+        self.resolved = FilenameCallback(self, UserFilenameCreator('.tmp', self.fnames, self.template))
         return self.resolved
     def updatedb(self, db):
         self.resolved.updatedb(db)

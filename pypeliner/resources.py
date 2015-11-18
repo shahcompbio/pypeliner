@@ -37,7 +37,7 @@ class Resource(Dependency):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, fnames):
+    def __init__(self, name, node, fnames=None, template=None):
         self.name = name
         self.node = node
         fname_key = tuple([a[1] for a in node])
@@ -49,6 +49,8 @@ class UserResource(Resource):
                     self.filename = fnames[fname_key[0]]
                 else:
                     self.filename = fnames[fname_key]
+        elif template is not None:
+            self.filename = template.format(**dict(node))
         else:
             self.filename = name.format(**dict(node))
     def get_exists(self, db):
@@ -57,9 +59,6 @@ class UserResource(Resource):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
-    @property
-    def id(self):
-        return (self.filename, ())
     def build_displayname(self, base_node=identifiers.Node()):
         return self.filename
     @property
