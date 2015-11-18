@@ -56,7 +56,7 @@ class JobInstance(object):
         try:
             self.argset = copy.deepcopy(self.job_def.argset, {'_job':self})
         except managed.JobArgMismatchException as e:
-            e.job_name = name
+            e.job_name = self.displayname
             raise
         self.logs_dir = os.path.join(logs_dir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
