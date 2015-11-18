@@ -202,8 +202,7 @@ class Pypeline(object):
         """ :py:class:`pypeliner.scheduler.Scheduler` object to which jobs are added using 
         :py:func:`pypeliner.scheduler.Scheduler.transform` etc. """
 
-        self.sch.set_pipeline_dir(self.config['tmpdir'])
-        self.sch.logs_dir = self.logs_dir
+        self.sch.workflow_dir = self.config['tmpdir']
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.repopulate = self.config['repopulate']
         self.sch.rerun = self.config['rerun']
