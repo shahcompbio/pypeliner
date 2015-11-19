@@ -100,7 +100,9 @@ class UserFilenameCreator(object):
         resource = resources.UserResource(name, node, fnames=self.fnames, template=self.template)
         return resource.filename + self.suffix
     def __repr__(self):
-        return '{0}.{1}({2})'.format(resourcemgr.FilenameCreator.__module__, resourcemgr.FilenameCreator.__name__, self.suffix)
+        return '{0}.{1}({2},{3},{4})'.format(UserFilenameCreator.__module__,
+            UserFilenameCreator.__name__,
+            self.suffix, self.fnames, self.template)
 
 
 class InputFileArg(Arg):
