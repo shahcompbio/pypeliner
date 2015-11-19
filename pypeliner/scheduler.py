@@ -65,7 +65,7 @@ class Scheduler(object):
         """
         self._job_temps_dirs = set()
         with helpers.DirectoryLock() as dir_lock:
-            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, dir_lock, prune=self.prune, cleanup=self.cleanup)
+            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, dir_lock, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
             failing = False
             try:
                 try:

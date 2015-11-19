@@ -46,9 +46,9 @@ class UserResource(Resource):
                 self.filename = name
             else:
                 if len(fname_key) == 1 and fname_key[0] in fnames:
-                    self.filename = fnames[fname_key[0]]
+                    self.filename = fnames.get(fname_key[0], name)
                 else:
-                    self.filename = fnames[fname_key]
+                    self.filename = fnames.get(fname_key, name)
         elif template is not None:
             self.filename = template.format(**dict(node))
         else:

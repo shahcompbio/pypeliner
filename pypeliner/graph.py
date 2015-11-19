@@ -128,7 +128,7 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, workflow_dir, dir_lock, node=identifiers.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow_def, workflow_dir, dir_lock, node=identifiers.Node(), prune=False, cleanup=False, rerun=False, repopulate=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.workflow_dir = workflow_dir
@@ -142,6 +142,8 @@ class WorkflowInstance(object):
         self.subworkflows = list()
         self.prune = prune
         self.cleanup = cleanup
+        self.rerun = rerun
+        self.repopulate = repopulate
         self.regenerate()
 
     def regenerate(self):
@@ -185,11 +187,16 @@ class WorkflowInstance(object):
             job = self.graph.pop_next_job()
 
             if job.is_subworkflow:
-                self._logger.info('creating subworkflow ' + job.displayname)
-                workflow_def = job.create_subworkflow(self.db)
-                node = self.node + job.node + identifiers.Namespace(job.job_def.name)
-                workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup)
-                self.subworkflows.append((job, workflow))
+                if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                    self._logger.info('creating subworkflow ' + job.displayname)
+                    workflow_def = job.create_subworkflow(self.db)
+                    node = self.node + job.node + identifiers.Namespace(job.job_def.name)
+                    workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+                    self.subworkflows.append((job, workflow))
+                else:
+                    self._logger.info('subworkflow ' + job.displayname + ' skipped')
+                    job.complete()
+                self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 continue
             elif job.is_immediate:
                 job.finalize()
