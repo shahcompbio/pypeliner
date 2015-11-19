@@ -189,6 +189,7 @@ class WorkflowInstance(object):
             if job.is_subworkflow:
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                     self._logger.info('creating subworkflow ' + job.displayname)
+                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + job.displaycommand)
                     workflow_def = job.create_subworkflow(self.db)
                     node = self.node + job.node + identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
