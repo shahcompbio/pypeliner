@@ -28,6 +28,14 @@ class Arg(object):
         return resolved
 
 
+class SplitMergeArg(object):
+    def get_node_chunks(self, node):
+        chunks = tuple([a[1] for a in node[-len(self.axes):]])
+        if len(chunks) == 1:
+            return chunks[0]
+        return chunks
+
+
 class TemplateArg(Arg):
     """ Templated name argument 
 
@@ -110,7 +118,7 @@ class InputFileArg(Arg):
         return self.resource.filename
 
 
-class MergeFileArg(Arg):
+class MergeFileArg(Arg,SplitMergeArg):
     """ Input files merged along a single axis
 
     The name argument is treated as a filename with named formatting.  Resolves to a dictionary with keys as chunks for
@@ -134,8 +142,7 @@ class MergeFileArg(Arg):
     def resolve(self, db):
         resolved = dict()
         for resource in self.get_resources(db):
-            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
-            resolved[chunks] = resource.filename
+            resolved[self.get_node_chunks(resource.node)] = resource.filename
         return resolved
 
 
@@ -157,7 +164,7 @@ class OutputFileArg(Arg):
         self.resource.finalize(self.resolved, db)
 
 
-class SplitFileArg(Arg):
+class SplitFileArg(Arg,SplitMergeArg):
     """ Output file arguments from a split
 
     The name argument is treated as a filename with named formatting.  Resolves to a filename callback that can be used
@@ -212,7 +219,7 @@ class TempInputObjArg(Arg):
         del self.func
 
 
-class TempMergeObjArg(Arg):
+class TempMergeObjArg(Arg,SplitMergeArg):
     """ Temp input object arguments merged along single axis
 
     Resolves to an dictionary of objects with keys given by the merge axis chunks.
@@ -237,8 +244,7 @@ class TempMergeObjArg(Arg):
             obj = resource.get_obj(db)
             if self.func is not None:
                 obj = self.func(obj)
-            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
-            resolved[resource.chunk] = obj
+            resolved[self.get_node_chunks(resource.node)] = obj
         return resolved
     def sanitize(self):
         del self.func
@@ -260,7 +266,7 @@ class TempOutputObjArg(Arg):
         self.resource.finalize(self.value, db)
 
 
-class TempSplitObjArg(Arg):
+class TempSplitObjArg(Arg,SplitMergeArg):
     """ Temporary output object arguments from a split
 
     Stores a dictionary of objects created by a job.  The keys of the dictionary are taken as the chunks for the given
@@ -288,17 +294,7 @@ class TempSplitObjArg(Arg):
             db.nodemgr.store_chunks(self.axes, self.node, self.value.keys())
     def finalize(self, db):
         for resource in self.get_resources(db):
-            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
-            instance_value = None
-            try:
-                instance_value = self.value[chunks]
-            except KeyError:
-                pass
-            try:
-                if len(chunks) == 1:
-                    instance_value = self.value[chunks[0]]
-            except KeyError:
-                pass
+            instance_value = self.value.get(self.get_node_chunks(resource.node), None)
             if instance_value is None:
                 raise ValueError('unable to extract ' + str(chunks) + ' from ' + self.name + ' with values ' + str(self.value))
             resource.finalize(instance_value, db)
@@ -318,7 +314,7 @@ class TempInputFileArg(Arg):
         return self.resource.get_filename(db)
 
 
-class TempMergeFileArg(Arg):
+class TempMergeFileArg(Arg,SplitMergeArg):
     """ Temp input files merged along a single axis
 
     Resolves to a dictionary of filenames of temporary files.
@@ -339,8 +335,7 @@ class TempMergeFileArg(Arg):
     def resolve(self, db):
         resolved = dict()
         for resource in self.get_resources(db):
-            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
-            resolved[chunks] = resource.get_filename(db)
+            resolved[self.get_node_chunks(resource.node)] = resource.get_filename(db)
         return resolved
 
 
@@ -375,7 +370,10 @@ class FilenameCallback(object):
         for axis, chunk in zip(self.arg.axes, chunks):
             node += identifiers.AxisInstance(axis, chunk)
         filename = self.filename_creator(self.arg.name, node)
-        self.filenames[chunks] = filename
+        if len(chunks) == 1:
+            self.filenames[chunks[0]] = filename
+        else:
+            self.filenames[chunks] = filename
         helpers.makedirs(os.path.dirname(filename))
         return filename
     def __repr__(self):
@@ -384,11 +382,10 @@ class FilenameCallback(object):
         db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys())
     def finalize(self, db):
         for resource in self.arg.get_resources(db):
-            chunks = tuple(a[1] for a in resource.node[-len(self.arg.axes):])
-            resource.finalize(self.filenames[chunks], db)
+            resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)], db)
 
 
-class TempSplitFileArg(Arg):
+class TempSplitFileArg(Arg,SplitMergeArg):
     """ Temp output file arguments from a split
 
     Resolves to a filename callback that can be used to create a temporary filename for each chunk of the split on the 
