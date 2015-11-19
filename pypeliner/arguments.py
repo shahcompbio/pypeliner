@@ -365,6 +365,8 @@ class FilenameCallback(object):
         self.filename_creator = filename_creator
         self.filenames = dict()
     def __call__(self, *chunks):
+        return self.__getitem__(*chunks)
+    def __getitem__(self, *chunks):
         if len(self.arg.axes) != len(chunks):
             raise ValueError('expected ' + str(len(self.arg.axes)) + ' values for axes ' + str(self.arg.axes))
         node = self.arg.node
