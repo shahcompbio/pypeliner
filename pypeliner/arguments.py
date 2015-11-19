@@ -37,10 +37,13 @@ class TemplateArg(Arg):
     dictionary.
 
     """
-    def __init__(self, db, name, node):
+    def __init__(self, db, name, node, template=None):
         self.name = name
         self.node = node
-        self.filename = name.format(**dict(node))
+        if template is not None:
+            self.filename = template.format(**dict(node))
+        else:
+            self.filename = name.format(**dict(node))
     def resolve(self, db):
         return self.filename
 
@@ -65,15 +68,19 @@ class MergeTemplateArg(Arg):
     for the merge axis.  Each value is the name formatted using the merge node dictionary.
 
     """
-    def __init__(self, db, name, base_node, merge_axis):
+    def __init__(self, db, name, base_node, merge_axis, template=None):
         self.name = name
         self.base_node = base_node
         self.merge_axis = merge_axis
+        self.template = template
     @property
     def resolve(self, db):
         resolved = dict()
         for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
-            resolved[node[-1][1]] = self.name.format(**dict(node))
+            if self.template is not None:
+                resolved[node[-1][1]] = self.template.format(**dict(node))
+            else:
+                resolved[node[-1][1]] = self.name.format(**dict(node))
         return resolved
 
 
