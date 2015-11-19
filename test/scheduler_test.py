@@ -305,6 +305,25 @@ if __name__ == '__main__':
                         output = output_file.readlines()
                         self.assertEqual(output, ['file{0}\n'.format(chunk)])
 
+            def test_set_multiple_axes(self):
+
+                workflow = pypeliner.workflow.Workflow()
+
+                # Merge a set of input files indexed by axis `byfile`
+                workflow.setobj(mgd.OutputChunks('byfile', 'bychar'), ((1, 'a'), (1, 'b'), (2, 'a')))
+                workflow.transform('merge_files', (), self.ctx, merge_file_byline,
+                    None,
+                    mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                    mgd.OutputFile(self.output_filename))
+
+                scheduler = self.create_scheduler()
+                scheduler.run(workflow, exec_queue)
+
+                with open(self.output_filename, 'r') as output_file:
+                    output = output_file.readlines()
+
+                self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n', 'line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n'])
+
             def test_tempfile(self):
 
                 workflow = pypeliner.workflow.Workflow()
@@ -1107,7 +1126,7 @@ else:
     def write_list(in_list, out_filename):
         with open(out_filename, 'w') as out_file:
             for a in sorted(in_list):
-                out_file.write(str(a))
+                out_file.write(str(a[0]))
 
     def do_nothing(*arg):
         pass

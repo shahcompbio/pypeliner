@@ -59,8 +59,8 @@ class Managed(object):
         axes_specific = self.axes[common:]
         if len(axes_specific) == 0 and self.normal is not None:
             arg = self.normal(job.db, self.name, job.node[:common], **self.kwargs)
-        elif len(axes_specific) == 1 and self.splitmerge is not None:
-            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific[0], **self.kwargs)
+        elif len(axes_specific) > 0 and self.splitmerge is not None:
+            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific, **self.kwargs)
         else:
             raise JobArgMismatchException(self.name, self.axes, job.node)
         job.args.append(arg)
@@ -309,5 +309,5 @@ class OutputChunks(Managed):
     normal = None
     splitmerge = arguments.OutputChunksArg
     def __init__(self, *axes):
-        Managed.__init__(self, None, *axes)
+        Managed.__init__(self, 'chunks', *axes)
 

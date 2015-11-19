@@ -68,15 +68,15 @@ class MergeTemplateArg(Arg):
     for the merge axis.  Each value is the name formatted using the merge node dictionary.
 
     """
-    def __init__(self, db, name, base_node, merge_axis, template=None):
+    def __init__(self, db, name, node, axes, template=None):
         self.name = name
-        self.base_node = base_node
-        self.merge_axis = merge_axis
+        self.node = node
+        self.axes = axes
         self.template = template
     @property
     def resolve(self, db):
         resolved = dict()
-        for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             if self.template is not None:
                 resolved[node[-1][1]] = self.template.format(**dict(node))
             else:
@@ -119,23 +119,25 @@ class MergeFileArg(Arg):
     the merge axis.  Each value is the filename formatted using the merge node dictonary.
 
     """
-    def __init__(self, db, name, base_node, merge_axis, fnames=None, template=None):
+    def __init__(self, db, name, node, axes, fnames=None, template=None):
         self.name = name
-        self.base_node = base_node
-        self.merge_axis = merge_axis
+        self.node = node
+        self.axes = axes
         self.fnames = fnames
         self.template = template
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        yield db.nodemgr.get_merge_input(self.merge_axis, self.base_node)
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
+            yield dependency
     def resolve(self, db):
         resolved = dict()
         for resource in self.get_resources(db):
-            resolved[resource.chunk] = resource.filename
+            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
+            resolved[chunks] = resource.filename
         return resolved
 
 
@@ -165,19 +167,20 @@ class SplitFileArg(Arg):
     involves removing the '.tmp' suffix for each file created by the job.
 
     """
-    def __init__(self, db, name, base_node, split_axis, fnames=None, template=None):
+    def __init__(self, db, name, node, axes, fnames=None, template=None):
         self.name = name
-        self.base_node = base_node
-        self.split_axis = split_axis
+        self.node = node
+        self.axes = axes
         self.fnames = fnames
         self.template = template
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        yield db.nodemgr.get_split_output(self.split_axis, self.base_node)
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+            yield dependency
     @property
     def is_split(self):
         return True
@@ -217,24 +220,26 @@ class TempMergeObjArg(Arg):
     Resolves to an dictionary of objects with keys given by the merge axis chunks.
 
     """
-    def __init__(self, db, name, node, merge_axis, func=None):
+    def __init__(self, db, name, node, axes, func=None):
         self.name = name
-        self.base_node = node
-        self.merge_axis = merge_axis
+        self.node = node
+        self.axes = axes
         self.func = func
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
              yield resources.TempObjManager(self.name, node)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource.input
-        yield db.nodemgr.get_merge_input(self.merge_axis, self.base_node)
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
+            yield dependency
     def resolve(self, db):
         resolved = dict()
         for resource in self.get_resources(db):
             obj = resource.get_obj(db)
             if self.func is not None:
                 obj = self.func(obj)
+            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
             resolved[resource.chunk] = obj
         return resolved
     def sanitize(self):
@@ -264,27 +269,41 @@ class TempSplitObjArg(Arg):
     split axis.
 
     """
-    def __init__(self, db, name, base_node, split_axis):
+    def __init__(self, db, name, node, axes):
         self.name = name
-        self.base_node = base_node
-        self.split_axis = split_axis
+        self.node = node
+        self.axes = axes
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
              yield resources.TempObjManager(self.name, node)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource.output
-        yield db.nodemgr.get_split_output(self.split_axis, self.base_node)
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+            yield dependency
     @property
     def is_split(self):
         return True
     def resolve(self, db):
         return self
     def updatedb(self, db):
-        db.nodemgr.store_chunks(self.split_axis, self.base_node, self.value.keys())
+        db.nodemgr.store_chunks(self.axes, self.node, self.value.keys())
     def finalize(self, db):
         for resource in self.get_resources(db):
-            resource.finalize(self.value[resource.chunk], db)
+            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
+            instance_value = None
+            try:
+                instance_value = self.value[chunks]
+            except KeyError:
+                pass
+            try:
+                if len(chunks) == 1:
+                    instance_value = self.value[chunks[0]]
+            except KeyError:
+                pass
+            if instance_value is None:
+                raise ValueError('unable to extract ' + chunks + ' from ' + self.name)
+            resource.finalize(instance_value, db)
 
 
 class TempInputFileArg(Arg):
@@ -307,21 +326,23 @@ class TempMergeFileArg(Arg):
     Resolves to a dictionary of filenames of temporary files.
 
     """
-    def __init__(self, db, name, base_node, merge_axis):
+    def __init__(self, db, name, node, axes):
         self.name = name
-        self.base_node = base_node
-        self.merge_axis = merge_axis
+        self.node = node
+        self.axes = axes
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.merge_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.TempFileResource(self.name, node, db)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        yield db.nodemgr.get_merge_input(self.merge_axis, self.base_node)
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
+            yield dependency
     def resolve(self, db):
         resolved = dict()
         for resource in self.get_resources(db):
-            resolved[resource.chunk] = resource.get_filename(db)
+            chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
+            resolved[chunks] = resource.get_filename(db)
         return resolved
 
 
@@ -349,19 +370,24 @@ class FilenameCallback(object):
         self.arg = arg
         self.filename_creator = filename_creator
         self.filenames = dict()
-    def __call__(self, chunk):
-        node = self.arg.base_node + identifiers.AxisInstance(self.arg.split_axis, chunk)
+    def __call__(self, *chunks):
+        if len(self.arg.axes) != len(chunks):
+            raise ValueError('expected ' + str(len(self.arg.axes)) + ' values for axes ' + str(self.arg.axes))
+        node = self.arg.node
+        for axis, chunk in zip(self.arg.axes, chunks):
+            node += identifiers.AxisInstance(axis, chunk)
         filename = self.filename_creator(self.arg.name, node)
-        self.filenames[chunk] = filename
+        self.filenames[chunks] = filename
         helpers.makedirs(os.path.dirname(filename))
         return filename
     def __repr__(self):
-        return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.arg.name, self.arg.base_node, self.arg.split_axis, self.filename_creator)))
+        return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.arg.name, self.arg.node, self.arg.axes, self.filename_creator)))
     def updatedb(self, db):
-        db.nodemgr.store_chunks(self.arg.split_axis, self.arg.base_node, self.filenames.keys())
+        db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys())
     def finalize(self, db):
         for resource in self.arg.get_resources(db):
-            resource.finalize(self.filenames[resource.chunk], db)
+            chunks = tuple(a[1] for a in resource.node[-len(self.arg.axes):])
+            resource.finalize(self.filenames[chunks], db)
 
 
 class TempSplitFileArg(Arg):
@@ -371,17 +397,18 @@ class TempSplitFileArg(Arg):
     given axis.  Finalizes with resource manager to move from temporary filename to final filename.
 
     """
-    def __init__(self, db, name, base_node, split_axis):
+    def __init__(self, db, name, node, axes):
         self.name = name
-        self.base_node = base_node
-        self.split_axis = split_axis
+        self.node = node
+        self.axes = axes
     def get_resources(self, db):
-        for node in db.nodemgr.retrieve_nodes((self.split_axis,), self.base_node):
+        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.TempFileResource(self.name, node, db)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        yield db.nodemgr.get_split_output(self.split_axis, self.base_node)
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+            yield dependency
     @property
     def is_split(self):
         return True
@@ -416,9 +443,10 @@ class InputChunksArg(Arg):
         self.node = node
         self.axis = axis
     def get_inputs(self, db):
-        yield db.nodemgr.get_merge_input(self.axis, self.node)
+        for dependency in db.nodemgr.get_merge_inputs(self.axis, self.node):
+            yield dependency
     def resolve(self, db):
-        return db.nodemgr.retrieve_chunks(self.axis, self.node)
+        return list(db.nodemgr.retrieve_chunks(self.axis, self.node))
 
 
 class OutputChunksArg(Arg):
@@ -427,16 +455,17 @@ class OutputChunksArg(Arg):
     Sets the list of chunks for the given axes.
 
     """
-    def __init__(self, db, name, node, axis):
+    def __init__(self, db, name, node, axes):
         self.node = node
-        self.axis = axis
+        self.axes = axes
     def get_outputs(self, db):
-        yield db.nodemgr.get_split_output(self.axis, self.node)
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+            yield dependency
     @property
     def is_split(self):
         return True
     def resolve(self, db):
         return self
     def finalize(self, db):
-        db.nodemgr.store_chunks(self.axis, self.node, self.value)
+        db.nodemgr.store_chunks(self.axes, self.node, self.value)
 

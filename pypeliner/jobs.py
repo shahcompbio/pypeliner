@@ -318,8 +318,10 @@ class ChangeAxisInstance(JobInstance):
     def _inputs(self):
         for node in self.db.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
             yield resources.Dependency(self.job_def.var_name, node)
-        yield self.db.nodemgr.get_merge_input(self.job_def.old_axis, self.node)
-        yield self.db.nodemgr.get_merge_input(self.job_def.new_axis, self.node)
+        for dependency in self.db.nodemgr.get_merge_inputs((self.job_def.old_axis,), self.node):
+            yield dependency
+        for depenency in self.db.nodemgr.get_merge_inputs((self.job_def.new_axis,), self.node):
+            yield dependency
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
@@ -330,13 +332,15 @@ class ChangeAxisInstance(JobInstance):
     def out_of_date(self):
         return True
     def finalize(self):
-        old_chunks = set(self.db.nodemgr.retrieve_chunks(self.job_def.old_axis, self.node))
-        new_chunks = set(self.db.nodemgr.retrieve_chunks(self.job_def.new_axis, self.node))
+        old_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.old_axis,), self.node))
+        new_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.new_axis,), self.node))
         if (old_chunks != new_chunks):
             raise ChangeAxisException(old_chunks, new_chunks)
-        for chunk in old_chunks:
-            old_node = self.node + identifiers.AxisInstance(self.job_def.old_axis, chunk)
-            new_node = self.node + identifiers.AxisInstance(self.job_def.new_axis, chunk)
+        for chunks in old_chunks:
+            if len(chunks) > 1:
+                raise NotImplementedError('only single axis changes currently supported')
+            old_node = self.node + identifiers.AxisInstance(self.job_def.old_axis, chunks[0])
+            new_node = self.node + identifiers.AxisInstance(self.job_def.new_axis, chunks[0])
             self.db.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
         self.workflow.notify_completed(self)

@@ -83,9 +83,6 @@ class TempFileResource(Resource):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
         return db.resmgr.retrieve_createtime(self.name, self.node, self.get_filename(db))
-    @property
-    def chunk(self):
-        return self.node[-1][1]
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.get_filename(db))

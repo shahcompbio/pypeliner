@@ -1,5 +1,6 @@
 import atexit
 import collections
+import itertools
 import os
 import pickle
 import shelve
@@ -23,12 +24,20 @@ class NodeManager(object):
         if len(axes) == 0:
             yield base_node
         else:
-            for chunk in self.retrieve_chunks(axes[0], base_node):
+            for chunk in self.retrieve_axis_chunks(axes[0], base_node):
                 for node in self.retrieve_nodes(axes[1:], base_node + identifiers.AxisInstance(axes[0], chunk)):
                     yield node
     def get_chunks_filename(self, axis, node):
         return os.path.join(self.nodes_dir, node.subdir, axis+'_chunks')
-    def retrieve_chunks(self, axis, node):
+    def retrieve_chunks(self, axes, node):
+        assert isinstance(axes, tuple)
+        if len(axes) == 0:
+            yield ()
+        else:
+            for chunk in self.retrieve_axis_chunks(axes[0], node):
+                for chunks_rest in self.retrieve_chunks(axes[1:], node + identifiers.AxisInstance(axes[0], chunk)):
+                    yield (chunk,) + chunks_rest
+    def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             chunks_filename = self.get_chunks_filename(axis, node)
             if not os.path.exists(chunks_filename):
@@ -37,7 +46,21 @@ class NodeManager(object):
                 with open(chunks_filename, 'rb') as f:
                     self.cached_chunks[(axis, node)] = pickle.load(f)
         return self.cached_chunks[(axis, node)]
-    def store_chunks(self, axis, node, chunks):
+    def store_chunks(self, axes, node, chunks):
+        if len(chunks) == 0:
+            raise ValueError('must be at least one chunk per axis')
+        if not isinstance(chunks[0], tuple):
+            chunks = [tuple([a]) for a in chunks]
+        if len(axes) != len(chunks[0]):
+            raise ValueError('for multiple axis, chunks must be a tuple of the same length')
+        for level in xrange(len(axes)):
+            for pre_chunks, level_chunks in itertools.groupby(chunks, lambda a: a[:level]):
+                level_node = node
+                for idx in xrange(level):
+                    level_node += identifiers.AxisInstance(axes[idx], pre_chunks[idx])
+                level_chunks = set([a[level] for a in level_chunks])
+                self.store_axis_chunks(axes[level], level_node, level_chunks)
+    def store_axis_chunks(self, axis, node, chunks):
         for chunk in chunks:
             new_node = node + identifiers.AxisInstance(axis, chunk)
             helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
@@ -49,10 +72,15 @@ class NodeManager(object):
         with open(temp_chunks_filename, 'wb') as f:
             pickle.dump(chunks, f)
         helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
-    def get_merge_input(self, axis, node):
-        return resources.ChunksResource(axis, node)
-    def get_split_output(self, axis, node):
-        return resources.Dependency(axis, node)
+    def get_merge_inputs(self, axes, node):
+        return self.get_splitmerge(axes, node, resources.ChunksResource)
+    def get_split_outputs(self, axes, node):
+        return self.get_splitmerge(axes, node, resources.Dependency)
+    def get_splitmerge(self, axes, node, factory):
+        yield factory(axes[0], node)
+        for level in xrange(len(axes) - 1):
+            for level_node in self.retrieve_nodes(axes[:level+1], base_node=node):
+                yield factory(axes[level+1], level_node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield resources.Dependency(node[-1][0], node[:-1])
