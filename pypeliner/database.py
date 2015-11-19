@@ -46,7 +46,9 @@ class NodeManager(object):
                 with open(chunks_filename, 'rb') as f:
                     self.cached_chunks[(axis, node)] = pickle.load(f)
         return self.cached_chunks[(axis, node)]
-    def store_chunks(self, axes, node, chunks):
+    def store_chunks(self, axes, node, chunks, subset=None):
+        if subset is None:
+            subset = set([])
         if len(chunks) == 0:
             raise ValueError('must be at least one chunk per axis')
         if not isinstance(chunks[0], tuple):
@@ -54,6 +56,8 @@ class NodeManager(object):
         if len(axes) != len(chunks[0]):
             raise ValueError('for multiple axis, chunks must be a tuple of the same length')
         for level in xrange(len(axes)):
+            if level not in subset:
+                continue
             for pre_chunks, level_chunks in itertools.groupby(chunks, lambda a: a[:level]):
                 level_node = node
                 for idx in xrange(level):
@@ -72,13 +76,21 @@ class NodeManager(object):
         with open(temp_chunks_filename, 'wb') as f:
             pickle.dump(chunks, f)
         helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
-    def get_merge_inputs(self, axes, node):
-        return self.get_splitmerge(axes, node, resources.ChunksResource)
-    def get_split_outputs(self, axes, node):
-        return self.get_splitmerge(axes, node, resources.Dependency)
-    def get_splitmerge(self, axes, node, factory):
-        yield factory(axes[0], node)
+    def get_merge_inputs(self, axes, node, subset=None):
+        if subset is None:
+            subset = set([])
+        subset = set(range(len(axes))).difference(subset)
+        return self.get_splitmerge(axes, node, subset, resources.ChunksResource)
+    def get_split_outputs(self, axes, node, subset=None):
+        if subset is None:
+            subset = set([])
+        return self.get_splitmerge(axes, node, subset, resources.Dependency)
+    def get_splitmerge(self, axes, node, subset, factory):
+        if 0 in subset:
+            yield factory(axes[0], node)
         for level in xrange(len(axes) - 1):
+            if level not in subset:
+                continue
             for level_node in self.retrieve_nodes(axes[:level+1], base_node=node):
                 yield factory(axes[level+1], level_node)
     def get_node_inputs(self, node):

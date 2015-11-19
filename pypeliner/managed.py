@@ -308,6 +308,6 @@ class OutputChunks(Managed):
     """
     normal = None
     splitmerge = arguments.OutputChunksArg
-    def __init__(self, *axes):
-        Managed.__init__(self, 'chunks', *axes)
+    def __init__(self, *axes, **kwargs):
+        Managed.__init__(self, 'chunks', *axes, **kwargs)
 

@@ -34,6 +34,10 @@ class SplitMergeArg(object):
         if len(chunks) == 1:
             return chunks[0]
         return chunks
+    def get_axes_origin(self, axes_origin):
+        if axes_origin is None:
+            return set(range(len(self.axes)))
+        return axes_origin
 
 
 class TemplateArg(Arg):
@@ -173,22 +177,25 @@ class SplitFileArg(Arg,SplitMergeArg):
     involves removing the '.tmp' suffix for each file created by the job.
 
     """
-    def __init__(self, db, name, node, axes, is_split=True, fnames=None, template=None):
+    def __init__(self, db, name, node, axes, axes_origin=None, fnames=None, template=None):
         self.name = name
         self.node = node
         self.axes = axes
-        self.is_split = is_split
+        self.axes_origin = self.get_axes_origin(axes_origin)
+        self.is_split = self.axes_origin is not None
         self.fnames = fnames
         self.template = template
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
+    def get_inputs(self, db):
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        if self.is_split:
-            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-                yield dependency
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def resolve(self, db):
         self.resolved = FilenameCallback(self, UserFilenameCreator('.tmp', self.fnames, self.template))
         return self.resolved
@@ -274,25 +281,27 @@ class TempSplitObjArg(Arg,SplitMergeArg):
     split axis.
 
     """
-    def __init__(self, db, name, node, axes, is_split=True):
+    def __init__(self, db, name, node, axes, axes_origin=None):
         self.name = name
         self.node = node
         self.axes = axes
-        self.is_split = is_split
+        self.axes_origin = self.get_axes_origin(axes_origin)
+        self.is_split = self.axes_origin is not None
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
              yield resources.TempObjManager(self.name, node)
+    def get_inputs(self, db):
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource.output
-        if self.is_split:
-            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-                yield dependency
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def resolve(self, db):
         return self
     def updatedb(self, db):
-        if self.is_split:
-            db.nodemgr.store_chunks(self.axes, self.node, self.value.keys())
+        db.nodemgr.store_chunks(self.axes, self.node, self.value.keys(), subset=self.axes_origin)
     def finalize(self, db):
         for resource in self.get_resources(db):
             instance_value = self.value.get(self.get_node_chunks(resource.node), None)
@@ -382,7 +391,7 @@ class FilenameCallback(object):
     def __repr__(self):
         return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.arg.name, self.arg.node, self.arg.axes, self.filename_creator)))
     def updatedb(self, db):
-        db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys())
+        db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys(), subset=self.arg.axes_origin)
     def finalize(self, db):
         for resource in self.arg.get_resources(db):
             resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)], db)
@@ -395,20 +404,23 @@ class TempSplitFileArg(Arg,SplitMergeArg):
     given axis.  Finalizes with resource manager to move from temporary filename to final filename.
 
     """
-    def __init__(self, db, name, node, axes, is_split=True):
+    def __init__(self, db, name, node, axes, axes_origin=None):
         self.name = name
         self.node = node
         self.axes = axes
-        self.is_split = is_split
+        self.axes_origin = self.get_axes_origin(axes_origin)
+        self.is_split = self.axes_origin is not None
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.TempFileResource(self.name, node, db)
+    def get_inputs(self, db):
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        if self.is_split:
-            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-                yield dependency
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def resolve(self, db):
         self.resolved = FilenameCallback(self, db.resmgr.filename_creator)
         return self.resolved
@@ -447,21 +459,25 @@ class InputChunksArg(Arg):
         return list(db.nodemgr.retrieve_chunks(self.axis, self.node))
 
 
-class OutputChunksArg(Arg):
+class OutputChunksArg(Arg,SplitMergeArg):
     """ Instance list of a job as an argument
 
     Sets the list of chunks for the given axes.
 
     """
-    def __init__(self, db, name, node, axes):
+    def __init__(self, db, name, node, axes, axes_origin=None):
         self.node = node
         self.axes = axes
-        self.is_split = True
+        self.axes_origin = self.get_axes_origin(axes_origin)
+        self.is_split = self.axes_origin is not None
+    def get_inputs(self, db):
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
+            yield dependency
     def get_outputs(self, db):
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
             yield dependency
     def resolve(self, db):
         return self
     def finalize(self, db):
-        db.nodemgr.store_chunks(self.axes, self.node, self.value)
+        db.nodemgr.store_chunks(self.axes, self.node, self.value, subset=self.axes_origin)
 
