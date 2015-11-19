@@ -225,9 +225,9 @@ if __name__ == '__main__':
 
                 workflow = pypeliner.workflow.Workflow()
 
-                # For single axis, tuple or value should work
+                # For single axis, only single value is supported
                 input_filenames = {
-                    (1,):self.input_n_filename.format(byfile=1),
+                    1:self.input_n_filename.format(byfile=1),
                     2:self.input_n_filename.format(byfile=2),
                 }
 
@@ -269,10 +269,10 @@ if __name__ == '__main__':
 
                 workflow = pypeliner.workflow.Workflow()
 
-                # For single axis, tuple or value should work
+                # For single axis, only single value is supported
                 output_filenames = {
                     1:self.output_n_filename.format(byfile=1),
-                    (2,):self.output_n_filename.format(byfile=2),
+                    2:self.output_n_filename.format(byfile=2),
                 }
 
                 # Write a set of output files indexed by axis `byfile`
