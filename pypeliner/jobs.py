@@ -167,7 +167,7 @@ class JobInstance(object):
             status = ''
             if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
                 status = 'new'
-            explanation.append('input {0} {1} {2}'.format(input.build_displayname(self.workflow.node), input.get_createtime(self.db), status))
+            explanation.append('input {0} {1} {2} {3}'.format(input.build_displayname(self.workflow.node), input.get_filename(self.db), input.get_createtime(self.db), status))
         for output in self.output_resources:
             status = ''
             if output.get_createtime(self.db) is None:
@@ -176,7 +176,7 @@ class JobInstance(object):
                 status = '{0} old'.format(output.get_createtime(self.db))
             else:
                 status = '{0}'.format(output.get_createtime(self.db))
-            explanation.append('output {0} {1}'.format(output.build_displayname(self.workflow.node), status))
+            explanation.append('output {0} {1} {2}'.format(output.build_displayname(self.workflow.node), output.get_filename(self.db), status))
         return '\n'.join(explanation)
     @property
     def output_missing(self):

@@ -21,6 +21,8 @@ class Dependency(object):
         return (self.name, self.node)
     def build_displayname(self, base_node=identifiers.Node()):
         name = '/' + self.name
+        if self.node.displayname != '':
+            name = '/' + self.node.displayname + name
         if base_node.displayname != '':
             name = '/' + base_node.displayname + name
         return name
@@ -29,6 +31,8 @@ class Dependency(object):
 class Resource(Dependency):
     """ Abstract input/output in the dependency graph
     associated with a file tracked using creation time """
+    def get_filename(self, db):
+        raise NotImplementedError
     def get_exists(self, db):
         raise NotImplementedError
     def get_createtime(self, db):
@@ -56,6 +60,8 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
+    def get_filename(self, db):
+        return self.filename
     def get_exists(self, db):
         return os.path.exists(self.filename)
     def get_createtime(self, db):
@@ -161,8 +167,10 @@ class ChunksResource(Resource):
     @property
     def id(self):
         return (self.name, self.node)
+    def get_filename(self, db):
+        return db.nodemgr.get_chunks_filename(self.name, self.node)
     def get_exists(self, db):
-        return os.path.exists(db.nodemgr.get_chunks_filename(self.name, self.node))
+        return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
         if self.get_exists(db):
             return os.path.getmtime(db.nodemgr.get_chunks_filename(self.name, self.node))
