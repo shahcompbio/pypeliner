@@ -97,8 +97,7 @@ class UserFilenameCreator(object):
         self.fnames = fnames
         self.template = template
     def __call__(self, name, node):
-        resource = resources.UserResource(name, node, fnames=self.fnames, template=self.template)
-        return resource.filename + self.suffix
+        return resources.resolve_user_filename(name, node, fnames=self.fnames, template=self.template) + self.suffix
     def __repr__(self):
         return '{0}.{1}({2},{3},{4})'.format(UserFilenameCreator.__module__,
             UserFilenameCreator.__name__,

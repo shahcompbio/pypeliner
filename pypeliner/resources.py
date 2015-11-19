@@ -35,32 +35,33 @@ class Resource(Dependency):
         raise NotImplementedError
 
 
+def resolve_user_filename(name, node, fnames=None, template=None):
+    """ Resolve a filename based on user provided information """
+    fname_key = tuple([a[1] for a in node])
+    if fnames is not None:
+        if len(fname_key) == 1:
+            filename = fnames.get(fname_key[0], name)
+        else:
+            filename = fnames.get(fname_key, name)
+    elif template is not None:
+        filename = template.format(**dict(node))
+    else:
+        filename = name.format(**dict(node))
+    return filename
+
+
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
     def __init__(self, name, node, fnames=None, template=None):
         self.name = name
         self.node = node
-        fname_key = tuple([a[1] for a in node])
-        if fnames is not None:
-            if None in fname_key:
-                self.filename = name
-            else:
-                if len(fname_key) == 1 and fname_key[0] in fnames:
-                    self.filename = fnames.get(fname_key[0], name)
-                else:
-                    self.filename = fnames.get(fname_key, name)
-        elif template is not None:
-            self.filename = template.format(**dict(node))
-        else:
-            self.filename = name.format(**dict(node))
+        self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
     def get_exists(self, db):
         return os.path.exists(self.filename)
     def get_createtime(self, db):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
-    def build_displayname(self, base_node=identifiers.Node()):
-        return self.filename
     @property
     def chunk(self):
         return self.node[-1][1]
