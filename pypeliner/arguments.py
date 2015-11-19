@@ -7,13 +7,11 @@ import identifiers
 
 
 class Arg(object):
+    is_split = False
     def get_inputs(self, db):
         return []
     def get_outputs(self, db):
         return []
-    @property
-    def is_split(self):
-        return False
     def resolve(self, db):
         return None
     def updatedb(self, db):
@@ -167,10 +165,11 @@ class SplitFileArg(Arg):
     involves removing the '.tmp' suffix for each file created by the job.
 
     """
-    def __init__(self, db, name, node, axes, fnames=None, template=None):
+    def __init__(self, db, name, node, axes, is_split=True, fnames=None, template=None):
         self.name = name
         self.node = node
         self.axes = axes
+        self.is_split = is_split
         self.fnames = fnames
         self.template = template
     def get_resources(self, db):
@@ -179,16 +178,15 @@ class SplitFileArg(Arg):
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-            yield dependency
-    @property
-    def is_split(self):
-        return True
+        if self.is_split:
+            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+                yield dependency
     def resolve(self, db):
         self.resolved = FilenameCallback(self, UserFilenameCreator('.tmp', self.fnames, self.template))
         return self.resolved
     def updatedb(self, db):
-        self.resolved.updatedb(db)
+        if self.is_split:
+            self.resolved.updatedb(db)
     def finalize(self, db):
         self.resolved.finalize(db)
 
@@ -269,25 +267,25 @@ class TempSplitObjArg(Arg):
     split axis.
 
     """
-    def __init__(self, db, name, node, axes):
+    def __init__(self, db, name, node, axes, is_split=True):
         self.name = name
         self.node = node
         self.axes = axes
+        self.is_split = is_split
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
              yield resources.TempObjManager(self.name, node)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource.output
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-            yield dependency
-    @property
-    def is_split(self):
-        return True
+        if self.is_split:
+            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+                yield dependency
     def resolve(self, db):
         return self
     def updatedb(self, db):
-        db.nodemgr.store_chunks(self.axes, self.node, self.value.keys())
+        if self.is_split:
+            db.nodemgr.store_chunks(self.axes, self.node, self.value.keys())
     def finalize(self, db):
         for resource in self.get_resources(db):
             chunks = tuple(a[1] for a in resource.node[-len(self.axes):])
@@ -302,7 +300,7 @@ class TempSplitObjArg(Arg):
             except KeyError:
                 pass
             if instance_value is None:
-                raise ValueError('unable to extract ' + chunks + ' from ' + self.name)
+                raise ValueError('unable to extract ' + str(chunks) + ' from ' + self.name + ' with values ' + str(self.value))
             resource.finalize(instance_value, db)
 
 
@@ -397,26 +395,26 @@ class TempSplitFileArg(Arg):
     given axis.  Finalizes with resource manager to move from temporary filename to final filename.
 
     """
-    def __init__(self, db, name, node, axes):
+    def __init__(self, db, name, node, axes, is_split=True):
         self.name = name
         self.node = node
         self.axes = axes
+        self.is_split = is_split
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.TempFileResource(self.name, node, db)
     def get_outputs(self, db):
         for resource in self.get_resources(db):
             yield resource
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
-            yield dependency
-    @property
-    def is_split(self):
-        return True
+        if self.is_split:
+            for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
+                yield dependency
     def resolve(self, db):
         self.resolved = FilenameCallback(self, db.resmgr.filename_creator)
         return self.resolved
     def updatedb(self, db):
-        self.resolved.updatedb(db)
+        if self.is_split:
+            self.resolved.updatedb(db)
     def finalize(self, db):
         self.resolved.finalize(db)
 
@@ -458,12 +456,10 @@ class OutputChunksArg(Arg):
     def __init__(self, db, name, node, axes):
         self.node = node
         self.axes = axes
+        self.is_split = True
     def get_outputs(self, db):
         for dependency in db.nodemgr.get_split_outputs(self.axes, self.node):
             yield dependency
-    @property
-    def is_split(self):
-        return True
     def resolve(self, db):
         return self
     def finalize(self, db):
