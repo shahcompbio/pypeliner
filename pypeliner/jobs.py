@@ -19,12 +19,6 @@ class CallSet(object):
         self.ret = ret
         self.args = args
         self.kwargs = kwargs
-    def iteritems(self):
-        yield self.ret
-        for arg in self.args:
-            yield arg
-        for key, arg in sorted(self.kwargs.iteritems()):
-            yield arg
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
