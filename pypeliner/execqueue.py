@@ -27,7 +27,7 @@ def log_text(debug_filenames):
     return text
 
 def qsub_format_name(name):
-    return name.strip('/').rstrip('/').replace('/','.')
+    return name.strip('/').rstrip('/').replace('/','.').replace(':','_')
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
