@@ -203,6 +203,7 @@ class Pypeline(object):
         :py:func:`pypeliner.scheduler.Scheduler.transform` etc. """
 
         self.sch.workflow_dir = self.config['tmpdir']
+        self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.repopulate = self.config['repopulate']
         self.sch.rerun = self.config['rerun']

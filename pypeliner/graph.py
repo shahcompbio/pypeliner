@@ -128,14 +128,15 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, workflow_dir, dir_lock, node=identifiers.Node(), prune=False, cleanup=False, rerun=False, repopulate=False):
+    def __init__(self, workflow_def, workflow_dir, logs_dir, dir_lock, node=identifiers.Node(), prune=False, cleanup=False, rerun=False, repopulate=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.workflow_dir = workflow_dir
+        self.logs_dir = logs_dir
         self.dir_lock = dir_lock
-        self.logs_dir = os.path.join(workflow_dir, 'log', node.subdir)
-        helpers.makedirs(self.logs_dir)
-        self.dir_lock.add_lock(os.path.join(workflow_dir, node.subdir, '_lock'))
+        self.workflow_logs_dir = os.path.join(logs_dir, node.subdir)
+        self.workflow_lock_dir = os.path.join(workflow_dir, node.subdir, '_lock')
+        self.dir_lock.add_lock(self.workflow_lock_dir)
         self.db = database.WorkflowDatabase(workflow_dir, node.subdir)
         self.node = node
         self.graph = DependencyGraph()
@@ -151,7 +152,7 @@ class WorkflowInstance(object):
         """
 
         jobs = dict()
-        for job_inst in self.workflow_def._create_job_instances(self, self.db, self.logs_dir):
+        for job_inst in self.workflow_def._create_job_instances(self, self.db, self.workflow_logs_dir):
             if job_inst.id in jobs:
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
@@ -192,7 +193,7 @@ class WorkflowInstance(object):
                     self._logger.info('subworkflow ' + job.displayname + ' -> ' + job.displaycommand)
                     workflow_def = job.create_subworkflow(self.db)
                     node = self.node + job.node + identifiers.Namespace(job.job_def.name)
-                    workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+                    workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.logs_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
                     self.subworkflows.append((job, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')

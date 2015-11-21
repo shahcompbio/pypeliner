@@ -34,6 +34,7 @@ class Scheduler(object):
         self.cleanup = True
         self.prune = True
         self.workflow_dir = './'
+        self.logs_dir = './log'
         self.freeze = True
 
     def __setattr__(self, attr, value):
@@ -47,6 +48,13 @@ class Scheduler(object):
     @workflow_dir.setter
     def workflow_dir(self, value):
         self._workflow_dir = helpers.abspath(value)
+
+    @property
+    def logs_dir(self):
+        return self._logs_dir
+    @logs_dir.setter
+    def logs_dir(self, value):
+        self._logs_dir = helpers.abspath(value)
 
     def run(self, workflow_def, exec_queue):
         """ Run the pipeline
@@ -65,7 +73,7 @@ class Scheduler(object):
         """
         self._job_temps_dirs = set()
         with helpers.DirectoryLock() as dir_lock:
-            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, dir_lock, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, self.logs_dir, dir_lock, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
             failing = False
             try:
                 try:
