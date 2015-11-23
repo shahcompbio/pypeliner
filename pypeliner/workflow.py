@@ -10,10 +10,14 @@ class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
     """
-    def __init__(self):
+    def __init__(self, default_ctx=None):
+        if default_ctx is not None:
+            self.default_ctx = default_ctx
+        else:
+            self.default_ctx = {}
         self.job_definitions = dict()
 
-    def setobj(self, obj, value, axes=()):
+    def setobj(self, obj=None, value=None, axes=()):
         """ Set a managed temp object with a specified value.
 
         :param obj: managed object to be set with a given value
@@ -33,9 +37,9 @@ class Workflow(object):
 
         """
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
-        self.transform(name, axes, {'local':True}, _setobj_helper, obj, value)
+        self.transform(name=name, axes=axes, ctx={'local':True}, func=_setobj_helper, ret=obj, args=(value,))
 
-    def commandline(self, name, axes, ctx, *args):
+    def commandline(self, name='', axes=(), ctx=None, args=None):
         """ Add a command line based transform to the pipeline
 
         This call is equivalent to::
@@ -45,9 +49,9 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name, axes, ctx, commandline.execute, None, *args)
+        self.transform(name=name, axes=axes, ctx=ctx, func=commandline.execute, args=args)
 
-    def transform(self, name, axes, ctx, func, ret, *args, **kwargs):
+    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
         provided python function ``func`` to take input dependencies and create/update 
         output dependents.
@@ -79,11 +83,13 @@ class Workflow(object):
         derived class.
 
         """
+        if ctx is None:
+            ctx = self.default_ctx
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.JobDefinition(name, axes, ctx, func, jobs.CallSet(ret, args, kwargs))
+        self.job_definitions[name] = jobs.JobDefinition(name, axes, ctx, func, jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
-    def subworkflow(self, name, axes, func, *args, **kwargs):
+    def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
         takes the input dependencies and creates/updates output dependents.  The python 
         function ``func`` should return a workflow object containing the set of jobs.
@@ -105,9 +111,9 @@ class Workflow(object):
         """
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.SubWorkflowDefinition(name, axes, func, jobs.CallSet(None, args, kwargs))
+        self.job_definitions[name] = jobs.SubWorkflowDefinition(name, axes, func, jobs.CallSet(args=args, kwargs=kwargs))
 
-    def changeaxis(self, name, axes, var_name, old_axis, new_axis, exact=True):
+    def changeaxis(self, name='', axes=(), var_name='', old_axis='', new_axis='', exact=True):
         """ Change the axis for a managed variable.  This acts as a regular jobs with
         input dependencies and output dependents as for jobs created using transform.
 

@@ -87,9 +87,10 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Write a set of output files indexed by axis `byfile`
-                workflow.transform('write_files', (), self.ctx, write_files,
-                    None,
-                    mgd.OutputFile(self.output_n_filename, 'byfile'))
+                workflow.transform(
+                    name='write_files',
+                    func=write_files,
+                    args=(mgd.OutputFile(self.output_n_filename, 'byfile'),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -104,23 +105,30 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Directly set the chunks indexed by axis `byfile`
-                workflow.transform('set_chunks', (), self.ctx, set_chunks,
-                    mgd.OutputChunks('byfile'))
+                workflow.transform(
+                    name='set_chunks',
+                    func=set_chunks,
+                    ret=mgd.OutputChunks('byfile'))
 
                 # Transform the input files indexed by axis `byfile` to output files
                 # also indexed by axis `byfile`
-                workflow.transform('do', ('byfile',), self.ctx, file_transform,
-                    None,
-                    mgd.InputFile(self.input_n_filename, 'byfile'),
-                    mgd.OutputFile(self.output_n_filename, 'byfile'),
-                    mgd.InputInstance('byfile'),
-                    mgd.Template(self.output_n_template, 'byfile'))
+                workflow.transform(
+                    name='do',
+                    axes=('byfile',),
+                    func=file_transform,
+                    args=(
+                        mgd.InputFile(self.input_n_filename, 'byfile'),
+                        mgd.OutputFile(self.output_n_filename, 'byfile'),
+                        mgd.InputInstance('byfile'),
+                        mgd.Template(self.output_n_template, 'byfile')))
                 
                 # Merge output files indexed by axis `byfile` into a single output file
-                workflow.transform('merge', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.InputFile(self.output_n_filename, 'byfile'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.InputFile(self.output_n_filename, 'byfile'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -140,21 +148,27 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Read data into a managed object
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
                 # Extract a property of the managed object, modify it
                 # and store the result in another managed object
-                workflow.transform('do', (), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
                 # Write the object to an output file
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write',
+                    func=write_stuff,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -168,12 +182,14 @@ if __name__ == '__main__':
 
                 workflow = pypeliner.workflow.Workflow()
 
-                workflow.transform('dict_arg_stuff', (), self.ctx, dict_arg_stuff,
-                    None,
-                    {'1':mgd.OutputFile(self.output_1_filename),
-                     '2':mgd.OutputFile(self.output_2_filename)},
-                    {'1':mgd.InputFile(self.input_1_filename),
-                     '2':mgd.InputFile(self.input_2_filename)})
+                workflow.transform(
+                    name='dict_arg_stuff',
+                    func=dict_arg_stuff,
+                    args=(
+                        {'1':mgd.OutputFile(self.output_1_filename),
+                         '2':mgd.OutputFile(self.output_2_filename)},
+                        {'1':mgd.InputFile(self.input_1_filename),
+                         '2':mgd.InputFile(self.input_2_filename)}))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -186,27 +202,33 @@ if __name__ == '__main__':
 
             def test_simple_sub_workflow(self):
 
-                workflow = pypeliner.workflow.Workflow()
+                workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
 
-                workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
+                workflow.setobj(obj=mgd.OutputChunks('byfile'), value=(1, 2))
 
-                workflow.transform('append_to_lines', ('byfile',), self.ctx,
-                    append_to_lines,
-                    None,
-                    mgd.InputFile(self.input_n_filename, 'byfile'),
-                    '#',
-                    mgd.TempOutputFile('intermediate1', 'byfile'))
+                workflow.transform(
+                    name='append_to_lines',
+                    axes=('byfile',),
+                    func=append_to_lines,
+                    args=(
+                        mgd.InputFile(self.input_n_filename, 'byfile'),
+                        '#',
+                        mgd.TempOutputFile('intermediate1', 'byfile')))
 
-                workflow.subworkflow('sub_workflow_1', ('byfile',),
-                    create_workflow_1,
-                    mgd.TempInputFile('intermediate1', 'byfile'),
-                    mgd.TempOutputFile('intermediate2', 'byfile'))
+                workflow.subworkflow(
+                    name='sub_workflow_1',
+                    axes=('byfile',),
+                    func=create_workflow_1,
+                    args=(
+                        mgd.TempInputFile('intermediate1', 'byfile'),
+                        mgd.TempOutputFile('intermediate2', 'byfile')))
 
-                workflow.transform('merge_files', (), self.ctx,
-                    merge_file_byline,
-                    None,
-                    mgd.TempInputFile('intermediate2', 'byfile'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_files',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('intermediate2', 'byfile'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -233,10 +255,12 @@ if __name__ == '__main__':
 
                 # Merge a set of input files indexed by axis `byfile`
                 workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
-                workflow.transform('merge_files', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.InputFile('input_files', 'byfile', fnames=input_filenames),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_files',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.InputFile('input_files', 'byfile', fnames=input_filenames),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -252,10 +276,12 @@ if __name__ == '__main__':
 
                 # Merge a set of input files indexed by axis `byfile`
                 workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
-                workflow.transform('merge_files', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_files',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -276,9 +302,10 @@ if __name__ == '__main__':
                 }
 
                 # Write a set of output files indexed by axis `byfile`
-                workflow.transform('write_files', (), self.ctx, write_files,
-                    None,
-                    mgd.OutputFile('output_files', 'byfile', fnames=output_filenames))
+                workflow.transform(
+                    name='write_files',
+                    func=write_files,
+                    args=(mgd.OutputFile('output_files', 'byfile', fnames=output_filenames),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -293,9 +320,10 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Write a set of output files indexed by axis `byfile`
-                workflow.transform('write_files', (), self.ctx, write_files,
-                    None,
-                    mgd.OutputFile('output_files', 'byfile', template=self.output_n_filename))
+                workflow.transform(
+                    name='write_files',
+                    func=write_files,
+                    args=(mgd.OutputFile('output_files', 'byfile', template=self.output_n_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -311,10 +339,12 @@ if __name__ == '__main__':
 
                 # Merge a set of input files indexed by axis `byfile`
                 workflow.setobj(mgd.OutputChunks('byfile', 'bychar'), ((1, 'a'), (1, 'b'), (2, 'a')))
-                workflow.transform('merge_files', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_files',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -330,10 +360,12 @@ if __name__ == '__main__':
 
                 # Write the name of the temp file produced by pypeliner
                 # into an output file
-                workflow.transform('write_files', (), self.ctx, check_temp,
-                    None,
-                    mgd.OutputFile(self.output_filename),
-                    mgd.TempFile('temp_space'))
+                workflow.transform(
+                    name='write_files',
+                    func=check_temp,
+                    args=(
+                        mgd.OutputFile(self.output_filename),
+                        mgd.TempSpace('temp_space')))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -347,18 +379,24 @@ if __name__ == '__main__':
 
                 workflow = pypeliner.workflow.Workflow()
 
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
-                workflow.transform('do', (), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
-                workflow.transform('write', (), self.ctx, do_assert,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write',
+                    func=do_assert,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename)))
 
                 failed = not scheduler.run(exec_queue)
                 self.assertTrue(failed)
@@ -378,21 +416,27 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Read data into a managed object
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
                 # Extract a property of the managed object, modify it
                 # and store the result in another managed object
-                workflow.transform('do', (), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
                 # Write the object to an output file
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.TempOutputFile('output_file'))
+                workflow.transform(
+                    name='write',
+                    func=write_stuff,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.TempOutputFile('output_file')))
 
                 scheduler = self.create_scheduler()
                 scheduler.prune = False
@@ -414,24 +458,31 @@ if __name__ == '__main__':
                 # Read data into a managed object, but also add a superfluous
                 # input argument called `cyclic`, which is generated by a
                 # downstream job
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename),
-                    mgd.TempInputObj('cyclic'))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        mgd.TempInputObj('cyclic')))
 
                 # Extract a property of the managed object, modify it
                 # and store the result in another managed object
-                workflow.transform('do', (), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
                 # Write the object to an output file, and also include `cyclic`
                 # as an output so as to create a cycle in the dependency graph
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename),
-                    mgd.TempOutputObj('cyclic'))
+                workflow.transform(
+                    name='write',
+                    func=write_stuff,
+                    ret=mgd.TempOutputObj('cyclic'),
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
 
@@ -439,12 +490,15 @@ if __name__ == '__main__':
 
             def test_commandline_simple(self):
 
-                workflow = pypeliner.workflow.Workflow()
+                workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
 
                 # Copy input to output file using linux `cat`
-                workflow.commandline('do', (), self.ctx, 'cat',
-                    mgd.InputFile(self.input_filename),
-                    '>', mgd.OutputFile(self.output_filename))
+                workflow.commandline(
+                    name='do',
+                    args=(
+                        'cat',
+                        mgd.InputFile(self.input_filename),
+                        '>', mgd.OutputFile(self.output_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -456,33 +510,44 @@ if __name__ == '__main__':
 
             def test_single_object_split(self):
 
-                workflow = pypeliner.workflow.Workflow()
+                workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
 
                 # Read data into a managed object, which is a string
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read', 
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
                 # Split the string into individual characters
-                workflow.transform('splitbychar', (), self.ctx, split_stuff,
-                    mgd.TempOutputObj('input_data', 'bychar'),
-                    mgd.TempInputObj('input_data'))
+                workflow.transform(
+                    name='splitbychar',
+                    func=split_stuff,
+                    ret=mgd.TempOutputObj('input_data', 'bychar'),
+                    args=(mgd.TempInputObj('input_data'),))
                 
                 # Modify each single character string, appending `-`
-                workflow.transform('do', ('bychar',), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data', 'bychar'),
-                    mgd.TempInputObj('input_data', 'bychar').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    axes=('bychar',),
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data', 'bychar'),
+                    args=(mgd.TempInputObj('input_data', 'bychar').prop('some_string'),))
                 
                 # Merge the modified strings
-                workflow.transform('mergebychar', (), self.ctx, merge_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('output_data', 'bychar'))
+                workflow.transform(
+                    name='mergebychar', 
+                    func=merge_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('output_data', 'bychar'),))
                 
                 # Write the modified merged string to an output file
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write', 
+                    func=write_stuff,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -494,48 +559,60 @@ if __name__ == '__main__':
 
             def test_change_axis(self):
 
-                workflow = pypeliner.workflow.Workflow()
+                workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
 
                 # Read and modify a file and output to a temporary output file
                 # with name `mod_input_filename`
-                workflow.transform('dofilestuff', (), self.ctx, do_file_stuff,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    mgd.TempOutputFile('mod_input_filename'),
-                    'm')
+                workflow.transform(
+                    name='dofilestuff',
+                    func=do_file_stuff,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        mgd.TempOutputFile('mod_input_filename'),
+                        'm'))
 
                 # Split the same input file by pairs of lines and output
                 # two lines per file
-                workflow.transform('splitbyline', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    2,
-                    mgd.TempOutputFile('input_filename', 'byline'),
-                    max_files=2)
+                workflow.transform(
+                    name='splitbyline',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        2,
+                        mgd.TempOutputFile('input_filename', 'byline')),
+                    kwargs=dict(
+                        max_files=2))
                 
                 # Do an identical split on `mod_input_filename`
-                workflow.transform('splitbyline2', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('mod_input_filename'),
-                    2,
-                    mgd.TempOutputFile('mod_input_filename', 'byline2'))
+                workflow.transform(
+                    name='splitbyline2',
+                    func=split_file_byline,
+                    args=(
+                        mgd.TempInputFile('mod_input_filename'),
+                        2,
+                        mgd.TempOutputFile('mod_input_filename', 'byline2')))
                 
                 # Change the `mod_input_filename` split file to have the same axis as the first split
                 workflow.changeaxis('changeaxis', (), 'mod_input_filename', 'byline2', 'byline', exact=False)
 
                 # Modify split versions of `input_filename` and `mod_input_filename` in tandem, 
                 # concatenate both files together
-                workflow.transform('dopairedstuff', ('byline',), self.ctx, do_paired_stuff,
-                    None,
-                    mgd.TempOutputFile('output_filename', 'byline'),
-                    mgd.TempInputFile('input_filename', 'byline'),
-                    mgd.TempInputFile('mod_input_filename', 'byline'))
+                workflow.transform(
+                    name='dopairedstuff',
+                    axes=('byline',),
+                    func=do_paired_stuff,
+                    args=(
+                        mgd.TempOutputFile('output_filename', 'byline'),
+                        mgd.TempInputFile('input_filename', 'byline'),
+                        mgd.TempInputFile('mod_input_filename', 'byline')))
                 
                 # Merge concatenated files and output
-                workflow.transform('mergebychar', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_filename', 'byline'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='mergebychar',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_filename', 'byline'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.cleanup = False
@@ -560,25 +637,32 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Split input file by line and output one file per line
-                workflow.transform('splitbyline', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    1,
-                    mgd.TempOutputFile('input_filename', 'byline'))
+                workflow.transform(
+                    name='splitbyline',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        1,
+                        mgd.TempOutputFile('input_filename', 'byline')))
 
                 # Append the `instance` of the split (basically the index of the line)
                 # to each temporary file `input_filename` and output to a new file
-                workflow.transform('append', ('byline',), self.ctx, append_to_lines_instance,
-                    None,
-                    mgd.TempInputFile('input_filename', 'byline'),
-                    mgd.InputInstance('byline'),
-                    mgd.TempOutputFile('output_filename', 'byline'))
+                workflow.transform(
+                    name='append',
+                    axes=('byline',),
+                    func=append_to_lines_instance,
+                    args=(
+                        mgd.TempInputFile('input_filename', 'byline'),
+                        mgd.InputInstance('byline'),
+                        mgd.TempOutputFile('output_filename', 'byline')))
                 
                 # Merge files and output
-                workflow.transform('mergebyline', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_filename', 'byline'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='mergebyline',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_filename', 'byline'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -594,18 +678,22 @@ if __name__ == '__main__':
 
                 # Split file by line and output a single line per temporary output
                 # file named `input_filename`
-                workflow.transform('splitbyline', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    1,
-                    mgd.TempOutputFile('input_filename', 'byline'))
+                workflow.transform(
+                    name='splitbyline',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        1,
+                        mgd.TempOutputFile('input_filename', 'byline')))
 
                 # Write the list of chunks (line indexes) on the axis `byline` produced
                 # by splitting the input file
-                workflow.transform('writelist', (), self.ctx, write_list,
-                    None,
-                    mgd.InputChunks('byline'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='writelist',
+                    func=write_list,
+                    args=(
+                        mgd.InputChunks('byline'),
+                        mgd.OutputFile(self.output_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -621,41 +709,58 @@ if __name__ == '__main__':
 
                 # Read input file and store in managed input object, which is 
                 # a string of the file contents
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
                 # Split the string by line and store as a new object
-                workflow.transform('splitbyline', (), self.ctx, split_by_line,
-                    mgd.TempOutputObj('input_data', 'byline'),
-                    mgd.TempInputObj('input_data'))
+                workflow.transform(
+                    name='splitbyline',
+                    func=split_by_line,
+                    ret=mgd.TempOutputObj('input_data', 'byline'),
+                    args=(mgd.TempInputObj('input_data'),))
                 
                 # Split each of the resulting strings by character and 
                 # output as single character strings
-                workflow.transform('splitbychar', ('byline',), self.ctx, split_by_char,
-                    mgd.TempOutputObj('input_data', 'byline', 'bychar'),
-                    mgd.TempInputObj('input_data', 'byline'))
+                workflow.transform(
+                    name='splitbychar',
+                    axes=('byline',),
+                    func=split_by_char,
+                    ret=mgd.TempOutputObj('input_data', 'byline', 'bychar'),
+                    args=(mgd.TempInputObj('input_data', 'byline'),))
 
                 # Transform each single character string, appending a `-` character
-                workflow.transform('do', ('byline', 'bychar'), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data', 'byline', 'bychar'),
-                    mgd.TempInputObj('input_data', 'byline', 'bychar').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    axes=('byline', 'bychar'),
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data', 'byline', 'bychar'),
+                    args=(mgd.TempInputObj('input_data', 'byline', 'bychar').prop('some_string'),))
 
                 # Merge modified strings along the `bychar` axis
-                workflow.transform('mergebychar', ('byline',), self.ctx, merge_stuff,
-                    mgd.TempOutputObj('output_data', 'byline'),
-                    mgd.TempInputObj('output_data', 'byline', 'bychar'))
+                workflow.transform(
+                    name='mergebychar',
+                    axes=('byline',),
+                    func=merge_stuff,
+                    ret=mgd.TempOutputObj('output_data', 'byline'),
+                    args=(mgd.TempInputObj('output_data', 'byline', 'bychar'),))
 
                 # Merge modified strings along the `byline` axis
-                workflow.transform('mergebyline', (), self.ctx, merge_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('output_data', 'byline'))
+                workflow.transform(
+                    name='mergebyline',
+                    func=merge_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('output_data', 'byline'),))
 
                 # Write the merged string to an output file
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write',
+                    func=write_stuff,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -669,69 +774,99 @@ if __name__ == '__main__':
 
                 # Redo the same steps and ensure that each step is skipped because each
                 # step is up to date
-                workflow.transform('read', (), self.ctx, do_assert,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
-                workflow.transform('splitbyline', (), self.ctx, do_assert,
-                    mgd.TempOutputObj('input_data', 'byline'),
-                    mgd.TempInputObj('input_data'))
-                workflow.transform('splitbychar', ('byline',), self.ctx, do_assert,
-                    mgd.TempOutputObj('input_data', 'byline', 'bychar'),
-                    mgd.TempInputObj('input_data', 'byline'))
-                workflow.transform('do', ('byline', 'bychar'), self.ctx, do_assert,
-                    mgd.TempOutputObj('output_data', 'byline', 'bychar'),
-                    mgd.TempInputObj('input_data', 'byline', 'bychar').prop('some_string'))
-                workflow.transform('mergebychar', ('byline',), self.ctx, do_assert,
-                    mgd.TempOutputObj('output_data', 'byline'),
-                    mgd.TempInputObj('output_data', 'byline', 'bychar'))
-                workflow.transform('mergebyline', (), self.ctx, do_assert,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('output_data', 'byline'))
-                workflow.transform('write', (), self.ctx, do_assert,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='read',
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
+                workflow.transform(
+                    name='splitbyline',
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('input_data', 'byline'),
+                    args=(mgd.TempInputObj('input_data'),))
+                workflow.transform(
+                    name='splitbychar',
+                    axes=('byline',),
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('input_data', 'byline', 'bychar'),
+                    args=(mgd.TempInputObj('input_data', 'byline'),))
+                workflow.transform(
+                    name='do',
+                    axes=('byline', 'bychar'),
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('output_data', 'byline', 'bychar'),
+                    args=(mgd.TempInputObj('input_data', 'byline', 'bychar').prop('some_string'),))
+                workflow.transform(
+                    name='mergebychar',
+                    axes=('byline',),
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('output_data', 'byline'),
+                    args=(mgd.TempInputObj('output_data', 'byline', 'bychar'),))
+                workflow.transform(
+                    name='mergebyline',
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('output_data', 'byline'),))
+                workflow.transform(
+                    name='write',
+                    func=do_assert,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
 
             def test_multiple_file_split(self):
 
-                workflow = pypeliner.workflow.Workflow()
+                workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
 
                 # Split input file into 4 lines per output file (axis `byline_a`)
-                workflow.transform('split_byline_a', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    4,
-                    mgd.TempOutputFile('input_data', 'byline_a'))
+                workflow.transform(
+                    name='split_byline_a',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        4,
+                        mgd.TempOutputFile('input_data', 'byline_a')))
 
                 # Split again, this time with 2 lines per output file (axis `byline_b`)
-                workflow.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a'),
-                    2,
-                    mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='split_byline_b',
+                    axes=('byline_a',),
+                    func=split_file_byline,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a'),
+                        2,
+                        mgd.TempOutputFile('input_data', 'byline_a', 'byline_b')))
 
                 # Modify each file independently, adding the instance of this job on the
                 # `byline_a` axis
-                workflow.transform('do', ('byline_a', 'byline_b'), self.ctx, do_file_stuff,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
-                    mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.InputInstance('byline_a'))
+                workflow.transform(
+                    name='do',
+                    axes=('byline_a', 'byline_b'),
+                    func=do_file_stuff,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
+                        mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'),
+                        mgd.InputInstance('byline_a')))
 
                 # Merge along the `byline_b` axis
-                workflow.transform('merge_byline_b', ('byline_a',), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.TempOutputFile('output_data', 'byline_a'))
+                workflow.transform(
+                    name='merge_byline_b',
+                    axes=('byline_a',),
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
+                        mgd.TempOutputFile('output_data', 'byline_a')))
 
                 # Merge along the `byline_a` axis
-                workflow.transform('merge_byline_a', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_byline_a',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.cleanup = False
@@ -756,24 +891,30 @@ if __name__ == '__main__':
                 self.assertFalse(os.path.exists(self.output_filename))
 
                 # Modify input file, append `!` to each line
-                workflow.transform('step1', (), self.ctx, append_to_lines,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    '!',
-                    mgd.TempOutputFile('appended'))
+                workflow.transform(
+                    name='step1',
+                    func=append_to_lines,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        '!',
+                        mgd.TempOutputFile('appended')))
 
                 # Copy the file
-                workflow.transform('step2', (), self.ctx, copy_file,
-                    None,
-                    mgd.TempInputFile('appended'),
-                    mgd.TempOutputFile('appended_copy'))
+                workflow.transform(
+                    name='step2',
+                    func=copy_file,
+                    args=(
+                        mgd.TempInputFile('appended'),
+                        mgd.TempOutputFile('appended_copy')))
 
                 # This job should copy the file again but does nothing, raising
                 # an exception when the pipeline is run
-                workflow.transform('step3', (), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('appended_copy'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='step3',
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('appended_copy'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.cleanup = False
@@ -784,19 +925,25 @@ if __name__ == '__main__':
                 # Redo the previous steps, ensuring the first two steps are not
                 # run since their dependencies are up to date, and make sure the final
                 # copy is done correctly
-                workflow.transform('step1', (), self.ctx, do_assert,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    '!',
-                    mgd.TempOutputFile('appended'))
-                workflow.transform('step2', (), self.ctx, do_assert,
-                    None,
-                    mgd.TempInputFile('appended'),
-                    mgd.TempOutputFile('appended_copy'))
-                workflow.transform('step3', (), self.ctx, copy_file,
-                    None,
-                    mgd.TempInputFile('appended_copy'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='step1',
+                    func=do_assert,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        '!',
+                        mgd.TempOutputFile('appended')))
+                workflow.transform(
+                    name='step2',
+                    func=do_assert,
+                    args=(
+                        mgd.TempInputFile('appended'),
+                        mgd.TempOutputFile('appended_copy')))
+                workflow.transform(
+                    name='step3',
+                    func=copy_file,
+                    args=(
+                        mgd.TempInputFile('appended_copy'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler.cleanup = True
                 scheduler.run(workflow, exec_queue)
@@ -817,24 +964,30 @@ if __name__ == '__main__':
                 self.assertFalse(os.path.exists(self.output_filename))
 
                 # Modify input file, append `!` to each line
-                workflow.transform('step1', (), self.ctx, append_to_lines,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    '!',
-                    mgd.TempOutputFile('appended'))
+                workflow.transform(
+                    name='step1',
+                    func=append_to_lines,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        '!',
+                        mgd.TempOutputFile('appended')))
 
                 # Copy the file
-                workflow.transform('step2', (), self.ctx, copy_file,
-                    None,
-                    mgd.TempInputFile('appended'),
-                    mgd.TempOutputFile('appended_copy'))
+                workflow.transform(
+                    name='step2',
+                    func=copy_file,
+                    args=(
+                        mgd.TempInputFile('appended'),
+                        mgd.TempOutputFile('appended_copy')))
 
                 # This job should copy the file again but does nothing, raising
                 # an exception when the pipeline is run
-                workflow.transform('step3', (), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('appended_copy'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='step3',
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('appended_copy'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue)
@@ -845,19 +998,25 @@ if __name__ == '__main__':
 
                 # Rerun the same pipeline in repopulate mode, this time the final
                 # copy is done correctly
-                workflow.transform('step1', (), self.ctx, append_to_lines,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    '!',
-                    mgd.TempOutputFile('appended'))
-                workflow.transform('step2', (), self.ctx, copy_file,
-                    None,
-                    mgd.TempInputFile('appended'),
-                    mgd.TempOutputFile('appended_copy'))
-                workflow.transform('step3', (), self.ctx, copy_file,
-                    None,
-                    mgd.TempInputFile('appended_copy'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='step1',
+                    func=append_to_lines,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        '!',
+                        mgd.TempOutputFile('appended')))
+                workflow.transform(
+                    name='step2',
+                    func=copy_file,
+                    args=(
+                        mgd.TempInputFile('appended'),
+                        mgd.TempOutputFile('appended_copy')))
+                workflow.transform(
+                    name='step3',
+                    func=copy_file,
+                    args=(
+                        mgd.TempInputFile('appended_copy'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.repopulate = True
@@ -879,38 +1038,51 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Split input file into 4 lines per output file (axis `byline_a`)
-                workflow.transform('split_byline_a', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    4,
-                    mgd.TempOutputFile('input_data', 'byline_a'))
+                workflow.transform(
+                    name='split_byline_a',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        4,
+                        mgd.TempOutputFile('input_data', 'byline_a')))
 
                 # Split again, this time with 2 lines per output file (axis `byline_b`)
-                workflow.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a'),
-                    2,
-                    mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='split_byline_b',
+                    axes=('byline_a',),
+                    func=split_file_byline,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a'),
+                        2,
+                        mgd.TempOutputFile('input_data', 'byline_a', 'byline_b')))
 
                 # Modify each file independently, adding the instance of this job on the
                 # `byline_a` axis, fail here
-                workflow.transform('do', ('byline_a', 'byline_b'), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
-                    '!',
-                    mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='do',
+                    axes=('byline_a', 'byline_b'),
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
+                        '!',
+                        mgd.TempOutputFile('output_data', 'byline_a', 'byline_b')))
 
                 # Merge along the `byline_b` axis
-                workflow.transform('merge_byline_b', ('byline_a',), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.TempOutputFile('output_data', 'byline_a'))
+                workflow.transform(
+                    name='merge_byline_b',
+                    axes=('byline_a',),
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
+                        mgd.TempOutputFile('output_data', 'byline_a')))
 
                 # Merge along the `byline_a` axis
-                workflow.transform('merge_byline_a', (), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_byline_a',
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue)
@@ -918,38 +1090,51 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Split input file into 4 lines per output file (axis `byline_a`)
-                workflow.transform('split_byline_a', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    4,
-                    mgd.TempOutputFile('input_data', 'byline_a'))
+                workflow.transform(
+                    name='split_byline_a',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        4,
+                        mgd.TempOutputFile('input_data', 'byline_a')))
 
                 # Split again, this time with 2 lines per output file (axis `byline_b`)
-                workflow.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a'),
-                    2,
-                    mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='split_byline_b',
+                    axes=('byline_a',),
+                    func=split_file_byline,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a'),
+                        2,
+                        mgd.TempOutputFile('input_data', 'byline_a', 'byline_b')))
 
                 # Modify each file independently, adding the instance of this job on the
                 # `byline_a` axis
-                workflow.transform('do', ('byline_a', 'byline_b'), self.ctx, append_to_lines,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
-                    '!',
-                    mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='do',
+                    axes=('byline_a', 'byline_b'),
+                    func=append_to_lines,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
+                        '!',
+                        mgd.TempOutputFile('output_data', 'byline_a', 'byline_b')))
 
                 # Merge along the `byline_b` axis, fail here
-                workflow.transform('merge_byline_b', ('byline_a',), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.TempOutputFile('output_data', 'byline_a'))
+                workflow.transform(
+                    name='merge_byline_b',
+                    axes=('byline_a',),
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
+                        mgd.TempOutputFile('output_data', 'byline_a')))
 
                 # Merge along the `byline_a` axis
-                workflow.transform('merge_byline_a', (), self.ctx, do_nothing,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_byline_a',
+                    func=do_nothing,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue)
@@ -957,38 +1142,51 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Split input file into 4 lines per output file (axis `byline_a`)
-                workflow.transform('split_byline_a', (), self.ctx, split_file_byline,
-                    None,
-                    mgd.InputFile(self.input_filename),
-                    4,
-                    mgd.TempOutputFile('input_data', 'byline_a'))
+                workflow.transform(
+                    name='split_byline_a',
+                    func=split_file_byline,
+                    args=(
+                        mgd.InputFile(self.input_filename),
+                        4,
+                        mgd.TempOutputFile('input_data', 'byline_a')))
 
                 # Split again, this time with 2 lines per output file (axis `byline_b`)
-                workflow.transform('split_byline_b', ('byline_a',), self.ctx, split_file_byline,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a'),
-                    2,
-                    mgd.TempOutputFile('input_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='split_byline_b',
+                    axes=('byline_a',),
+                    func=split_file_byline,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a'),
+                        2,
+                        mgd.TempOutputFile('input_data', 'byline_a', 'byline_b')))
 
                 # Modify each file independently, adding the instance of this job on the
                 # `byline_a` axis
-                workflow.transform('do', ('byline_a', 'byline_b'), self.ctx, append_to_lines,
-                    None,
-                    mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
-                    '!',
-                    mgd.TempOutputFile('output_data', 'byline_a', 'byline_b'))
+                workflow.transform(
+                    name='do',
+                    axes=('byline_a', 'byline_b'),
+                    func=append_to_lines,
+                    args=(
+                        mgd.TempInputFile('input_data', 'byline_a', 'byline_b'),
+                        '!',
+                        mgd.TempOutputFile('output_data', 'byline_a', 'byline_b')))
 
                 # Merge along the `byline_b` axis
-                workflow.transform('merge_byline_b', ('byline_a',), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
-                    mgd.TempOutputFile('output_data', 'byline_a'))
+                workflow.transform(
+                    name='merge_byline_b',
+                    axes=('byline_a',),
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a', 'byline_b'),
+                        mgd.TempOutputFile('output_data', 'byline_a')))
 
                 # Merge along the `byline_a` axis
-                workflow.transform('merge_byline_a', (), self.ctx, merge_file_byline,
-                    None,
-                    mgd.TempInputFile('output_data', 'byline_a'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='merge_byline_a',
+                    func=merge_file_byline,
+                    args=(
+                        mgd.TempInputFile('output_data', 'byline_a'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -1004,21 +1202,27 @@ if __name__ == '__main__':
                 workflow = pypeliner.workflow.Workflow()
 
                 # Read data into a managed object
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename),))
 
                 # Extract a property of the managed object, modify it
                 # and store the result in another managed object
-                workflow.transform('do', (), self.ctx, do_stuff,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_stuff,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
                 # Write the object to an output file
-                workflow.transform('write', (), self.ctx, write_stuff,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write',
+                    func=write_stuff,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename)))
 
                 scheduler = self.create_scheduler()
                 scheduler.cleanup = False
@@ -1034,21 +1238,27 @@ if __name__ == '__main__':
                 shutil.copyfile(self.input_filename, self.input_filename+'.tmp')
 
                 # Read the same data into a managed object
-                workflow.transform('read', (), self.ctx, read_stuff,
-                    mgd.TempOutputObj('input_data'),
-                    mgd.InputFile(self.input_filename+'.tmp'))
+                workflow.transform(
+                    name='read',
+                    func=read_stuff,
+                    ret=mgd.TempOutputObj('input_data'),
+                    args=(mgd.InputFile(self.input_filename+'.tmp'),))
 
                 # Extract a property of the managed object, modify it
                 # and store the result in another managed object
-                workflow.transform('do', (), self.ctx, do_assert,
-                    mgd.TempOutputObj('output_data'),
-                    mgd.TempInputObj('input_data').prop('some_string'))
+                workflow.transform(
+                    name='do',
+                    func=do_assert,
+                    ret=mgd.TempOutputObj('output_data'),
+                    args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
                 # Write the object to an output file
-                workflow.transform('write', (), self.ctx, do_assert,
-                    None,
-                    mgd.TempInputObj('output_data'),
-                    mgd.OutputFile(self.output_filename))
+                workflow.transform(
+                    name='write',
+                    func=do_assert,
+                    args=(
+                        mgd.TempInputObj('output_data'),
+                        mgd.OutputFile(self.output_filename),))
 
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
@@ -1166,48 +1376,59 @@ else:
             output_file.write(temp_filename)
 
     def create_workflow_2(input_filename, output_filename):
-        workflow = pypeliner.workflow.Workflow()
-        ctx = dict({'mem':1})
+        workflow = pypeliner.workflow.Workflow(default_ctx={'mem':1})
 
-        workflow.transform('dofilestuff1', (), ctx, do_file_stuff,
-            None,
-            mgd.InputFile(input_filename),
-            mgd.TempOutputFile('intermediate1'),
-            'a')
+        workflow.transform(
+            name='dofilestuff1',
+            func=do_file_stuff,
+            args=(
+                mgd.InputFile(input_filename),
+                mgd.TempOutputFile('intermediate1'),
+                'a'))
 
-        workflow.transform('dofilestuff2', (), ctx, do_file_stuff,
-            None,
-            mgd.TempInputFile('intermediate1'),
-            mgd.OutputFile(output_filename),
-            'b')
+        workflow.transform(
+            name='dofilestuff2',
+            func=do_file_stuff,
+            args=(
+                mgd.TempInputFile('intermediate1'),
+                mgd.OutputFile(output_filename),
+                'b'))
 
         return workflow
 
     def create_workflow_1(input_filename, output_filename):
-        workflow = pypeliner.workflow.Workflow()
-        ctx = dict({'mem':1})
+        workflow = pypeliner.workflow.Workflow(default_ctx={'mem':1})
 
         # Read data into a managed object
-        workflow.transform('read', (), ctx, read_stuff,
-            mgd.TempOutputObj('input_data'),
-            mgd.InputFile(input_filename))
+        workflow.transform(
+            name='read',
+            func=read_stuff,
+            ret=mgd.TempOutputObj('input_data'),
+            args=(mgd.InputFile(input_filename),))
 
         # Extract a property of the managed object, modify it
         # and store the result in another managed object
-        workflow.transform('do', (), ctx, do_stuff,
-            mgd.TempOutputObj('output_data'),
-            mgd.TempInputObj('input_data').prop('some_string'))
+        workflow.transform(
+            name='do',
+            func=do_stuff,
+            ret=mgd.TempOutputObj('output_data'),
+            args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
         # Write the object to an output file
-        workflow.transform('write', (), ctx, write_stuff,
-            None,
-            mgd.TempInputObj('output_data'),
-            mgd.TempOutputFile('output_file'))
+        workflow.transform(
+            name='write',
+            func=write_stuff,
+            args=(
+                mgd.TempInputObj('output_data'),
+                mgd.TempOutputFile('output_file')))
 
         # Recursive workflow
-        workflow.subworkflow('sub_workflow_2', (), create_workflow_2,
-            mgd.TempInputFile('output_file'),
-            mgd.OutputFile(output_filename))
+        workflow.subworkflow(
+            name='sub_workflow_2',
+            func=create_workflow_2,
+            args=(
+                mgd.TempInputFile('output_file'),
+                mgd.OutputFile(output_filename)))
 
         return workflow
 

@@ -15,10 +15,16 @@ import identifiers
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
-    def __init__(self, ret, args, kwargs):
+    def __init__(self, ret=None, args=None, kwargs=None):
         self.ret = ret
-        self.args = args
-        self.kwargs = kwargs
+        if args is not None:
+            self.args = args
+        else:
+            self.args = ()
+        if kwargs is not None:
+            self.kwargs = kwargs
+        else:
+            self.kwargs = {}
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
