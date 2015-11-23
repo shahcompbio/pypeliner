@@ -88,18 +88,17 @@ class Template(Managed):
     normal = arguments.TemplateArg
     splitmerge = arguments.MergeTemplateArg
 
-class TempFile(Managed):
-    """ Represents a temp file the can be written to but is not a dependency
+class TempSpace(Managed):
+    """ Represents a temporary file or directory that is not a dependency
 
-    `TempFile` objects will resolve to the path of a temporary file located
-    in pypeliner's temporary file space.  If axes are given, a new temporary
-    file will be created for each chunk of the given axes.  The file is not
-    guaranteed to exist after the job referencing the `TempFile` has finished
-    execution.
+    `TempSpace` objects will resolve to a unique path within pypeliner's
+    temporary file space.  If axes are given, a path will be provided for each
+    chunk of the given axes.  The file is not checked for existance after the
+    job referencing the `TempSpace` has finished execution.
 
-    :param name: The name of the temporary file.  The temp file will have
-                 this filename, but different instances for different axis
-                 chunks will be located in different directories.
+    :param name: The name of the temporary file or directory.  The temp file
+                 will have this filename, but different instances for different
+                 axis chunks will be located in different directories.
     :param axes: The axes for the file.  This should be identical to the
                  axes of the referencing job.
 
@@ -154,6 +153,17 @@ class OutputFile(Managed):
     """
     normal = arguments.OutputFileArg
     splitmerge = arguments.SplitFileArg
+
+class File(Managed):
+    """ Interface class used to represent a user specified managed file
+
+    """
+    def as_input(self):
+        return InputFile(self.name, *self.axes, **self.kwargs)
+    def as_output(self):
+        return OutputFile(self.name, *self.axes, **self.kwargs)
+    def create_arg(self, job):
+        raise NotImplementedError('create input or output using as_input or as_output')
 
 class TempInputObj(Managed):
     """ Interface class used to represent a managed object input
@@ -226,6 +236,17 @@ class TempInputObjExtract(Managed):
         Managed.__init__(self, name, *axes)
         self.kwargs['func'] = func
 
+class TempObj(Managed):
+    """ Interface class used to represent a managed object
+
+    """
+    def as_input(self):
+        return TempInputObj(self.name, *self.axes, **self.kwargs)
+    def as_output(self):
+        return TempOutputObj(self.name, *self.axes, **self.kwargs)
+    def create_arg(self, job):
+        raise NotImplementedError('create input or output using as_input or as_output')
+
 class TempInputFile(Managed):
     """ Interface class used to represent a managed temporary file input
 
@@ -261,7 +282,18 @@ class TempOutputFile(Managed):
     normal = arguments.TempOutputFileArg
     splitmerge = arguments.TempSplitFileArg
 
-class InputInstance(Managed):
+class TempFile(Managed):
+    """ Interface class used to represent a managed temporary file
+
+    """
+    def as_input(self):
+        return TempInputFile(self.name, *self.axes, **self.kwargs)
+    def as_output(self):
+        return TempOutputFile(self.name, *self.axes, **self.kwargs)
+    def create_arg(self, job):
+        raise NotImplementedError('create input or output using as_input or as_output')
+
+class Instance(Managed):
     """ Interface class used to represent an input chunk associated with the
     job instance
 
@@ -276,6 +308,9 @@ class InputInstance(Managed):
         arg = arguments.InputInstanceArg(job.db, job.node, self.axis)
         job.args.append(arg)
         return arg
+
+class InputInstance(Instance):
+    pass
 
 class InputChunks(Managed):
     """ Interface class used to represent an input chunk list for a specific axis
@@ -310,4 +345,15 @@ class OutputChunks(Managed):
     splitmerge = arguments.OutputChunksArg
     def __init__(self, *axes, **kwargs):
         Managed.__init__(self, 'chunks', *axes, **kwargs)
+
+class Chunks(Managed):
+    """ Interface class used to represent the list of chunks for a specific axis
+
+    """
+    def as_input(self):
+        return InputChunks(self.name, *self.axes, **self.kwargs)
+    def as_output(self):
+        return OutputChunks(self.name, *self.axes, **self.kwargs)
+    def create_arg(self, job):
+        raise NotImplementedError('create input or output using as_input or as_output')
 
