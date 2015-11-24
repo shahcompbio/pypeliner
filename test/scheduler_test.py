@@ -110,6 +110,11 @@ if __name__ == '__main__':
                     func=set_chunks,
                     ret=mgd.OutputChunks('byfile'))
 
+                workflow.setobj(
+                    obj=mgd.OutputChunks('byfile', 'axis2'),
+                    value=['a', 'b'],
+                    axes=('byfile',))
+
                 # Transform the input files indexed by axis `byfile` to output files
                 # also indexed by axis `byfile`
                 workflow.transform(
@@ -120,7 +125,8 @@ if __name__ == '__main__':
                         mgd.InputFile(self.input_n_filename, 'byfile'),
                         mgd.OutputFile(self.output_n_filename, 'byfile'),
                         mgd.InputInstance('byfile'),
-                        mgd.Template(self.output_n_template, 'byfile')))
+                        mgd.Template(self.output_n_template, 'byfile'),
+                        mgd.Template('{byfile}_{axis2}', 'byfile', 'axis2')))
                 
                 # Merge output files indexed by axis `byfile` into a single output file
                 workflow.transform(
@@ -133,15 +139,19 @@ if __name__ == '__main__':
                 scheduler = self.create_scheduler()
                 scheduler.run(workflow, exec_queue)
 
+                merged_expected = []
                 for chunk in ('1', '2'):
                     self.assertTrue(os.path.exists(self.output_n_template.format(**{'byfile':chunk})))
                     with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
                         output = output_file.readlines()
-                        self.assertEqual(output, [chunk + 'line' + str(line_num) + '\n' for line_num in range(1, 9)])
+                        expected = ['{0}\t{1}_{0}\n'.format(x, chunk) for x in ('a', 'b')]
+                        expected += [chunk + 'line' + str(line_num) + '\n' for line_num in range(1, 9)]
+                        self.assertEqual(output, expected)
+                        merged_expected += expected
 
                 with open(self.output_filename, 'r') as output_file:
                     output = output_file.readlines()
-                    self.assertEqual(output, [chunk + 'line' + str(line_num) + '\n' for chunk in ('1', '2') for line_num in range(1, 9)])
+                    self.assertEqual(output, merged_expected)
 
             def test_simple(self):
 
@@ -1359,10 +1369,12 @@ else:
     def set_chunks():
         return [1, 2]
 
-    def file_transform(in_filename, out_filename, prefix, template_filename):
+    def file_transform(in_filename, out_filename, prefix, template_filename, merge_templates):
         with open(template_filename, 'w'):
             pass
         with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
+            for key, value in merge_templates.iteritems():
+                out_file.write('{0}\t{1}\n'.format(key, value))
             for line in in_file:
                 out_file.write('{0}'.format(prefix) + line)
 

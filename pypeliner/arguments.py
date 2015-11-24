@@ -83,7 +83,9 @@ class MergeTemplateArg(Arg):
         self.node = node
         self.axes = axes
         self.template = template
-    @property
+    def get_inputs(self, db):
+        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
+            yield dependency
     def resolve(self, db):
         resolved = dict()
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
