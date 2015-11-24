@@ -16,15 +16,21 @@ import identifiers
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
     def __init__(self, ret=None, args=None, kwargs=None):
+        if ret is not None and not isinstance(ret, managed.Managed):
+            raise ValueError('ret must be a managed object')
         self.ret = ret
-        if args is not None:
-            self.args = args
-        else:
+        if args is None:
             self.args = ()
-        if kwargs is not None:
-            self.kwargs = kwargs
+        elif not isinstance(args, tuple):
+            raise ValueError('args must be a tuple')
         else:
+            self.args = args
+        if kwargs is None:
             self.kwargs = {}
+        elif not isinstance(kwargs, dict):
+            raise ValueError('kwargs must be a dict')
+        else:
+            self.kwargs = kwargs
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
