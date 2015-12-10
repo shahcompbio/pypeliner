@@ -21,8 +21,8 @@ class CallSet(object):
         self.ret = ret
         if args is None:
             self.args = ()
-        elif not isinstance(args, tuple):
-            raise ValueError('args must be a tuple')
+        elif not isinstance(args, (tuple, list)):
+            raise ValueError('args must be a list or tuple')
         else:
             self.args = args
         if kwargs is None:
