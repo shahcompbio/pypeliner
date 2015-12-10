@@ -192,7 +192,7 @@ class JobInstance(object):
         return '\n'.join(explanation)
     @property
     def output_missing(self):
-        return not all([output.exists for output in self.output_resources])
+        return not all([output.get_exists(self.db) for output in self.output_resources])
     def check_require_regenerate(self):
         for arg in self.args:
             if isinstance(arg, arguments.Arg):
