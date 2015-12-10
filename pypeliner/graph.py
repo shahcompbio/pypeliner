@@ -8,6 +8,9 @@ import helpers
 import identifiers
 import database
 
+class IncompleteWorkflowException(Exception):
+    pass
+
 class AmbiguousInputException(Exception):
     def __init__(self, id):
         self.id = id
@@ -172,29 +175,35 @@ class WorkflowInstance(object):
         
         while True:
             # Check if sub workflows have ready jobs, or have finished
-            for job, graph in self.subworkflows:
+            for job, received, workflow in self.subworkflows:
                 try:
-                    return graph.pop_next_job()
+                    return workflow.pop_next_job()
                 except NoJobs:
                     pass
-                if graph.finished:
-                    job.finalize()
+                if workflow.finished:
+                    job.finalize(received)
                     job.complete()
 
             # Remove finished sub workflows
-            self.subworkflows = filter(lambda (job, graph): not graph.finished, self.subworkflows)
+            self.subworkflows = filter(lambda (job, received, workflow): not workflow.finished, self.subworkflows)
 
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
             if job.is_subworkflow:
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                    send = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname)
-                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + job.displaycommand)
-                    workflow_def = job.create_subworkflow(self.db)
+                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + send.displaycommand)
+                    send()
+                    received = send
+                    if not received.finished:
+                        self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
+                        raise IncompleteWorkflowException()
+                    workflow_def = received.ret_value
                     node = self.node + job.node + identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.workflow_dir, self.logs_dir, self.dir_lock, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
-                    self.subworkflows.append((job, workflow))
+                    self.subworkflows.append((job, received, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')
                     job.complete()

@@ -71,6 +71,7 @@ class Scheduler(object):
         and the second interrupt will attempt to cleanly cancel all jobs.
 
         """
+        self._active_jobs = dict()
         self._job_temps_dirs = set()
         with helpers.DirectoryLock() as dir_lock:
             workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, self.logs_dir, dir_lock, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
@@ -108,19 +109,24 @@ class Scheduler(object):
             except graph.NoJobs:
                 return
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                name = job.displayname
+                self._active_jobs[name] = job
                 if job.temps_dir in self._job_temps_dirs:
                     raise ValueError('duplicate temps directory ' + job.temps_dir)
                 self._job_temps_dirs.add(job.temps_dir)
-                exec_queue.add(job.ctx, job)
+                send = job.create_callable()
+                exec_queue.add(job.ctx, name, send, job.temps_dir)
                 self._logger.info('job ' + job.displayname + ' executing')
-                self._logger.info('job ' + job.displayname + ' -> ' + job.displaycommand)
+                self._logger.info('job ' + job.displayname + ' -> ' + send.displaycommand)
             else:
                 job.complete()
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
     def _wait_next_job(self, exec_queue, workflow):
-        job, received = exec_queue.wait()
+        name, received = exec_queue.wait()
+        job = self._active_jobs[name]
+        del self._active_jobs[name]
         assert job is not None
         assert job.id == received.id
         if not received.finished:

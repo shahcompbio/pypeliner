@@ -7,6 +7,44 @@ import helpers
 import delegator
 
 
+class JobQueue(object):
+    """ Abstract class for a queue of jobs.
+    """
+    def add(self, ctx, name, send, temps_dir):
+        """ Add a job to the queue.
+
+        Args:
+            ctx (dict): context of job, mem etc.
+            name (str): unique name for the job
+            send (callable): callable object
+            temps_dir (str): unique path for strong job temps
+
+        """
+        raise NotImplementedError()
+
+    def wait(self, immediate=False):
+        """ Wait for a job to finish.
+
+        KwArgs:
+            immediate (bool): do not wait if not job has finished
+
+        Returns:
+            (str, callable): job name, called callable object
+
+        """
+        raise NotImplementedError()
+
+    @property
+    def length(self):
+        """ Number of jobs in the queue. """
+        raise NotImplementedError()
+
+    @property
+    def empty(self):
+        """ Queue is empty. """
+        raise NotImplementedError()
+
+
 class SubmitException(Exception):
     pass
 
@@ -31,14 +69,14 @@ def qsub_format_name(name):
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
-    def __init__(self, ctx, job, modules):
-        self.job = job
+    def __init__(self, ctx, name, send, temps_dir, modules):
+        self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
-        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
+        self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(temps_dir, 'job.err')
         self.debug_files = []
         try:
             self.debug_files.append(open(self.debug_filenames['job stdout'], 'w'))
@@ -46,7 +84,7 @@ class LocalJob(object):
             self.process = subprocess.Popen(self.command, stdout=self.debug_files[0], stderr=self.debug_files[1])
         except OSError as e:
             self.close_debug_files()
-            error_text = self.job.displayname + ' submit failed\n'
+            error_text = self.name + ' submit failed\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'
             error_text += str(e) + '\n'
@@ -60,7 +98,7 @@ class LocalJob(object):
         self.close_debug_files()
         self.received = self.delegated.finalize()
         if returncode != 0 or self.received is None:
-            error_text = self.job.displayname + ' failed to complete\n'
+            error_text = self.name + ' failed to complete\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'
             error_text += 'return code {0}\n'.format(returncode)
@@ -72,29 +110,29 @@ class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess
     """
-    def __init__(self, ctx, job, modules, qsub_bin, native_spec):
-        self.job = job
+    def __init__(self, ctx, name, send, temps_dir, modules, qsub_bin, native_spec):
+        self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
-        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
-        self.debug_filenames['submit stdout'] = os.path.join(job.temps_dir, 'submit.out')
-        self.debug_filenames['submit stderr'] = os.path.join(job.temps_dir, 'submit.err')
+        self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(temps_dir, 'job.err')
+        self.debug_filenames['submit stdout'] = os.path.join(temps_dir, 'submit.out')
+        self.debug_filenames['submit stderr'] = os.path.join(temps_dir, 'submit.err')
         self.debug_files = []
-        self.script_filename = os.path.join(job.temps_dir, 'submit.sh')
+        self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, job.displayname, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+        self.submit_command = self.create_submit_command(ctx, self.name, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             self.debug_files.append(open(self.debug_filenames['submit stdout'], 'w'))
             self.debug_files.append(open(self.debug_filenames['submit stderr'], 'w'))
             self.process = subprocess.Popen(self.submit_command, stdout=self.debug_files[0], stderr=self.debug_files[1])
         except OSError as e:
             self.close_debug_files()
-            error_text = self.job.displayname + ' submit failed\n'
+            error_text = self.name + ' submit failed\n'
             error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.submit_command) + '\n'
             if type(e) == OSError and e.errno == 2:
@@ -120,7 +158,7 @@ class QsubJob(object):
         self.close_debug_files()
         self.received = self.delegated.finalize()
         if returncode != 0 or self.received is None:
-            error_text = self.job.displayname + ' failed to complete\n'
+            error_text = self.name + ' failed to complete\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'
             error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
@@ -130,7 +168,7 @@ class QsubJob(object):
             self.logger.error(error_text)
             raise ReceiveException()
 
-class SubProcessJobQueue(object):
+class SubProcessJobQueue(JobQueue):
     """ Abstract class for a queue of jobs run using subprocesses.  Maintains
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
@@ -142,10 +180,10 @@ class SubProcessJobQueue(object):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         pass
-    def create(self, ctx, job):
+    def create(self, ctx, name, send, temps_dir):
         raise NotImplementedError()
-    def add(self, ctx, job):
-        submitted = self.create(ctx, job)
+    def add(self, ctx, name, send, temps_dir):
+        submitted = self.create(ctx, name, send, temps_dir)
         self.jobs[submitted.process.pid] = submitted
     def wait(self, immediate=False):
         while True:
@@ -159,7 +197,7 @@ class SubProcessJobQueue(object):
                 submitted = self.jobs[process_id]
                 del self.jobs[process_id]
                 submitted.finalize(returncode)
-                return submitted.job, submitted.received
+                return submitted.name, submitted.received
     @property
     def length(self):
         return len(self.jobs)
@@ -169,8 +207,8 @@ class SubProcessJobQueue(object):
 
 class LocalJobQueue(SubProcessJobQueue):
     """ Queue of local jobs """
-    def create(self, ctx, job):
-        return LocalJob(ctx, job, self.modules)
+    def create(self, ctx, name, send, temps_dir):
+        return LocalJob(ctx, name, send, temps_dir, self.modules)
 
 class QsubJobQueue(SubProcessJobQueue):
     """ Queue of qsub jobs """
@@ -179,36 +217,36 @@ class QsubJobQueue(SubProcessJobQueue):
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
         self.local_queue = LocalJobQueue(modules)
-    def create(self, ctx, job):
+    def create(self, ctx, name, send, temps_dir):
         if ctx.get('local', False):
-            return LocalJob(ctx, job, self.modules)
+            return LocalJob(ctx, name, send, temps_dir, self.modules)
         else:
-            return QsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
+            return QsubJob(ctx, name, send, temps_dir, self.modules, self.qsub_bin, self.native_spec)
 
 class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess, and polled using qstat
     """
-    def __init__(self, ctx, job, modules, qsub_bin, native_spec):
-        self.job = job
+    def __init__(self, ctx, name, send, temps_dir, modules, qsub_bin, native_spec):
+        self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(job.callable, os.path.join(job.temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
-        self.debug_filenames['job stdout'] = os.path.join(job.temps_dir, 'job.out')
-        self.debug_filenames['job stderr'] = os.path.join(job.temps_dir, 'job.err')
-        self.debug_filenames['submit stdout'] = os.path.join(job.temps_dir, 'submit.out')
-        self.debug_filenames['submit stderr'] = os.path.join(job.temps_dir, 'submit.err')
-        self.script_filename = os.path.join(job.temps_dir, 'submit.sh')
+        self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
+        self.debug_filenames['job stderr'] = os.path.join(temps_dir, 'job.err')
+        self.debug_filenames['submit stdout'] = os.path.join(temps_dir, 'submit.out')
+        self.debug_filenames['submit stderr'] = os.path.join(temps_dir, 'submit.err')
+        self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, job.displayname, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+        self.submit_command = self.create_submit_command(ctx, name, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             with open(self.debug_filenames['submit stdout'], 'w') as submit_stdout, open(self.debug_filenames['submit stderr'], 'w') as submit_stderr:
                 subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
         except Exception as e:
-            error_text = self.job.displayname + ' submit failed\n'
+            error_text = self.name + ' submit failed\n'
             error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.submit_command) + '\n'
             if type(e) == OSError and e.errno == 2:
@@ -231,7 +269,7 @@ class AsyncQsubJob(object):
     def finalize(self):
         self.received = self.delegated.finalize()
         if self.received is None:
-            error_text = self.job.displayname + ' failed to complete\n'
+            error_text = self.name + ' failed to complete\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'
             error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
@@ -279,7 +317,7 @@ class QstatJobStatus(object):
             except Exception:
                 continue
 
-class AsyncQsubJobQueue(object):
+class AsyncQsubJobQueue(JobQueue):
     """ Class for a queue of jobs run using subprocesses.  Maintains
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
@@ -299,13 +337,13 @@ class AsyncQsubJobQueue(object):
         self.local_queue.__exit__(exc_type, exc_value, traceback)
         for qsub_job_id in self.jobs.iterkeys():
             self.delete_job(qsub_job_id)
-    def create(self, ctx, job):
-        return AsyncQsubJob(ctx, job, self.modules, self.qsub_bin, self.native_spec)
-    def add(self, ctx, job):
+    def create(self, ctx, name, send, temps_dir):
+        return AsyncQsubJob(ctx, name, send, temps_dir, self.modules, self.qsub_bin, self.native_spec)
+    def add(self, ctx, name, send, temps_dir):
         if ctx.get('local', False):
-            self.local_queue.add(ctx, job)
+            self.local_queue.add(ctx, name, send, temps_dir)
         else:
-            submitted = self.create(ctx, job)
+            submitted = self.create(ctx, name, send, temps_dir)
             self.jobs[submitted.qsub_job_id] = submitted
             self.qstat.invalidate()
     def wait(self):
@@ -315,7 +353,7 @@ class AsyncQsubJobQueue(object):
                 if job_id is not None:
                     return job_id, job
             if len(self.jobs) == 0:
-                return None
+                return None, None
             try:
                 updated = self.qstat.update()
             except Exception as e:
@@ -332,7 +370,7 @@ class AsyncQsubJobQueue(object):
                         submitted = self.jobs[qsub_job_id]
                         del self.jobs[qsub_job_id]
                         submitted.finalize()
-                        return submitted.job, submitted.received
+                        return submitted.name, submitted.received
             time.sleep(self.poll_time)
     def delete_job(self, qsub_job_id):
         try:
