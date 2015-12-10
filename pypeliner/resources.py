@@ -31,6 +31,13 @@ class Dependency(object):
 class Resource(Dependency):
     """ Abstract input/output in the dependency graph
     associated with a file tracked using creation time """
+    def build_displayname_filename(self, db, base_node=identifiers.Node()):
+        displayname = self.build_displayname(base_node)
+        filename = self.get_filename(db)
+        if displayname != filename:
+            return ' '.join([displayname, filename])
+        else:
+            return displayname
     def get_filename(self, db):
         raise NotImplementedError
     def get_exists(self, db):
@@ -61,6 +68,8 @@ class UserResource(Resource):
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
     def get_filename(self, db):
+        return self.filename
+    def build_displayname(self, base_node=identifiers.Node()):
         return self.filename
     def get_exists(self, db):
         return os.path.exists(self.filename)
