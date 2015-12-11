@@ -44,10 +44,10 @@ def execute(*args):
     """
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
-        raise Exception("Bad redirect to file")
+        raise ValueError("Bad redirect to file")
 
     if args.count("<") > 1 or args[0] == "<" or args[-1] == "<":
-        raise Exception("Bad redirect from file")
+        raise ValueError("Bad redirect from file")
 
     args = filter(lambda arg: arg != '', args)
     args = list(str(arg) for arg in args)

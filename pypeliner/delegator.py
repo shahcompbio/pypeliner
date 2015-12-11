@@ -72,7 +72,7 @@ if __name__ == "__main__":
     with open(before_filename, 'rb') as before:
         job = pickle.load(before)
     if job is None:
-        raise Exception('no job data in ' + before_filename)
+        raise ValueError('no job data in ' + before_filename)
     job()
     with open(after_filename, 'wb') as after:
         pickle.dump(job, after)

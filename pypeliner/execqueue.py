@@ -278,6 +278,9 @@ class AsyncQsubJob(object):
             self.logger.error(error_text)
             raise ReceiveException()
 
+class QstatError(Exception):
+    pass
+
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
     def __init__(self, poll_time, max_qstat_failures):
@@ -306,7 +309,7 @@ class QstatJobStatus(object):
             except:
                 self.qstat_failures += 1
             if self.qstat_failures >= self.max_qstat_failures:
-                raise Exception('too many qstat failures')
+                raise QstatError('too many qstat failures')
     def qstat_job_status(self):
         for line in subprocess.check_output([self.qstat_bin]).split('\n'):
             row = line.split()
@@ -316,6 +319,9 @@ class QstatJobStatus(object):
                 yield job_id, status
             except Exception:
                 continue
+
+class QsubError(Exception):
+    pass
 
 class AsyncQsubJobQueue(JobQueue):
     """ Class for a queue of jobs run using subprocesses.  Maintains
@@ -365,7 +371,7 @@ class AsyncQsubJobQueue(JobQueue):
                 for qsub_job_id in self.jobs.iterkeys():
                     if self.qstat.errors(qsub_job_id):
                         del self.jobs[qsub_job_id]
-                        raise Exception('job ' + str(qsub_job_id) + ' entered error state')
+                        raise QsubError('job ' + str(qsub_job_id) + ' entered error state')
                     if self.qstat.finished(qsub_job_id):
                         submitted = self.jobs[qsub_job_id]
                         del self.jobs[qsub_job_id]

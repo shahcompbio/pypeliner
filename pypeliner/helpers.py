@@ -22,7 +22,7 @@ def which(name):
             p = os.path.join(p, name)
             if os.access(p, os.X_OK):
                 return p
-    raise Exception('unable to find ' + name + ' in the system path')
+    raise EnvironmentError('unable to find ' + name + ' in the system path')
 
 def set_executable(filename):
     mode = os.stat(filename).st_mode
@@ -63,6 +63,9 @@ def symlink(source, link_name):
             raise
     os.symlink(source, link_name)
 
+class PipelineLockedError(Exception):
+    pass
+
 class DirectoryLock(object):
     def __init__(self):
         self.locked_directories = list()
@@ -72,7 +75,7 @@ class DirectoryLock(object):
             os.mkdir(lock_directory)
         except OSError as e:
             if e.errno == errno.EEXIST:
-                raise Exception('Pipeline already running, remove {0} to override'.format(lock_directory))
+                raise PipelineLockedError('Pipeline already running, remove {0} to override'.format(lock_directory))
             else:
                 raise
         self.locked_directories.append(lock_directory)
