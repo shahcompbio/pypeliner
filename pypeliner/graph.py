@@ -33,6 +33,12 @@ class DependencyCycleException(Exception):
 class NoJobs(Exception):
     pass
 
+def pop_if(L, pred):
+    for idx, item in enumerate(L):
+        if pred(item):
+            return L.pop(idx)
+    raise IndexError()
+
 class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
@@ -169,20 +175,36 @@ class WorkflowInstance(object):
 
         self.graph.regenerate(inputs, outputs, jobs.values())
 
+    def finalize_workflows(self):
+        """ Finalize any workflows that are finished.
+        """
+
+        while len(self.subworkflows) > 0:
+
+            # Pop the next finished workflow if it exists
+            try:
+                job, received, workflow = pop_if(self.subworkflows, lambda (j, r, w): w.finished)
+            except IndexError:
+                return
+
+            # Finalize the workflow
+            job.finalize(received)
+            job.complete()
+
     def pop_next_job(self):
         """ Pop the next job from the top of this or a subgraph.
         """
         
         while True:
-            # Check if sub workflows have ready jobs, or have finished
+            # Return any ready jobs from sub workflows
             for job, received, workflow in self.subworkflows:
                 try:
                     return workflow.pop_next_job()
                 except NoJobs:
                     pass
-                if workflow.finished:
-                    job.finalize(received)
-                    job.complete()
+
+            # Finalize finished workflows
+            self.finalize_workflows()
 
             # Remove finished sub workflows
             self.subworkflows = filter(lambda (job, received, workflow): not workflow.finished, self.subworkflows)
