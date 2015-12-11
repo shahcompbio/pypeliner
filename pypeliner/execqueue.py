@@ -287,6 +287,7 @@ class QstatJobStatus(object):
         self.poll_time = poll_time
         self.max_qstat_failures = max_qstat_failures
         self.qstat_bin = helpers.which('qstat')
+        self.qacct_bin = helpers.which('qacct')
         self.last_qstat_time = None
         self.qstat_failures = 0
     def update(self):
@@ -300,6 +301,10 @@ class QstatJobStatus(object):
     def errors(self, job_id):
         assert self.last_qstat_time is not None
         return 'e' in self.cached_job_status.get(job_id, '')
+    def get_exit_status(self, job_id):
+        for line in subprocess.check_output([self.qacct_bin]).split('\n'):
+            if line.startswith('exit_status'):
+                return int(line[len('exit_status'):])
     def update_status_cache(self):
         if self.last_qstat_time is None or time.time() - self.last_qstat_time > self.poll_time:
             try:
@@ -360,19 +365,15 @@ class AsyncQsubJobQueue(JobQueue):
                     return job_id, job
             if len(self.jobs) == 0:
                 return None, None
-            try:
-                updated = self.qstat.update()
-            except Exception as e:
-                for qsub_job_id in self.jobs.iterkeys():
-                    self.delete_job(qsub_job_id)
-                self.jobs.clear()
-                raise e
-            if updated:
+            if self.qstat.update():
                 for qsub_job_id in self.jobs.iterkeys():
                     if self.qstat.errors(qsub_job_id):
                         del self.jobs[qsub_job_id]
                         raise QsubError('job ' + str(qsub_job_id) + ' entered error state')
                     if self.qstat.finished(qsub_job_id):
+                        exit_status = self.qstat.get_exit_status(job_id)
+                        if exit_status != 0:
+                            raise QsubError('job ' + str(qsub_job_id) + ' exited with status ' + str(exit_status))
                         submitted = self.jobs[qsub_job_id]
                         del self.jobs[qsub_job_id]
                         submitted.finalize()
