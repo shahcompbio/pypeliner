@@ -1,5 +1,4 @@
 import os
-import collections
 import networkx
 import itertools
 import logging
@@ -32,12 +31,6 @@ class DependencyCycleException(Exception):
 
 class NoJobs(Exception):
     pass
-
-def pop_if(L, pred):
-    for idx, item in enumerate(L):
-        if pred(item):
-            return L.pop(idx)
-    raise IndexError()
 
 class DependencyGraph:
     """ Graph of dependencies between jobs.
@@ -183,7 +176,7 @@ class WorkflowInstance(object):
 
             # Pop the next finished workflow if it exists
             try:
-                job, received, workflow = pop_if(self.subworkflows, lambda (j, r, w): w.finished)
+                job, received, workflow = helpers.pop_if(self.subworkflows, lambda (j, r, w): w.finished)
             except IndexError:
                 return
 

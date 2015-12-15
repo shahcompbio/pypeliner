@@ -5,6 +5,12 @@ import hashlib
 import warnings
 import errno
 
+def pop_if(L, pred):
+    for idx, item in enumerate(L):
+        if pred(item):
+            return L.pop(idx)
+    raise IndexError()
+
 def abspath(path):
     if path.endswith('/'):
         return os.path.abspath(path) + '/'
@@ -53,6 +59,12 @@ def makedirs(dirname):
         if e.errno != 17:
             raise
     assert os.path.isdir(dirname)
+
+def saferemove(filename):
+    try:
+        os.remove(filename)
+    except OSError:
+        pass
 
 def symlink(source, link_name):
     source = os.path.abspath(source)

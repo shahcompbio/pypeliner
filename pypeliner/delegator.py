@@ -3,11 +3,12 @@ import logging
 import os
 import pickle
 import sys
-import traceback
 import time
 import tempfile
 import shutil
 import subprocess
+
+import helpers
 
 
 class delegator(object):
@@ -17,11 +18,8 @@ class delegator(object):
         self.after_filename = prefix + ".after"
         self.syspaths = [os.path.dirname(os.path.abspath(module.__file__)) for module in modules]
     def cleanup(self):
-        self._saferemove(self.before_filename)
-        self._saferemove(self.after_filename)
-    def _saferemove(self, filename):
-        try: os.remove(filename)
-        except OSError: pass
+        helpers.saferemove(self.before_filename)
+        helpers.saferemove(self.after_filename)
     def _waitfile(self, filename):
         waittime = 1
         while waittime < 100:

@@ -45,10 +45,10 @@ class JobQueue(object):
         raise NotImplementedError()
 
 
-class SubmitException(Exception):
+class SubmitError(Exception):
     pass
 
-class ReceiveException(Exception):
+class ReceiveError(Exception):
     pass
 
 def log_text(debug_filenames):
@@ -90,7 +90,7 @@ class LocalJob(object):
             error_text += str(e) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise SubmitException()
+            raise SubmitError()
     def close_debug_files(self):
         for file in self.debug_files:
             file.close()
@@ -104,7 +104,7 @@ class LocalJob(object):
             error_text += 'return code {0}\n'.format(returncode)
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise ReceiveException()
+            raise ReceiveError()
 
 class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
@@ -141,7 +141,7 @@ class QsubJob(object):
                 error_text += str(e) + '\n'
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise SubmitException()
+            raise SubmitError()
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += ['-sync', 'y', '-b', 'y']
@@ -166,7 +166,7 @@ class QsubJob(object):
             error_text += 'return code {0}\n'.format(returncode)
             error_text += log_text(self.debug_filenames)
             self.logger.error(error_text)
-            raise ReceiveException()
+            raise ReceiveError()
 
 class SubProcessJobQueue(JobQueue):
     """ Abstract class for a queue of jobs run using subprocesses.  Maintains
@@ -223,41 +223,52 @@ class QsubJobQueue(SubProcessJobQueue):
         else:
             return QsubJob(ctx, name, send, temps_dir, self.modules, self.qsub_bin, self.native_spec)
 
+class QacctError(Exception):
+    pass
+
 class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess, and polled using qstat
     """
-    def __init__(self, ctx, name, send, temps_dir, modules, qsub_bin, native_spec):
+    def __init__(self, ctx, name, send, temps_dir, modules, qenv, native_spec, qstat_job_status, max_qacct_failures=10):
         self.name = name
+        self.qenv = qenv
+        self.qstat_job_status = qstat_job_status
+        self.qstat_job_status.clear_cache()
+        self.max_qacct_failures = max_qacct_failures
+        self.qacct_results = None
+        self.qacct_failures = 0
         self.logger = logging.getLogger('execqueue')
+
         self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
+
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
         self.debug_filenames['job stderr'] = os.path.join(temps_dir, 'job.err')
         self.debug_filenames['submit stdout'] = os.path.join(temps_dir, 'submit.out')
         self.debug_filenames['submit stderr'] = os.path.join(temps_dir, 'submit.err')
+        self.debug_filenames['qacct stdout'] = os.path.join(temps_dir, 'qacct.out')
+        self.debug_filenames['qacct stderr'] = os.path.join(temps_dir, 'qacct.err')
+        for filename in self.debug_filenames.itervalues():
+            helpers.saferemove(filename)
+
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, name, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+
+        self.submit_command = self.create_submit_command(ctx, name, self.script_filename, self.qenv.qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
+
         try:
             with open(self.debug_filenames['submit stdout'], 'w') as submit_stdout, open(self.debug_filenames['submit stderr'], 'w') as submit_stderr:
                 subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
         except Exception as e:
-            error_text = self.name + ' submit failed\n'
-            error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
-            error_text += ' '.join(self.submit_command) + '\n'
-            if type(e) == OSError and e.errno == 2:
-                error_text += str(e) + ', ' + self.submit_command[0] + ' not found\n'
-            else:
-                error_text += str(e) + '\n'
-            error_text += log_text(self.debug_filenames)
-            self.logger.error(error_text)
-            raise SubmitException()
+            raise SubmitError(self.create_error_text('submit error ' + str(e)))
+
         with open(self.debug_filenames['submit stdout'], 'r') as submit_stdout:
             self.qsub_job_id = submit_stdout.readline().rstrip().replace('Your job ', '').split(' ')[0]
+
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += native_spec.format(**ctx).split()
@@ -266,67 +277,200 @@ class AsyncQsubJob(object):
         qsub += ['-e', stderr_filename]
         qsub += [script_filename]
         return qsub
+
+    @property
+    def finished(self):
+        """ Get job finished boolean.
+        """
+        if not self.qstat_job_status.finished(self.qsub_job_id):
+            return False
+
+        if self.qacct_results is None:
+            try:
+                self.qacct_results = self.get_qacct_results()
+            except QacctError:
+                return True
+        
+        return self.qacct_results is not None
+
     def finalize(self):
+        """ Finalize a job after remote run.
+        """
+        assert self.finished
+
+        if self.qstat_job_status.errors(self.qsub_job_id):
+            self.delete()
+
+        if self.qacct_results is None:
+            raise SubmitError(self.create_error_text('qacct error'))
+
+        if self.qacct_results['exit_status'] != '0':
+            raise SubmitError(self.create_error_text('qsub error'))
+
         self.received = self.delegated.finalize()
+
         if self.received is None:
-            error_text = self.name + ' failed to complete\n'
-            error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
-            error_text += ' '.join(self.command) + '\n'
-            error_text += '-' * 10 + ' submit command ' + '-' * 10 + '\n'
-            error_text += ' '.join(self.submit_command) + '\n'
-            error_text += log_text(self.debug_filenames)
-            self.logger.error(error_text)
-            raise ReceiveException()
+            raise ReceiveError(self.create_error_text('receive error'))
+
+    def get_qacct_results(self):
+        """ Run qacct to obtain finished job info.
+
+        Returns:
+            dict: key value mapping of job info
+        """
+        try:
+            with open(self.debug_filenames['qacct stdout'], 'w') as qacct_stdout, open(self.debug_filenames['qacct stderr'], 'w') as qacct_stderr:
+                subprocess.check_call([self.qenv.qacct_bin, '-j', self.qsub_job_id], stdout=qacct_stdout, stderr=qacct_stderr)
+        except subprocess.CalledProcessError:
+            self.qacct_failures += 1
+            if self.qacct_failures > self.max_qacct_failures:
+                raise QacctError()
+            else:
+                return None
+
+        qacct_results = dict()
+
+        with open(self.debug_filenames['qacct stdout'], 'r') as qacct_file:
+            for line in qacct_file:
+                try:
+                    key, value = line.split()
+                except ValueError:
+                    continue
+                qacct_results[key] = value
+
+        return qacct_results
+
+    def delete(self):
+        """ Delete job from queue.
+        """
+        try:
+            subprocess.call([self.qenv.qdel, self.qsub_job_id])
+        except:
+            pass
+
+    def create_error_text(self, desc):
+        """ Create error text string.
+
+        Args:
+            desc (str): error description
+
+        Returns:
+            str: multi-line error text
+        """
+
+        error_text = list()
+
+        error_text += [desc  + ' for job: ' + self.name]
+        error_text += ['qsub id: ' + self.qsub_job_id]
+
+        error_text += ['delegator command: ' + ' '.join(self.command)]
+        error_text += ['submit command: ' + ' '.join(self.submit_command)]
+
+        if self.qacct_results is not None:
+            error_text += ['memory consumed: ' + self.qacct_results['maxvmem']]
+            error_text += ['job exit status: ' + self.qacct_results['exit_status']]
+
+        for debug_type, debug_filename in self.debug_filenames.iteritems():
+            if not os.path.exists(debug_filename):
+                error_text += [debug_type + ': missing']
+                continue
+            with open(debug_filename, 'r') as debug_file:
+                error_text += [debug_type + ':']
+                for line in debug_file:
+                    error_text += ['\t' + line.rstrip()]
+
+        return '\n'.join(error_text)
+
 
 class QstatError(Exception):
     pass
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
-    def __init__(self, poll_time, max_qstat_failures):
+    def __init__(self, qenv, poll_time, max_qstat_failures=10):
+        self.qenv = qenv
         self.poll_time = poll_time
         self.max_qstat_failures = max_qstat_failures
-        self.qstat_bin = helpers.which('qstat')
-        self.qacct_bin = helpers.which('qacct')
-        self.last_qstat_time = None
+        self.cached_job_status = None
+        self.last_qstat_time = time.time() - poll_time - 1
         self.qstat_failures = 0
+
     def update(self):
-        self.update_status_cache()
-        return self.last_qstat_time is not None
-    def invalidate(self):
-        self.last_qstat_time = None
-    def finished(self, job_id):
-        assert self.last_qstat_time is not None
-        return job_id not in self.cached_job_status
-    def errors(self, job_id):
-        assert self.last_qstat_time is not None
-        return 'e' in self.cached_job_status.get(job_id, '')
-    def get_exit_status(self, job_id):
-        for line in subprocess.check_output([self.qacct_bin]).split('\n'):
-            if line.startswith('exit_status'):
-                return int(line[len('exit_status'):])
-    def update_status_cache(self):
+        """ Update cached job status after sleeping for remainder of polling time.
+
+        Returns:
+            bool: statuses updated
+        """
+        wait_time = self.poll_time - (time.time() - self.last_qstat_time)
+        if wait_time > 0:
+            time.sleep(wait_time)
+
         if self.last_qstat_time is None or time.time() - self.last_qstat_time > self.poll_time:
             try:
-                self.cached_job_status = dict(self.qstat_job_status())
+                self.cached_job_status = self.get_qstat_job_status()
                 self.last_qstat_time = time.time()
                 self.qstat_failures = 0
             except:
+                self.cached_job_status = None
                 self.qstat_failures += 1
             if self.qstat_failures >= self.max_qstat_failures:
                 raise QstatError('too many qstat failures')
-    def qstat_job_status(self):
-        for line in subprocess.check_output([self.qstat_bin]).split('\n'):
+
+        return self.cached_job_status is not None
+
+    def clear_cache(self):
+        """ Clear cached job statuses.
+        """
+        self.cached_job_status = None
+
+    def finished(self, job_id):
+        """ Query whether job is finished.
+
+        Returns:
+            bool: job finished, None for no information
+        """
+        if self.cached_job_status is None:
+            return None
+
+        return job_id not in self.cached_job_status
+
+    def errors(self, job_id):
+        """ Query whether job is in error state.
+
+        Returns:
+            bool: job finished, None for no information
+        """
+        if self.cached_job_status is None:
+            return None
+
+        return 'e' in self.cached_job_status.get(job_id, '')
+
+    def get_qstat_job_status(self):
+        """ Run qstat to obtain job statues.
+
+        Returns:
+            dict: job id to job status dictionary
+        """
+        job_status = dict()
+
+        for line in subprocess.check_output([self.qenv.qstat_bin]).split('\n'):
             row = line.split()
             try:
-                job_id = row[0]
+                qsub_job_id = row[0]
                 status = row[4].lower()
-                yield job_id, status
-            except Exception:
+                job_status[qsub_job_id] = status
+            except IndexError:
                 continue
 
-class QsubError(Exception):
-    pass
+        return job_status
+
+class QEnv(object):
+    """ Paths to qsub, qstat, qdel """
+    def __init__(self):
+        self.qsub_bin = helpers.which('qsub')
+        self.qstat_bin = helpers.which('qstat')
+        self.qacct_bin = helpers.which('qacct')
+        self.qdel_bin = helpers.which('qdel')
 
 class AsyncQsubJobQueue(JobQueue):
     """ Class for a queue of jobs run using subprocesses.  Maintains
@@ -335,62 +479,55 @@ class AsyncQsubJobQueue(JobQueue):
     """
     def __init__(self, modules, native_spec, poll_time):
         self.modules = modules
-        self.qsub_bin = helpers.which('qsub')
+        self.qenv = QEnv()
         self.native_spec = native_spec
         self.poll_time = poll_time
-        self.qstat = QstatJobStatus(poll_time, 10)
-        self.jobs = dict()
+        self.qstat = QstatJobStatus(self.qenv, poll_time)
+        self.jobs = list()
         self.local_queue = LocalJobQueue(modules)
+
     def __enter__(self):
         self.local_queue.__enter__()
         return self
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.local_queue.__exit__(exc_type, exc_value, traceback)
-        for qsub_job_id in self.jobs.iterkeys():
-            self.delete_job(qsub_job_id)
+        for job in self.jobs:
+            job.delete()
+
     def create(self, ctx, name, send, temps_dir):
-        return AsyncQsubJob(ctx, name, send, temps_dir, self.modules, self.qsub_bin, self.native_spec)
+        return AsyncQsubJob(ctx, name, send, temps_dir, self.modules, self.qenv, self.native_spec, self.qstat)
+
     def add(self, ctx, name, send, temps_dir):
         if ctx.get('local', False):
             self.local_queue.add(ctx, name, send, temps_dir)
         else:
-            submitted = self.create(ctx, name, send, temps_dir)
-            self.jobs[submitted.qsub_job_id] = submitted
-            self.qstat.invalidate()
+            self.jobs.append(self.create(ctx, name, send, temps_dir))
+
     def wait(self):
         while True:
             if not self.local_queue.empty:
                 job_id, job = self.local_queue.wait(immediate=True)
                 if job_id is not None:
                     return job_id, job
-            if len(self.jobs) == 0:
-                return None, None
-            if self.qstat.update():
-                for qsub_job_id in self.jobs.iterkeys():
-                    if self.qstat.errors(qsub_job_id):
-                        del self.jobs[qsub_job_id]
-                        raise QsubError('job ' + str(qsub_job_id) + ' entered error state')
-                    if self.qstat.finished(qsub_job_id):
-                        exit_status = self.qstat.get_exit_status(job_id)
-                        if exit_status != 0:
-                            raise QsubError('job ' + str(qsub_job_id) + ' exited with status ' + str(exit_status))
-                        submitted = self.jobs[qsub_job_id]
-                        del self.jobs[qsub_job_id]
-                        submitted.finalize()
-                        return submitted.name, submitted.received
-            time.sleep(self.poll_time)
-    def delete_job(self, qsub_job_id):
-        try:
-            subprocess.call(['qdel', qsub_job_id])
-        except:
-            pass
+            while True:
+                if not self.qstat.update():
+                    continue
+                try:
+                    job = helpers.pop_if(self.jobs, lambda j: j.finished)
+                except IndexError:
+                    break
+                job.finalize()
+                return job.name, job.received
+
     @property
     def length(self):
         return len(self.jobs) + self.local_queue.length
+
     @property
     def empty(self):
         return self.length == 0
-
+        
 class PbsQstatJobStatus(QstatJobStatus):
     """ Statuses of jobs on a pbs cluster """
     def finished(self, job_id):
