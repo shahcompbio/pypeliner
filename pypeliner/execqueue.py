@@ -10,13 +10,13 @@ import delegator
 class JobQueue(object):
     """ Abstract class for a queue of jobs.
     """
-    def add(self, ctx, name, send, temps_dir):
+    def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
 
         Args:
             ctx (dict): context of job, mem etc.
             name (str): unique name for the job
-            send (callable): callable object
+            sent (callable): callable object
             temps_dir (str): unique path for strong job temps
 
         """
@@ -26,10 +26,22 @@ class JobQueue(object):
         """ Wait for a job to finish.
 
         KwArgs:
-            immediate (bool): do not wait if not job has finished
+            immediate (bool): do not wait if no job has finished
 
         Returns:
-            (str, callable): job name, called callable object
+            str: job name
+
+        """
+        raise NotImplementedError()
+
+    def receive(self, name):
+        """ Receive finished job.
+
+        Args:
+            name (str): name of job to retrieve
+
+        Returns:
+            object: received object
 
         """
         raise NotImplementedError()
@@ -69,10 +81,10 @@ def qsub_format_name(name):
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
-    def __init__(self, ctx, name, send, temps_dir, modules):
+    def __init__(self, ctx, name, sent, temps_dir, modules):
         self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
@@ -110,10 +122,10 @@ class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess
     """
-    def __init__(self, ctx, name, send, temps_dir, modules, qsub_bin, native_spec):
+    def __init__(self, ctx, name, sent, temps_dir, modules, qsub_bin, native_spec):
         self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
@@ -176,28 +188,36 @@ class SubProcessJobQueue(JobQueue):
     def __init__(self, modules):
         self.modules = modules
         self.jobs = dict()
+        self.pid_names = dict()
+        self.pid_returncodes = dict()
     def __enter__(self):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         pass
-    def create(self, ctx, name, send, temps_dir):
+    def create(self, ctx, name, sent, temps_dir):
         raise NotImplementedError()
-    def add(self, ctx, name, send, temps_dir):
-        submitted = self.create(ctx, name, send, temps_dir)
-        self.jobs[submitted.process.pid] = submitted
+    def send(self, ctx, name, sent, temps_dir):
+        submitted = self.create(ctx, name, sent, temps_dir)
+        self.jobs[name] = submitted
+        self.pid_names[submitted.process.pid] = name
     def wait(self, immediate=False):
         while True:
             if immediate:
                 process_id, returncode = os.waitpid(-1, os.WNOHANG)
                 if process_id is None:
-                    return None, None
+                    return None
             else:
                 process_id, returncode = os.wait()
-            if process_id in self.jobs:
-                submitted = self.jobs[process_id]
-                del self.jobs[process_id]
-                submitted.finalize(returncode)
-                return submitted.name, submitted.received
+            try:
+                name = self.pid_names.pop(process_id)
+            except KeyError:
+                continue
+            self.pid_returncodes[name] = returncode
+            return name
+    def receive(self, name):
+        job = self.jobs.pop(name)
+        job.finalize(self.pid_returncodes.pop(name))
+        return job.received
     @property
     def length(self):
         return len(self.jobs)
@@ -207,8 +227,8 @@ class SubProcessJobQueue(JobQueue):
 
 class LocalJobQueue(SubProcessJobQueue):
     """ Queue of local jobs """
-    def create(self, ctx, name, send, temps_dir):
-        return LocalJob(ctx, name, send, temps_dir, self.modules)
+    def create(self, ctx, name, sent, temps_dir):
+        return LocalJob(ctx, name, sent, temps_dir, self.modules)
 
 class QsubJobQueue(SubProcessJobQueue):
     """ Queue of qsub jobs """
@@ -217,11 +237,11 @@ class QsubJobQueue(SubProcessJobQueue):
         self.qsub_bin = helpers.which('qsub')
         self.native_spec = native_spec
         self.local_queue = LocalJobQueue(modules)
-    def create(self, ctx, name, send, temps_dir):
+    def create(self, ctx, name, sent, temps_dir):
         if ctx.get('local', False):
-            return LocalJob(ctx, name, send, temps_dir, self.modules)
+            return LocalJob(ctx, name, sent, temps_dir, self.modules)
         else:
-            return QsubJob(ctx, name, send, temps_dir, self.modules, self.qsub_bin, self.native_spec)
+            return QsubJob(ctx, name, sent, temps_dir, self.modules, self.qsub_bin, self.native_spec)
 
 class QacctError(Exception):
     pass
@@ -230,7 +250,7 @@ class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess, and polled using qstat
     """
-    def __init__(self, ctx, name, send, temps_dir, modules, qenv, native_spec, qstat_job_status, max_qacct_failures=10):
+    def __init__(self, ctx, name, sent, temps_dir, modules, qenv, native_spec, qstat_job_status, max_qacct_failures=100):
         self.name = name
         self.qenv = qenv
         self.qstat_job_status = qstat_job_status
@@ -240,7 +260,7 @@ class AsyncQsubJob(object):
         self.qacct_failures = 0
         self.logger = logging.getLogger('execqueue')
 
-        self.delegated = delegator.delegator(send, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
 
         self.debug_filenames = dict()
@@ -302,10 +322,10 @@ class AsyncQsubJob(object):
             self.delete()
 
         if self.qacct_results is None:
-            raise SubmitError(self.create_error_text('qacct error'))
+            raise ReceiveError(self.create_error_text('qacct error'))
 
         if self.qacct_results['exit_status'] != '0':
-            raise SubmitError(self.create_error_text('qsub error'))
+            raise ReceiveError(self.create_error_text('qsub error'))
 
         self.received = self.delegated.finalize()
 
@@ -387,36 +407,23 @@ class QstatError(Exception):
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
-    def __init__(self, qenv, poll_time, max_qstat_failures=10):
+    def __init__(self, qenv, max_qstat_failures=10):
         self.qenv = qenv
-        self.poll_time = poll_time
         self.max_qstat_failures = max_qstat_failures
         self.cached_job_status = None
-        self.last_qstat_time = time.time() - poll_time - 1
         self.qstat_failures = 0
 
     def update(self):
         """ Update cached job status after sleeping for remainder of polling time.
-
-        Returns:
-            bool: statuses updated
         """
-        wait_time = self.poll_time - (time.time() - self.last_qstat_time)
-        if wait_time > 0:
-            time.sleep(wait_time)
-
-        if self.last_qstat_time is None or time.time() - self.last_qstat_time > self.poll_time:
-            try:
-                self.cached_job_status = self.get_qstat_job_status()
-                self.last_qstat_time = time.time()
-                self.qstat_failures = 0
-            except:
-                self.cached_job_status = None
-                self.qstat_failures += 1
-            if self.qstat_failures >= self.max_qstat_failures:
-                raise QstatError('too many qstat failures')
-
-        return self.cached_job_status is not None
+        try:
+            self.cached_job_status = self.get_qstat_job_status()
+            self.qstat_failures = 0
+        except:
+            self.cached_job_status = None
+            self.qstat_failures += 1
+        if self.qstat_failures >= self.max_qstat_failures:
+            raise QstatError('too many consecutive qstat failures')
 
     def clear_cache(self):
         """ Clear cached job statuses.
@@ -430,7 +437,7 @@ class QstatJobStatus(object):
             bool: job finished, None for no information
         """
         if self.cached_job_status is None:
-            return None
+            return False
 
         return job_id not in self.cached_job_status
 
@@ -477,13 +484,14 @@ class AsyncQsubJobQueue(JobQueue):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-    def __init__(self, modules, native_spec, poll_time):
+    def __init__(self, modules, native_spec, qstat_period):
         self.modules = modules
         self.qenv = QEnv()
         self.native_spec = native_spec
-        self.poll_time = poll_time
-        self.qstat = QstatJobStatus(self.qenv, poll_time)
-        self.jobs = list()
+        self.qstat_period = qstat_period
+        self.qstat = QstatJobStatus(self.qenv)
+        self.jobs = dict()
+        self.name_islocal = dict()
         self.local_queue = LocalJobQueue(modules)
 
     def __enter__(self):
@@ -492,33 +500,37 @@ class AsyncQsubJobQueue(JobQueue):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.local_queue.__exit__(exc_type, exc_value, traceback)
-        for job in self.jobs:
+        for job in self.jobs.itervalues():
             job.delete()
 
-    def create(self, ctx, name, send, temps_dir):
-        return AsyncQsubJob(ctx, name, send, temps_dir, self.modules, self.qenv, self.native_spec, self.qstat)
+    def create(self, ctx, name, sent, temps_dir):
+        return AsyncQsubJob(ctx, name, sent, temps_dir, self.modules, self.qenv, self.native_spec, self.qstat)
 
-    def add(self, ctx, name, send, temps_dir):
+    def send(self, ctx, name, sent, temps_dir):
         if ctx.get('local', False):
-            self.local_queue.add(ctx, name, send, temps_dir)
+            self.local_queue.send(ctx, name, sent, temps_dir)
         else:
-            self.jobs.append(self.create(ctx, name, send, temps_dir))
+            self.jobs[name] = self.create(ctx, name, sent, temps_dir)
 
     def wait(self):
         while True:
             if not self.local_queue.empty:
-                job_id, job = self.local_queue.wait(immediate=True)
-                if job_id is not None:
-                    return job_id, job
-            while True:
-                if not self.qstat.update():
-                    continue
-                try:
-                    job = helpers.pop_if(self.jobs, lambda j: j.finished)
-                except IndexError:
-                    break
-                job.finalize()
-                return job.name, job.received
+                name = self.local_queue.wait(immediate=True)
+                if name is not None:
+                    self.name_islocal[name] = True
+                    return name
+            for name, job in self.jobs.iteritems():
+                if job.finished:
+                    return name
+            time.sleep(self.qstat_period)
+            self.qstat.update()
+
+    def receive(self, name):
+        if self.name_islocal.pop(name, False):
+            return self.local_queue.receive(name)
+        job = self.jobs.pop(name)
+        job.finalize()
+        return job.received
 
     @property
     def length(self):
@@ -537,6 +549,6 @@ class PbsQstatJobStatus(QstatJobStatus):
 
 class PbsJobQueue(AsyncQsubJobQueue):
     """ Queue of jobs running on a pbs cluster """
-    def __init__(self, modules, native_spec, poll_time):
-        super(PbsJobQueue, self).__init__(modules, native_spec, poll_time)
-        self.qstat = PbsQstatJobStatus(poll_time, 10)
+    def __init__(self, modules, native_spec, qstat_period):
+        super(PbsJobQueue, self).__init__(modules, native_spec, qstat_period)
+        self.qstat = PbsQstatJobStatus(qstat_period, 10)

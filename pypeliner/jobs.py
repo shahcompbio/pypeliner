@@ -66,19 +66,13 @@ class JobInstance(object):
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
-        self.exc_dir = os.path.join(self.logs_dir, 'exc')
-        helpers.makedirs(self.exc_dir)
         self.is_subworkflow = False
         self.is_immediate = False
+        self.retry_idx = 0
+        self.ctx = job_def.ctx.copy()
     @property
     def id(self):
         return (self.node, self.job_def.name)
-    @property
-    def ctx(self):
-        return self.job_def.ctx
-    @property
-    def temps_dir(self):
-        return self.exc_dir
     @property
     def displayname(self):
         name = '/' + self.job_def.name
@@ -195,12 +189,29 @@ class JobInstance(object):
         return False
     def create_callable(self):
         return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir)
+    def create_exc_dir(self):
+        exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
+        helpers.makedirs(exc_dir)
+        return exc_dir
     def finalize(self, callable):
         callable.finalize(self.db)
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
         self.workflow.notify_completed(self)
+    def retry(self):
+        if self.retry_idx >= self.ctx.get('num_retry', 0):
+            return False
+        self.retry_idx += 1
+        updated = False
+        for key, value in self.ctx.iteritems():
+            if key.endswith('_retry_factor'):
+                self.ctx[key[:-len('_retry_factor')]] *= value
+                updated = True
+            elif key.endswith('_retry_increment'):
+                self.ctx[key[:-len('_retry_increment')]] += value
+                updated = True
+        return updated
 
 class JobTimer(object):
     """ Timer using a context manager """
@@ -271,6 +282,7 @@ class SubWorkflowDefinition(JobDefinition):
     def __init__(self, name, axes, func, argset):
         self.name = name
         self.axes = axes
+        self.ctx = {}
         self.func = func
         self.argset = argset
     def create_job_instances(self, workflow, db):

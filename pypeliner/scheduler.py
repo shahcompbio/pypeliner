@@ -8,6 +8,7 @@ import traceback
 
 import helpers
 import graph
+import execqueue
 import database
 
 
@@ -73,7 +74,7 @@ class Scheduler(object):
 
         """
         self._active_jobs = dict()
-        self._job_temps_dirs = set()
+        self._job_exc_dirs = set()
         with database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
             workflow = graph.WorkflowInstance(workflow_def, db_factory, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
             failing = False
@@ -103,6 +104,28 @@ class Scheduler(object):
                 self._logger.error('pipeline failed')
                 raise PipelineException('pipeline failed')
 
+    def _add_job(self, exec_queue, job):
+        sent = job.create_callable()
+        exc_dir = job.create_exc_dir()
+
+        self._active_jobs[job.displayname] = job
+
+        if exc_dir in self._job_exc_dirs:
+            raise ValueError('duplicate temps directory ' + exc_dir)
+        self._job_exc_dirs.add(exc_dir)
+        
+        self._logger.info('job ' + job.displayname + ' executing')
+        self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand)
+
+        exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
+
+    def _retry_job(self, exec_queue, job):
+        if not job.retry():
+            return False
+        self._logger.info('job ' + job.displayname + ' retry ' + str(job.retry_idx))
+        self._add_job(exec_queue, job)
+        return True
+
     def _add_jobs(self, exec_queue, workflow):
         while exec_queue.length < self.max_jobs:
             try:
@@ -110,34 +133,44 @@ class Scheduler(object):
             except graph.NoJobs:
                 return
             if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
-                name = job.displayname
-                self._active_jobs[name] = job
-                if job.temps_dir in self._job_temps_dirs:
-                    raise ValueError('duplicate temps directory ' + job.temps_dir)
-                self._job_temps_dirs.add(job.temps_dir)
-                send = job.create_callable()
-                exec_queue.add(job.ctx, name, send, job.temps_dir)
-                self._logger.info('job ' + job.displayname + ' executing')
-                self._logger.info('job ' + job.displayname + ' -> ' + send.displaycommand)
+                self._add_job(exec_queue, job)
             else:
                 job.complete()
                 self._logger.info('job ' + job.displayname + ' skipped')
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
     def _wait_next_job(self, exec_queue, workflow):
-        name, received = exec_queue.wait()
+        name = exec_queue.wait()
+
         job = self._active_jobs[name]
         del self._active_jobs[name]
+
         assert job is not None
-        assert job.id == received.id
-        if not received.finished:
-            self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
-            raise IncompleteJobException()
+
+        try:
+            received = exec_queue.receive(name)
+        except execqueue.ReceiveError as e:
+            self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc())
+            received = None
+
+        assert received is None or job.id == received.id
+
+        if received is not None:
+            if received.finished:
+                self._logger.info('job ' + job.displayname + ' completed successfully')
+            else:
+                self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
+            self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's')
+            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's')
+
+        if received is None or not received.finished:
+            if self._retry_job(exec_queue, job):
+                return
+            else:
+                raise IncompleteJobException()
+
         job.finalize(received)
         job.complete()
-        self._logger.info('job ' + job.displayname + ' completed successfully')
-        self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's')
-        self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's')
 
     def pretend(self, workflow_def):
         """ Pretend run the pipeline.
