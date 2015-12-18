@@ -75,29 +75,3 @@ def symlink(source, link_name):
             raise
     os.symlink(source, link_name)
 
-class PipelineLockedError(Exception):
-    pass
-
-class DirectoryLock(object):
-    def __init__(self):
-        self.locked_directories = list()
-    def add_lock(self, lock_directory):
-        try:
-            makedirs(os.path.join(lock_directory, os.path.pardir))
-            os.mkdir(lock_directory)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                raise PipelineLockedError('Pipeline already running, remove {0} to override'.format(lock_directory))
-            else:
-                raise
-        self.locked_directories.append(lock_directory)
-    def __enter__(self):
-        return self
-    def __exit__(self, exc_type, exc_value, traceback):
-        for lock_directory in self.locked_directories:
-            try:
-                os.rmdir(lock_directory)
-            except:
-                warnings.warn('unable to unlock ' + lock_directory)
-
-

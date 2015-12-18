@@ -8,6 +8,7 @@ import traceback
 
 import helpers
 import graph
+import database
 
 
 class PipelineException(Exception):
@@ -73,8 +74,8 @@ class Scheduler(object):
         """
         self._active_jobs = dict()
         self._job_temps_dirs = set()
-        with helpers.DirectoryLock() as dir_lock:
-            workflow = graph.WorkflowInstance(workflow_def, self.workflow_dir, self.logs_dir, dir_lock, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+        with database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
+            workflow = graph.WorkflowInstance(workflow_def, db_factory, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
             failing = False
             try:
                 try:

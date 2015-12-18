@@ -1,4 +1,3 @@
-import atexit
 import collections
 import itertools
 import os
@@ -96,6 +95,8 @@ class NodeManager(object):
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield resources.Dependency(node[-1][0], node[:-1])
+    def close(self):
+        pass
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
@@ -117,7 +118,6 @@ class ResourceManager(object):
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
-        atexit.register(lambda : self.createtimes_shelf.close())
     @property
     def filename_creator(self):
         return FilenameCreator(self.temps_dir, self.temps_suffix)
@@ -155,9 +155,12 @@ class ResourceManager(object):
                         logging.getLogger('resourcemgr').debug('removing ' + filename)
                         os.remove(filename)
             depgraph.obsolete.remove((name, node))
+    def close(self):
+        self.createtimes_shelf.close()
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, instance_subdir):
+    def __init__(self, workflow_dir, logs_dir, instance_subdir):
+        self.instance_subdir = instance_subdir
         db_dir = os.path.join(workflow_dir, 'db', instance_subdir)
         nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
@@ -166,4 +169,49 @@ class WorkflowDatabase(object):
         helpers.makedirs(temps_dir)
         self.resmgr = ResourceManager(temps_dir, db_dir)
         self.nodemgr = NodeManager(nodes_dir, temps_dir)
+        self.logs_dir = os.path.join(logs_dir, instance_subdir)
+    def close(self):
+        self.resmgr.close()
+        self.nodemgr.close()
+
+class PipelineLockedError(Exception):
+    pass
+
+class WorkflowDatabaseFactory(object):
+    def __init__(self, workflow_dir, logs_dir):
+        self.workflow_dir = workflow_dir
+        self.logs_dir = logs_dir
+        self.dbs = list()
+        self.lock_directories = list()
+    def create(self, instance_subdir):
+        self._add_lock(instance_subdir)
+        db = WorkflowDatabase(self.workflow_dir, self.logs_dir, instance_subdir)
+        self.dbs.append(db)
+        return db
+    def _add_lock(self, instance_subdir):
+        lock_directory = os.path.join(self.workflow_dir, instance_subdir, '_lock')
+        try:
+            helpers.makedirs(os.path.join(lock_directory, os.path.pardir))
+            os.mkdir(lock_directory)
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                raise PipelineLockedError('Pipeline already running, remove {0} to override'.format(lock_directory))
+            else:
+                raise
+        self.lock_directories.append(lock_directory)
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        for db in self.dbs:
+            try:
+                db.close()
+            except:
+                logging.exception('unable to close ' + db.instance_subdir)
+        for lock_directory in self.lock_directories:
+            try:
+                os.rmdir(lock_directory)
+            except:
+                logging.exception('unable to unlock ' + lock_directory)
+
+
 

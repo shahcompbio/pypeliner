@@ -40,9 +40,9 @@ class JobDefinition(object):
         self.ctx = ctx
         self.func = func
         self.argset = argset
-    def create_job_instances(self, workflow, db, logs_dir):
+    def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
-            yield JobInstance(self, workflow, db, node, logs_dir)
+            yield JobInstance(self, workflow, db, node)
 
 class InputMissingException(Exception):
     def __init__(self, input, job):
@@ -53,7 +53,7 @@ class InputMissingException(Exception):
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
-    def __init__(self, job_def, workflow, db, node, logs_dir):
+    def __init__(self, job_def, workflow, db, node):
         self.job_def = job_def
         self.workflow = workflow
         self.db = db
@@ -64,7 +64,7 @@ class JobInstance(object):
         except managed.JobArgMismatchException as e:
             e.job_name = self.displayname
             raise
-        self.logs_dir = os.path.join(logs_dir, self.node.subdir, self.job_def.name)
+        self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
         helpers.makedirs(self.logs_dir)
         self.exc_dir = os.path.join(self.logs_dir, 'exc')
         helpers.makedirs(self.exc_dir)
@@ -273,14 +273,14 @@ class SubWorkflowDefinition(JobDefinition):
         self.axes = axes
         self.func = func
         self.argset = argset
-    def create_job_instances(self, workflow, db, logs_dir):
+    def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
-            yield SubWorkflowInstance(self, workflow, db, node, logs_dir)
+            yield SubWorkflowInstance(self, workflow, db, node)
 
 class SubWorkflowInstance(JobInstance):
     """ Represents a sub workflow. """
-    def __init__(self, job_def, workflow, db, node, logs_dir):
-        super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node, logs_dir)
+    def __init__(self, job_def, workflow, db, node):
+        super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
         self.is_subworkflow = True
         self.is_immediate = False
 
@@ -293,7 +293,7 @@ class ChangeAxisDefinition(object):
         self.old_axis = old_axis
         self.new_axis = new_axis
         self.exact = exact
-    def create_job_instances(self, workflow, db, logs_dir):
+    def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield ChangeAxisInstance(self, workflow, db, node, exact=self.exact)
 
