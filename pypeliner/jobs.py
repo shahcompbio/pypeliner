@@ -70,6 +70,7 @@ class JobInstance(object):
         self.is_immediate = False
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
+        self.direct_write = False
     @property
     def id(self):
         return (self.node, self.job_def.name)
@@ -188,7 +189,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir)
+        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir, self.direct_write)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         helpers.makedirs(exc_dir)
@@ -230,11 +231,11 @@ class JobTimer(object):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, db, id, func, argset, logs_dir):
+    def __init__(self, db, id, func, argset, logs_dir, direct_write=False):
         self.id = id
         self.func = func
         self.callargs = list()
-        self.callset = copy.deepcopy(argset, {'_db':db, '_args':self.callargs})
+        self.callset = copy.deepcopy(argset, {'_db':db, '_direct_write':direct_write, '_args':self.callargs})
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -295,6 +296,7 @@ class SubWorkflowInstance(JobInstance):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
         self.is_subworkflow = True
         self.is_immediate = False
+        self.direct_write = True
 
 class ChangeAxisDefinition(object):
     """ Represents an abstract aliasing """

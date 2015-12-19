@@ -113,14 +113,12 @@ class ResourceManager(object):
     def __init__(self, temps_dir, db_dir):
         self.temps_dir = temps_dir
         self.db_dir = db_dir
-        self.temps_suffix = '.tmp'
         self.disposable = collections.defaultdict(set)
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
         self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
-    @property
-    def filename_creator(self):
-        return FilenameCreator(self.temps_dir, self.temps_suffix)
+    def get_filename_creator(self, suffix):
+        return FilenameCreator(self.temps_dir, suffix)
     def store_createtime(self, name, node, filename):
         self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
     def retrieve_createtime(self, name, node, filename):
