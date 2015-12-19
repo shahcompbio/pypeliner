@@ -77,9 +77,6 @@ class UserResource(Resource):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
-    @property
-    def chunk(self):
-        return self.node[-1][1]
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.filename)
@@ -150,9 +147,6 @@ class TempObjManager(object):
     @property
     def output(self):
         return TempObjResource(self.name, self.node, is_input=False)
-    @property
-    def chunk(self):
-        return self.node[-1][1]
     def get_obj(self, db):
         try:
             with open(self.input.get_filename(db), 'rb') as f:
