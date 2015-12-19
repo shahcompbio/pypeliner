@@ -184,7 +184,7 @@ class SplitFileArg(Arg,SplitMergeArg):
         self.node = node
         self.axes = axes
         self.axes_origin = self.get_axes_origin(axes_origin)
-        self.is_split = self.axes_origin is not None
+        self.is_split = len(self.axes_origin) != 0
         self.fnames = fnames
         self.template = template
     def get_resources(self, db):
@@ -288,7 +288,7 @@ class TempSplitObjArg(Arg,SplitMergeArg):
         self.node = node
         self.axes = axes
         self.axes_origin = self.get_axes_origin(axes_origin)
-        self.is_split = self.axes_origin is not None
+        self.is_split = len(self.axes_origin) != 0
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
              yield resources.TempObjManager(self.name, node)
@@ -411,7 +411,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         self.node = node
         self.axes = axes
         self.axes_origin = self.get_axes_origin(axes_origin)
-        self.is_split = self.axes_origin is not None
+        self.is_split = len(self.axes_origin) != 0
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             yield resources.TempFileResource(self.name, node, db)
@@ -471,7 +471,7 @@ class OutputChunksArg(Arg,SplitMergeArg):
         self.node = node
         self.axes = axes
         self.axes_origin = self.get_axes_origin(axes_origin)
-        self.is_split = self.axes_origin is not None
+        self.is_split = len(self.axes_origin) != 0
     def get_inputs(self, db):
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
             yield dependency
