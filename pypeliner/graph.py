@@ -194,9 +194,6 @@ class WorkflowInstance(object):
             # Finalize finished workflows
             self.finalize_workflows()
 
-            # Remove finished sub workflows
-            self.subworkflows = filter(lambda (job, received, workflow): not workflow.finished, self.subworkflows)
-
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
