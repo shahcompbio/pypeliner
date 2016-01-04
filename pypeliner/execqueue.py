@@ -364,9 +364,9 @@ class AsyncQsubJob(object):
         """ Delete job from queue.
         """
         try:
-            subprocess.call([self.qenv.qdel, self.qsub_job_id])
-        except:
-            pass
+            subprocess.check_call([self.qenv.qdel_bin, self.qsub_job_id])
+        except Exception as e:
+            self.logger.exception('Unable to delete {}'.format(self.qsub_job_id))
 
     def create_error_text(self, desc):
         """ Create error text string.
