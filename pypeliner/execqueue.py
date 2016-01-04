@@ -365,7 +365,7 @@ class AsyncQsubJob(object):
         """
         try:
             subprocess.check_call([self.qenv.qdel_bin, self.qsub_job_id])
-        except Exception as e:
+        except:
             self.logger.exception('Unable to delete {}'.format(self.qsub_job_id))
 
     def create_error_text(self, desc):
@@ -380,7 +380,7 @@ class AsyncQsubJob(object):
 
         error_text = list()
 
-        error_text += [desc  + ' for job: ' + self.name]
+        error_text += [desc + ' for job: ' + self.name]
         error_text += ['qsub id: ' + self.qsub_job_id]
 
         error_text += ['delegator command: ' + ' '.join(self.command)]
@@ -412,6 +412,7 @@ class QstatJobStatus(object):
         self.max_qstat_failures = max_qstat_failures
         self.cached_job_status = None
         self.qstat_failures = 0
+        self.logger = logging.getLogger('execqueue')
 
     def update(self):
         """ Update cached job status after sleeping for remainder of polling time.
@@ -420,6 +421,7 @@ class QstatJobStatus(object):
             self.cached_job_status = self.get_qstat_job_status()
             self.qstat_failures = 0
         except:
+            self.logger.exception('Unable to qstat')
             self.cached_job_status = None
             self.qstat_failures += 1
         if self.qstat_failures >= self.max_qstat_failures:
