@@ -302,7 +302,7 @@ class AsyncQsubJob(object):
     def finished(self):
         """ Get job finished boolean.
         """
-        if not self.qstat_job_status.finished(self.qsub_job_id):
+        if not self.qstat_job_status.finished(self.qsub_job_id) and not self.qstat_job_status.errors(self.qsub_job_id):
             return False
 
         if self.qacct_results is None:
@@ -452,7 +452,7 @@ class QstatJobStatus(object):
         if self.cached_job_status is None:
             return None
 
-        return 'e' in self.cached_job_status.get(job_id, '')
+        return 'e' in self.cached_job_status.get(job_id, '').lower()
 
     def get_qstat_job_status(self):
         """ Run qstat to obtain job statues.
