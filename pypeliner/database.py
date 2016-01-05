@@ -1,6 +1,7 @@
 import collections
 import itertools
 import os
+import errno
 import pickle
 import shelve
 import logging
