@@ -1,4 +1,5 @@
 import collections
+import errno
 import itertools
 import os
 import errno
@@ -188,7 +189,7 @@ class WorkflowDatabaseFactory(object):
         self.dbs.append(db)
         return db
     def _add_lock(self, instance_subdir):
-        lock_directory = os.path.join(self.workflow_dir, instance_subdir, '_lock')
+        lock_directory = os.path.join(self.workflow_dir, 'locks', instance_subdir, '_lock')
         try:
             helpers.makedirs(os.path.join(lock_directory, os.path.pardir))
             os.mkdir(lock_directory)
