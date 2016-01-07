@@ -6,6 +6,7 @@ import logging
 import helpers
 import identifiers
 import database
+import pypeliner.workflow
 
 class IncompleteWorkflowException(Exception):
     pass
@@ -205,9 +206,12 @@ class WorkflowInstance(object):
                     send()
                     received = send
                     if not received.finished:
-                        self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
+                        self._logger.error('subworkflow ' + job.displayname + ' failed to complete\n' + received.log_text())
                         raise IncompleteWorkflowException()
                     workflow_def = received.ret_value
+                    if not isinstance(workflow_def, pypeliner.workflow.Workflow):
+                        self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text())
+                        raise IncompleteWorkflowException()
                     node = self.node + job.node + identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.db_factory, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
                     self.subworkflows.append((job, received, workflow))
