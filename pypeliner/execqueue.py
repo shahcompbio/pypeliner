@@ -256,6 +256,7 @@ class AsyncQsubJob(object):
         self.qstat_job_status = qstat_job_status
         self.qstat_job_status.clear_cache()
         self.max_qacct_failures = max_qacct_failures
+        self.qsub_job_id = None
         self.qacct_results = None
         self.qacct_failures = 0
         self.logger = logging.getLogger('execqueue')
@@ -381,7 +382,9 @@ class AsyncQsubJob(object):
         error_text = list()
 
         error_text += [desc + ' for job: ' + self.name]
-        error_text += ['qsub id: ' + self.qsub_job_id]
+
+        if self.qsub_job_id is not None:
+            error_text += ['qsub id: ' + self.qsub_job_id]
 
         error_text += ['delegator command: ' + ' '.join(self.command)]
         error_text += ['submit command: ' + ' '.join(self.submit_command)]
