@@ -60,9 +60,10 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Type of exec queue to use for job submission.
 
     nativespec
-        Tequired for qsub based job submission, specifies how to request memory from
+        Required for qsub based job submission, specifies how to request memory from
         the cluster system.  Nativespec is treated as a python style format string
-        and uses the job's context to resolve named.
+        and uses the job's context to resolve named.  If available, a default value
+        will be obtained from the `$DEFAULT_NATIVESPEC` environment variable.
 
     maxjobs
         The maximum number of jobs to execute in parallel, either on a cluster or
@@ -102,11 +103,13 @@ ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 log_levels = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 submit_types = ('local', 'qsub', 'asyncqsub', 'pbs', 'drmaa')
 
+default_nativespec = os.environ.get('DEFAULT_NATIVESPEC', '')
+
 config_infos = list()
 config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of intermediate pipeline files'))
 config_infos.append(ConfigInfo('loglevel', log_levels, log_levels[2], 'logging level for console messages'))
 config_infos.append(ConfigInfo('submit', submit_types, submit_types[0], 'job submission system'))
-config_infos.append(ConfigInfo('nativespec', str, '', 'qsub native specification'))
+config_infos.append(ConfigInfo('nativespec', str, default_nativespec, 'qsub native specification'))
 config_infos.append(ConfigInfo('maxjobs', int, 1, 'maximum number of parallel jobs'))
 config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporaries'))
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
