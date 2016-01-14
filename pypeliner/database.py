@@ -89,11 +89,11 @@ class NodeManager(object):
     def get_splitmerge(self, axes, node, subset, factory):
         if 0 in subset:
             yield factory(axes[0], node)
-        for level in xrange(len(axes) - 1):
+        for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
-            for level_node in self.retrieve_nodes(axes[:level+1], base_node=node):
-                yield factory(axes[level+1], level_node)
+            for level_node in self.retrieve_nodes(axes[:level], base_node=node):
+                yield factory(axes[level], level_node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield resources.Dependency(node[-1][0], node[:-1])
