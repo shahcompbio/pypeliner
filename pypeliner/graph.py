@@ -198,6 +198,12 @@ class WorkflowInstance(object):
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
+            # Change axis jobs, to be depracated
+            if job.is_immediate:
+                job.finalize()
+                job.complete()
+                continue
+
             if job.is_subworkflow:
                 if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
                     send = job.create_callable()
@@ -220,10 +226,21 @@ class WorkflowInstance(object):
                     job.complete()
                 self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 continue
-            elif job.is_immediate:
-                job.finalize()
-                job.complete()
-                continue
+            elif job.ctx.get('immediate', False):
+                if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                    send = job.create_callable()
+                    self._logger.info('creating job ' + job.displayname)
+                    self._logger.info('job ' + job.displayname + ' -> ' + send.displaycommand)
+                    send()
+                    received = send
+                    if not received.finished:
+                        self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
+                        raise IncompleteWorkflowException()
+                    job.finalize(received)
+                    job.complete()
+                else:
+                    self._logger.info('job ' + job.displayname + ' skipped')
+                    job.complete()
             else:
                 return job
 

@@ -37,7 +37,7 @@ class Workflow(object):
 
         """
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
-        self.transform(name=name, axes=axes, ctx={'local':True}, func=_setobj_helper, ret=obj, args=(value,))
+        self.transform(name=name, axes=axes, ctx={'immediate':True}, func=_setobj_helper, ret=obj, args=(value,))
 
     def commandline(self, name='', axes=(), ctx=None, args=None):
         """ Add a command line based transform to the pipeline
