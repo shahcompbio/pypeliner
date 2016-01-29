@@ -322,6 +322,7 @@ class AsyncQsubJob(object):
 
         if self.qstat_job_status.errors(self.qsub_job_id):
             self.delete()
+            raise ReceiveError(self.create_error_text('job error'))
 
         if self.qacct_results is None:
             raise ReceiveError(self.create_error_text('qacct error'))
