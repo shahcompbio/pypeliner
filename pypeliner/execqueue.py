@@ -254,7 +254,6 @@ class AsyncQsubJob(object):
         self.name = name
         self.qenv = qenv
         self.qstat_job_status = qstat_job_status
-        self.qstat_job_status.clear_cache()
         self.max_qacct_failures = max_qacct_failures
         self.qsub_job_id = None
         self.qacct_results = None
@@ -290,6 +289,8 @@ class AsyncQsubJob(object):
         with open(self.debug_filenames['submit stdout'], 'r') as submit_stdout:
             self.qsub_job_id = submit_stdout.readline().rstrip().replace('Your job ', '').split(' ')[0]
 
+        self.qsub_time = time.time()
+
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += native_spec.format(**ctx).split()
@@ -303,7 +304,7 @@ class AsyncQsubJob(object):
     def finished(self):
         """ Get job finished boolean.
         """
-        if not self.qstat_job_status.finished(self.qsub_job_id) and not self.qstat_job_status.errors(self.qsub_job_id):
+        if not self.qstat_job_status.finished(self.qsub_job_id, self.qsub_time) and not self.qstat_job_status.errors(self.qsub_job_id):
             return False
 
         if self.qacct_results is None:
@@ -415,6 +416,7 @@ class QstatJobStatus(object):
         self.max_qstat_failures = max_qstat_failures
         self.cached_job_status = None
         self.qstat_failures = 0
+        self.qstat_time = None
         self.logger = logging.getLogger('execqueue')
 
     def update(self):
@@ -423,20 +425,19 @@ class QstatJobStatus(object):
         try:
             self.cached_job_status = self.get_qstat_job_status()
             self.qstat_failures = 0
+            self.qstat_time = time.time()
         except:
             self.logger.exception('Unable to qstat')
-            self.cached_job_status = None
             self.qstat_failures += 1
         if self.qstat_failures >= self.max_qstat_failures:
             raise QstatError('too many consecutive qstat failures')
 
-    def clear_cache(self):
-        """ Clear cached job statuses.
-        """
-        self.cached_job_status = None
-
-    def finished(self, job_id):
+    def finished(self, qsub_job_id, qsub_time):
         """ Query whether job is finished.
+
+        Args:
+            qsub_job_id (str): job id returned by qsub
+            qsub_time (float): time job was submitted
 
         Returns:
             bool: job finished, None for no information
@@ -444,9 +445,12 @@ class QstatJobStatus(object):
         if self.cached_job_status is None:
             return False
 
-        return job_id not in self.cached_job_status
+        if qsub_time >= self.qstat_time:
+            return False
 
-    def errors(self, job_id):
+        return qsub_job_id not in self.cached_job_status
+
+    def errors(self, qsub_job_id):
         """ Query whether job is in error state.
 
         Returns:
@@ -455,7 +459,7 @@ class QstatJobStatus(object):
         if self.cached_job_status is None:
             return None
 
-        return 'e' in self.cached_job_status.get(job_id, '').lower()
+        return 'e' in self.cached_job_status.get(qsub_job_id, '').lower()
 
     def get_qstat_job_status(self):
         """ Run qstat to obtain job statues.
