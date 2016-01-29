@@ -411,9 +411,11 @@ class QstatError(Exception):
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
-    def __init__(self, qenv, max_qstat_failures=10):
+    def __init__(self, qenv, qstat_period, max_qstat_failures=10):
         self.qenv = qenv
+        self.qstat_period = qstat_period
         self.max_qstat_failures = max_qstat_failures
+        self.qstat_attempt_time = None
         self.cached_job_status = None
         self.qstat_failures = 0
         self.qstat_time = None
@@ -422,6 +424,11 @@ class QstatJobStatus(object):
     def update(self):
         """ Update cached job status after sleeping for remainder of polling time.
         """
+        if self.qstat_attempt_time is not None:
+            time_since_attempt = time.time() - self.qstat_attempt_time
+            sleep_time = max(0, self.qstat_period - time_since_attempt)
+            time.sleep(sleep_time)
+        self.qstat_attempt_time = time.time()
         try:
             self.cached_job_status = self.get_qstat_job_status()
             self.qstat_failures = 0
@@ -497,8 +504,7 @@ class AsyncQsubJobQueue(JobQueue):
         self.modules = modules
         self.qenv = QEnv()
         self.native_spec = native_spec
-        self.qstat_period = qstat_period
-        self.qstat = QstatJobStatus(self.qenv)
+        self.qstat = QstatJobStatus(self.qenv, qstat_period)
         self.jobs = dict()
         self.name_islocal = dict()
         self.local_queue = LocalJobQueue(modules)
@@ -531,7 +537,6 @@ class AsyncQsubJobQueue(JobQueue):
             for name, job in self.jobs.iteritems():
                 if job.finished:
                     return name
-            time.sleep(self.qstat_period)
             self.qstat.update()
 
     def receive(self, name):
