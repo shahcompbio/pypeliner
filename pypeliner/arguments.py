@@ -167,6 +167,7 @@ class OutputFileArg(Arg):
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
         self.resolved = self.resource.filename + suffix
+        helpers.makedirs(os.path.dirname(self.resolved))
         return self.resolved
     def finalize(self, db):
         self.resource.finalize(self.resolved, db)
