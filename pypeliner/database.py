@@ -59,7 +59,7 @@ class NodeManager(object):
         for level in xrange(len(axes)):
             if level not in subset:
                 continue
-            for pre_chunks, level_chunks in itertools.groupby(chunks, lambda a: a[:level]):
+            for pre_chunks, level_chunks in itertools.groupby(sorted(chunks), lambda a: a[:level]):
                 level_node = node
                 for idx in xrange(level):
                     level_node += identifiers.AxisInstance(axes[idx], pre_chunks[idx])
