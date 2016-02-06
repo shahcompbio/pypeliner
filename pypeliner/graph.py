@@ -15,7 +15,7 @@ class AmbiguousInputException(Exception):
     def __init__(self, id):
         self.id = id
     def __str__(self):
-        return 'input {0} not created by any job'.format(self.id)
+        return 'temp input {0} not created by any job'.format(self.id)
 
 class AmbiguousOutputException(Exception):
     def __init__(self, output, jobs):
@@ -73,11 +73,14 @@ class DependencyGraph:
             raise DependencyCycleException(cycles[0])
 
         # Check for ambiguous output
+        # and temps with no creating job
         for node in self.G.nodes():
             if node[0] == 'resource':
                 created_by = [edge[0][1] for edge in self.G.in_edges(node)]
                 if len(created_by) > 1:
                     raise AmbiguousOutputException(node[1], created_by)
+                if node[1] not in inputs and len(created_by) == 0:
+                    raise AmbiguousInputException(node[1])
 
         # Assume pipeline inputs exist
         self.created.update(inputs)
