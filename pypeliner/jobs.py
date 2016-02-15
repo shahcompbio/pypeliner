@@ -257,7 +257,7 @@ class JobCallable(object):
         if self.func == commandline.execute:
             return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
         else:
-            return self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
+            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
     def __call__(self):
         with open(self.stdout_filename, 'w', 0) as stdout_file, open(self.stderr_filename, 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
