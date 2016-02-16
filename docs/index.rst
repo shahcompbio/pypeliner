@@ -25,9 +25,8 @@ Contents:
    :glob:
 
    installation
-   quickstart
+   concepts
    tutorial
-   examples
    api
 
 

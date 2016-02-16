@@ -33,34 +33,42 @@ arduous when the size and complexity of the pipeline grows.
       nature of ``bwa``, and perform the process in smaller chunks, merging at the end
 
 We will focus on the first 2 issues, then revisit the third in a subsequent section.
-To run the same commands using pypeliner we first create a :py:class:`pypeliner.scheduler.Scheduler`
+To run the same commands using pypeliner we first create a :py:class:`pypeliner.workflow.Workflow`
 object::
 
-    import pypeliner
+    import pypeliner.workflow
 
-    scheduler = pypeliner.scheduler.Scheduler()
+    workflow = pypeliner.workflow.Workflow()
 
-Add the jobs to the scheduler by calling :py:func:`pypeliner.scheduler.Scheduler.commandline`::
+Add the jobs to the workflow by calling :py:func:`pypeliner.workflow.Workflow.commandline`::
 
-    scheduler.commandline('bwa_aln', (), {},
-        'bwa', 'aln',
-        pypeliner.managed.InputFile('genome.fasta'),
-        pypeliner.managed.InputFile('input.fastq'),
-        '>',
-        pypeliner.managed.TempOutputFile('tmp.sai'))
+    workflow.commandline(
+        name='bwa_aln',
+        args=(
+            'bwa', 'aln',
+            pypeliner.managed.InputFile('genome.fasta'),
+            pypeliner.managed.InputFile('input.fastq'),
+            '>',
+            pypeliner.managed.TempOutputFile('tmp.sai'),
+        )
+    )
 
-    scheduler.commandline('bwa_samse', (), {},
-        'bwa', 'samse',
-        pypeliner.managed.InputFile('genome.fasta'),
-        pypeliner.managed.TempInputFile('tmp.sai'),
-        pypeliner.managed.InputFile('input.fastq'),
-        '>',
-        pypeliner.managed.TempOutputFile('output.sam'))
+    workflow.commandline(
+        name='bwa_samse',
+        args=(
+            'bwa', 'samse',
+            pypeliner.managed.InputFile('genome.fasta'),
+            pypeliner.managed.TempInputFile('tmp.sai'),
+            pypeliner.managed.InputFile('input.fastq'),
+            '>',
+            pypeliner.managed.TempOutputFile('output.sam'),
+        )
+    )
 
-Then run the jobs using an execution queue::
+Then create a :py:class:`pypeliner.app.Pypeline` object and run the jobs::
 
-    with pypeliner.execqueue.LocalJobQueue([]) as exec_queue: 
-        scheduler.run(exec_queue)
+    pyp = pypeliner.app.Pypeline()
+    pyp.run(workflow)
 
 Trivially, the syntax is slightly different for executing a command line.  The first argument gives a name to the
 command line job.  We will ignore the second and third argument for now.  The ``>`` argument will be familiar to `bash`
@@ -89,59 +97,61 @@ pypeliner can:
 Creating a pypeliner script
 ---------------------------
 
-We can create a script using the above code, however, :py:class:`pypeliner.scheduler.Scheduler` objects have a number of
-configuration options that we may like to set using a configuration file, and override with command line arguments to
-our script.  Additionally, we might like to log the output of our ``bwa`` job.
+We can create a script using the above code that will run our ``bwa`` pipeline.  We can then run the ``bwa`` pipeline from the command line, providing filenames and additional pypeliner options as command line arguments.
 
-To ease this process, pypeliner provides the :py:mod:`pypeliner.app` module.  We reimplement our pedagogic ``bwa``
-example below.
-
-Import pypeliner::
+Import pypeliner and argparse::
 
     import pypeliner
+    import argparse
 
 Create an ``argparse.ArgumentParser`` object to handle command line arguments
 including a config, then parse the arguments::
 
     argparser = argparse.ArgumentParser()
     pypeliner.app.add_arguments(argparser)
-    argparser.add_argument('config', help='Configuration Filename')
     argparser.add_argument('genome', help='Genome Fasta')
     argparser.add_argument('reads', help='Reads Fastq')
     argparser.add_argument('alignments', help='Alignments Sam')
     args = vars(argparser.parse_args())
 
-Read in the config.  Here we are using a python syntax style config::
+Create a :py:class:`pypeliner.app.Pypeline` object with the config as the command line arguments::
 
-    config = {}
-    execfile(args['config'], config)
+    pyp = pypeliner.app.Pypeline(config=args)
 
-Override config options with command line arguments::
+Create a :py:class:`pypeliner.workflow.Workflow` object to which we will add jobs::
 
-    config.update(args)
-
-Create a :py:class:`pypeliner.app.Pypeline` object with the config::
-
-    pyp = pypeliner.app.Pypeline([], config)
+    workflow = pypeliner.workflow.Workflow()
 
 Add the job and run::
 
-    pyp.sch.commandline('bwa_aln', (), {},
-        'bwa', 'aln',
-        pypeliner.managed.InputFile(args['genome']),
-        pypeliner.managed.InputFile(args['reads']),
-        '>',
-        pypeliner.managed.TempOutputFile('tmp.sai'))
+    genome_filename = args['genome']
+    reads_filename = args['reads']
+    alignments_filename = args['alignments']
 
-    pyp.sch.commandline('bwa_samse', (), {},
-        'bwa', 'samse',
-        pypeliner.managed.InputFile(args['genome']),
-        pypeliner.managed.TempInputFile('tmp.sai'),
-        pypeliner.managed.InputFile(args['reads']),
-        '>',
-        pypeliner.managed.OutputFile(args['alignments']))
+    workflow.commandline(
+        name='bwa_aln',
+        args=(
+            'bwa', 'aln',
+            pypeliner.managed.InputFile(genome_filename),
+            pypeliner.managed.InputFile(reads_filename),
+            '>',
+            pypeliner.managed.TempOutputFile('tmp.sai'),
+        )
+    )
 
-    pyp.sch.run()
+    workflow.commandline(
+        name='bwa_samse',
+        args=(
+            'bwa', 'samse',
+            pypeliner.managed.InputFile(genome_filename),
+            pypeliner.managed.TempInputFile('tmp.sai'),
+            pypeliner.managed.InputFile(reads_filename),
+            '>',
+            pypeliner.managed.OutputFile(alignments_filename),
+        )
+    )
+
+    pyp.sch.run(workflow)
 
 Running the script above with ``-h`` shows the command line options available to control a pipeline.  The options are
 described in the :py:mod:`pypeliner.app` api reference.
@@ -150,7 +160,7 @@ Adding a python function
 ------------------------
 
 At some point in your pipeline you may wish to transform your data using a small amount of python code.  With pypeliner
-you can add a python function to your pipeline in a similar way to adding command lines.
+you can add a python function job to your pipeline in a similar way to adding command line jobs.
 
 For example, perhaps you have the following function that filters sam files (produced by ``bwa samse``) to remove
 unmapped reads::
@@ -165,21 +175,28 @@ unmapped reads::
 We can add this function to the end of our pipeline and thus post-process the results of ``bwa samse`` using
 :py:func:`pypeliner.scheduler.Scheduler.transform` as follows::
 
-    pyp.sch.commandline('bwa_samse', (), {},
-        'bwa', 'samse',
-        pypeliner.managed.InputFile(args['genome']),
-        pypeliner.managed.TempInputFile('tmp.sai'),
-        pypeliner.managed.InputFile(args['reads']),
-        '>',
-        pypeliner.managed.TempOutputFile('raw.sam'))
+    workflow.commandline(
+        name='bwa_samse',
+        args=(
+            'bwa', 'samse',
+            pypeliner.managed.InputFile(genome_filename),
+            pypeliner.managed.TempInputFile('tmp.sai'),
+            pypeliner.managed.InputFile(reads_filename),
+            '>',
+            pypeliner.managed.TempOutputFile('raw.sam'),
+        )
+    )
 
-    pyp.sch.transform('filter_unmapped', (), {},
-        filter_unmapped,
-        None,
-        pypeliner.managed.TempInputFile('raw.sam'),
-        pypeliner.managed.OutputFile(args['alignments']))
+    workflow.transform(
+        name='filter_unmapped',
+        func=filter_unmapped,
+        args=(
+            pypeliner.managed.TempInputFile('raw.sam'),
+            pypeliner.managed.OutputFile(alignments_filename),
+        )
+    )
 
-    pyp.sch.run()
+    pyp.sch.run(workflow)
 
 Note that we have made the output of ``bwa samse`` a temporary output file named ``raw.sam``, and given it as input to
 ``filter_unmapped``.  The 4th argument to ``transform`` is the python function we wish to call.  The 5th can be
@@ -198,7 +215,7 @@ function in your main script is as follows::
 
         ...
 
-        pyp.sch.transform('filter_unmapped', (), {},
+        workflow.transform('filter_unmapped', (), {},
             myscript.filter_unmapped,
 
         ...
@@ -214,11 +231,11 @@ If the function is defined in a separate module, you must add it to the module l
 
     import mymod
 
-    pyp = pypeliner.app.Pypeline([mymod], config)
+    pyp = pypeliner.app.Pypeline(modules=[mymod], config=config)
 
     ...
 
-    pyp.sch.transform('filter_unmapped', (), {},
+    workflow.transform('filter_unmapped', (), {},
         mymod.filter_unmapped,
 
     ...
@@ -249,12 +266,15 @@ arguments ``0``, ``1`` and ``2``.
 
 We can add this function to our pipeline as follows::
 
-    pyp.sch.transform('split_fastq', (), {},
-        split_file_byline,
-        None,
-        pypeliner.managed.InputFile('input.fastq'),
-        4*1000000,
-        pypeliner.managed.TempOutputFile('input.fastq', 'reads'))
+    workflow.transform(
+        name='split_fastq',
+        func=split_file_byline,
+        args=(
+            pypeliner.managed.InputFile('input.fastq'),
+            4*1000000,
+            pypeliner.managed.TempOutputFile('input.fastq', 'reads'),
+        )
+    )
 
 Pypeliner will call ``split_file_byline``, providing a callback as the 3rd argument, and this callback will provide the
 filename for each chunk of ``input.fastq``.  For our input file with 2,500,000 reads (10,000,000 lines), 3 files will be
@@ -268,20 +288,30 @@ must be run once for each chunk of the ``'reads'`` split axis, inputting each ch
 and outputting ``'tmp.sai', 'reads'`` and then ``'raw.sam', 'reads'``.  To do so we simply add ``'reads'`` to the second
 argument of each call to ``commandline`` or ``transform``, and to the appropriate managed objects::
 
-    pyp.sch.commandline('bwa_aln', ('reads',), {},
-        'bwa', 'aln',
-        pypeliner.managed.InputFile(args['genome']),
-        pypeliner.managed.TempInputFile('input.fastq', 'reads'),
-        '>',
-        pypeliner.managed.TempOutputFile('tmp.sai', 'reads'))
+    workflow.commandline(
+        name='bwa_aln',
+        axes=('reads',),
+        args=(
+            'bwa', 'aln',
+            pypeliner.managed.InputFile(genome_filename),
+            pypeliner.managed.TempInputFile('input.fastq', 'reads'),
+            '>',
+            pypeliner.managed.TempOutputFile('tmp.sai', 'reads'),
+        )
+    )
 
-    pyp.sch.commandline('bwa_samse', ('reads',), {},
-        'bwa', 'samse',
-        pypeliner.managed.InputFile(args['genome']),
-        pypeliner.managed.TempInputFile('tmp.sai', 'reads'),
-        pypeliner.managed.TempInputFile('input.fastq', 'reads'),
-        '>',
-        pypeliner.managed.TempOutputFile('raw.sam', 'reads'))
+    workflow.commandline(
+        name='bwa_samse',
+        axes=('reads',),
+        args=(
+            'bwa', 'samse',
+            pypeliner.managed.InputFile(genome_filename),
+            pypeliner.managed.TempInputFile('tmp.sai', 'reads'),
+            pypeliner.managed.TempInputFile('input.fastq', 'reads'),
+            '>',
+            pypeliner.managed.TempOutputFile('raw.sam', 'reads'),
+        )
+    )
 
 Finally we require a merge function to create ``'raw.sam'`` from the set ``'raw.sam', 'reads'`` files.  A merge output of
 a job must have the same set of axes as the job, and one additional axis, the merge axis.  For a merge output, pypeliner
@@ -298,10 +328,80 @@ Merging by line is sufficient for sam files::
 
 We can add this merge job with an additional transform::
 
-    pyp.sch.transform('merge_fastq', (), {},
-        merge_file_byline,
-        None,
-        pypeliner.managed.TempInputFile('raw.sam', 'reads'),
-        pypeliner.managed.TempOutputFile('raw.sam'))
+    workflow.transform(
+        name='merge_sam',
+        func=merge_file_byline,
+        args=(
+            pypeliner.managed.TempInputFile('raw.sam', 'reads'),
+            pypeliner.managed.TempOutputFile('raw.sam'),
+        )
+    )
+
+Creating a workflow function
+----------------------------
+
+Now that we have defined a set of jobs that accomplish a task, we would like to be able to resuse this functionality in other contexts.  One way would be to create a script that runs the above pipeline and call that pipeline from other pipelines.  Alternatively, we can create a workflow function that can be recursively included in other pypeliner pipelines.
+
+A workflow function is simply a function that returns a :py:class:`pypeliner.workflow.Workflow` object.  For example, an abbreviated version of the bwa align workflow function would be::
+
+    def create_bwa_align_workflow(genome_filename, reads_filename, alignments_filename):
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.transform(
+            name='split_fastq'
+            ...
+        )
+
+        workflow.commandline(
+            name='bwa_aln',
+            ...
+        )
+
+        workflow.commandline(
+            name='bwa_samse',
+            ...
+        )
+
+        workflow.transform(
+            name='merge_sam',
+            ...
+        )
+
+        return workflow
+
+Workflow functions are useful for creating larger workflows composed of smaller sub-workflows.
+
+Subworkflows
+------------
+
+A subworkflow is a smaller workflow that has been encorporated as a module in a larger workflow.  Subworkflows are added to a workflow similarly to transform or command line jobs.  We provide pypeliner with the function to execute to create the subworkflow, and a set of arguments to that function, some of which will be managed objects.  Pypeliner will then execute the function, and create and run the subworkflow, conditional on the inputs and outputs requiring a rerun.  
+
+Continuing our example, perhaps we would like to extract the reads from a bam and do bwa alignment using the bwa alignment workflow as a subworkflow::
+
+    bam_filename = 'sample.bam'
+    alignments_filename = 'alignments.sam'
+
+	workflow = pypeliner.workflow.Workflow()
+
+    workflow.subworkflow(
+    	name='extract_reads',
+    	func=extract_reads,
+    	args=(
+    		managed.InputFile(bam_filename),
+    		managed.TempOutputFile('reads.fastq'),
+    	),
+    )
+
+    workflow.subworkflow(
+        name='bwa_workflow',
+        func=create_bwa_align_workflow,
+        args=(
+        	genome_filename,
+            managed.TempInputFile('reads.fastq'),
+        	managed.OutputFile(alignments_filename),
+        ),
+    )
+
+The above workflow will first extract reads with the ``extract_reads`` function, then check the inputs and outputs of the ``bwa_workflow`` job.  If the outputs are out of date, pypeliner will run the ``create_bwa_align_workflow`` function with the 3 arguments specified, resolving the temp input and output appropriately.  The resulting workflow will be used to add more jobs to the scheduling system.  If the outputs are up to date, the subworkflow will be skipped.
 
 

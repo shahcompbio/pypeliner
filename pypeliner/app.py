@@ -15,29 +15,21 @@ including a config, then parse the arguments::
 
     argparser = argparse.ArgumentParser()
     pypeliner.app.add_arguments(argparser)
-    argparser.add_argument('config', help='Configuration Filename')
     argparser.add_argument('arg1', help='Additional argument 1')
     argparser.add_argument('arg2', help='Additional argument 2')
     args = vars(argparser.parse_args())
 
-Read in the config.  Here we are using a python syntax style config::
+Create a :py:class:`pypeliner.app.Pypeline` object passing the arguments to the config parameter::
 
-    config = {}
-    execfile(args['config'], config)
+    pyp = pypeliner.app.Pypeline(config=args)
 
-Override config options with command line arguments::
+Create a workflow and run::
 
-    config.update(args)
+    workflow = pypeliner.workflow.Workflow()
+    workflow.transform(...)
+    workflow.commandline(...)
 
-Create a :py:class:`pypeliner.app.Pypeline` object with the config::
-
-    pyp = pypeliner.app.Pypeline([], config)
-
-Add jobs and run::
-
-    pyp.sch.transform(...)
-    pyp.sch.commandline(...)
-    pyp.sch.run()
+    pyp.run(workflow)
 
 The following options are supported via the config dictionary argument to 
 :py:class:`pypeliner.app.Pypeline` or as command line arguments
@@ -169,10 +161,11 @@ class Pypeline(object):
     the scheduler with options provided by the conifg argument.
 
     """
-    def __init__(self, modules, config):
+    def __init__(self, modules=(), config=None):
         self.modules = modules
         self.config = dict([(info.name, info.default) for info in config_infos])
-        self.config.update(config)
+        if config is not None:
+            self.config.update(config)
 
         datetime_log_prefix = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
         self.logs_dir = os.path.join(self.config['tmpdir'], 'log', datetime_log_prefix)

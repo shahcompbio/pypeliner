@@ -3,6 +3,16 @@
 Installation
 ============
 
+From pip
+--------
+
+Pypeliner is available from pip, to install, type:
+
+    $ pip install pypeliner
+
+From bitbucket
+--------------
+
 Obtain pypeliner from the bitbucket using git::
 
 	$ git clone https://dranew@bitbucket.org/dranew/pypeliner.git

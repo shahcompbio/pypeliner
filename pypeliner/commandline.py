@@ -33,6 +33,8 @@ class CommandNotFoundException(Exception):
 def execute(*args):
     """ Execute a command line
 
+    :param args: executable and command line arguments
+
     Execute a command line, and handle pipes between processes and to files.
     The '|', '>' and '<' characters are interpretted as pipes between processes,
     to files and from files in the same way as in bash.  Each process is checked
