@@ -172,27 +172,4 @@ class Scheduler(object):
         job.finalize(received)
         job.complete()
 
-    def pretend(self, workflow_def):
-        """ Pretend run the pipeline.
-
-        Print jobs that would be run, but do not actually run them.  May halt before completion of
-        the pipeline if some axes have not yet been defined.
-
-        """
-        workflow = graph.DependencyGraph()
-        with resourcemgr.ResourceManager(self.temps_dir, self.db_dir) as resmgr, self.PipelineLock():
-            nodemgr = nodes.NodeManager(self.nodes_dir, self.temps_dir)
-            jobs = self._create_jobs(workflow_def, resmgr, nodemgr)
-            self._workflow_regenerate(resmgr, nodemgr, jobs, workflow)
-            while workflow.jobs_ready:
-                job = workflow.next_job()
-                if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
-                    self._logger.info('job ' + job.displayname + ' executing')
-                    if not job.trigger_regenerate:
-                        workflow.notify_completed(job)
-                else:
-                    self._logger.info('job ' + job.displayname + ' skipped')
-                    workflow.notify_completed(job)
-                self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
-        return True
 

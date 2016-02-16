@@ -82,9 +82,6 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Do not prune jobs that are not necessary for the requested outputs.  Run
         all jobs.
 
-    pretend
-        Do not run any jobs, instead just print what would be run.
-
 """
 
 import sys
@@ -115,7 +112,6 @@ config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporar
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('noprune', bool, False, 'do not prune unecessary jobs'))
-config_infos.append(ConfigInfo('pretend', bool, False, 'do nothing, report initial jobs to be run'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -179,10 +175,7 @@ class Pypeline(object):
         helpers.symlink(self.logs_dir, os.path.join(self.config['tmpdir'], 'log', 'latest'))
         logging.basicConfig(level=logging.DEBUG, filename=self.pipeline_log_filename, filemode='a')
         console = logging.StreamHandler()
-        if self.config['pretend']:
-            console.setLevel(logging.DEBUG)
-        else:
-            console.setLevel(self.config['loglevel'])
+        console.setLevel(self.config['loglevel'])
         logging.getLogger('').addHandler(console)
         logfmt = helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
@@ -214,8 +207,5 @@ class Pypeline(object):
         self.sch.prune = not self.config['noprune']
 
     def run(self, workflow):
-        if self.config['pretend']:
-            return self.sch.pretend()
-        else:
-            with self.exec_queue:
-                return self.sch.run(workflow, self.exec_queue)
+        with self.exec_queue:
+            return self.sch.run(workflow, self.exec_queue)
