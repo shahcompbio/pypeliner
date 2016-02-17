@@ -31,8 +31,6 @@ class Scheduler(object):
     def __init__(self):
         self._logger = logging.getLogger('scheduler')
         self.max_jobs = 1
-        self.rerun = False
-        self.repopulate = False
         self.cleanup = True
         self.prune = True
         self.workflow_dir = './'
@@ -58,12 +56,13 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = helpers.abspath(value)
 
-    def run(self, workflow_def, exec_queue):
+    def run(self, workflow_def, exec_queue, runskip):
         """ Run the pipeline
 
         :param workflow_def: workflow of jobs to be submitted.
         :param exec_queue: queue to which jobs will be submitted.  The queues implemented
                            in :py:mod:`pypeliner.execqueue` should suffice for most purposes
+        :param runskip: callable object returning boolean, used to determine whether to run jobs
 
         Call this function after adding jobs to a workflow using
         :py:func:`pypeliner.scheduler.Scheduler.transform` etc.  Jobs will be run locally or
@@ -76,12 +75,12 @@ class Scheduler(object):
         self._active_jobs = dict()
         self._job_exc_dirs = set()
         with database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
-            workflow = graph.WorkflowInstance(workflow_def, db_factory, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+            workflow = graph.WorkflowInstance(workflow_def, db_factory, runskip, prune=self.prune, cleanup=self.cleanup)
             failing = False
             try:
                 try:
                     while True:
-                        self._add_jobs(exec_queue, workflow)
+                        self._add_jobs(exec_queue, workflow, runskip)
                         if exec_queue.empty:
                             break
                         self._wait_next_job(exec_queue, workflow)
@@ -126,13 +125,13 @@ class Scheduler(object):
         self._add_job(exec_queue, job)
         return True
 
-    def _add_jobs(self, exec_queue, workflow):
+    def _add_jobs(self, exec_queue, workflow, runskip):
         while exec_queue.length < self.max_jobs:
             try:
                 job = workflow.pop_next_job()
             except graph.NoJobs:
                 return
-            if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+            if runskip(job):
                 self._add_job(exec_queue, job)
             else:
                 job.complete()

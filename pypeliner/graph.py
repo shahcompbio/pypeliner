@@ -131,18 +131,17 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, db_factory, node=identifiers.Node(), prune=False, cleanup=False, rerun=False, repopulate=False):
+    def __init__(self, workflow_def, db_factory, runskip, node=identifiers.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.db_factory = db_factory
+        self.runskip = runskip
         self.db = db_factory.create(node.subdir)
         self.node = node
         self.graph = DependencyGraph()
         self.subworkflows = list()
         self.prune = prune
         self.cleanup = cleanup
-        self.rerun = rerun
-        self.repopulate = repopulate
         self.regenerate()
 
     def regenerate(self):
@@ -205,7 +204,7 @@ class WorkflowInstance(object):
                 continue
 
             if job.is_subworkflow:
-                if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                if self.runskip(job):
                     send = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname)
                     self._logger.info('subworkflow ' + job.displayname + ' -> ' + send.displaycommand)
@@ -219,7 +218,7 @@ class WorkflowInstance(object):
                         self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text())
                         raise IncompleteWorkflowException()
                     node = self.node + job.node + identifiers.Namespace(job.job_def.name)
-                    workflow = WorkflowInstance(workflow_def, self.db_factory, node=node, prune=self.prune, cleanup=self.cleanup, rerun=self.rerun, repopulate=self.repopulate)
+                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, prune=self.prune, cleanup=self.cleanup)
                     self.subworkflows.append((job, received, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')
@@ -227,7 +226,7 @@ class WorkflowInstance(object):
                 self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 continue
             elif job.ctx.get('immediate', False):
-                if job.out_of_date or self.rerun or self.repopulate and job.output_missing:
+                if self.runskip(job):
                     send = job.create_callable()
                     self._logger.info('creating job ' + job.displayname)
                     self._logger.info('job ' + job.displayname + ' -> ' + send.displaycommand)

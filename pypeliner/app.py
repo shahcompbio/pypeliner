@@ -201,11 +201,14 @@ class Pypeline(object):
         self.sch.workflow_dir = self.config['tmpdir']
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
-        self.sch.repopulate = self.config['repopulate']
-        self.sch.rerun = self.config['rerun']
         self.sch.cleanup = not self.config['nocleanup']
         self.sch.prune = not self.config['noprune']
 
+        self.runskip = BasicRunSkip(
+            repopulate=self.config['repopulate'],
+            rerun=self.config['rerun'],
+        )
+
     def run(self, workflow):
         with self.exec_queue:
-            return self.sch.run(workflow, self.exec_queue)
+            return self.sch.run(workflow, self.exec_queue, self.runskip)
