@@ -131,12 +131,12 @@ class Scheduler(object):
                 job = workflow.pop_next_job()
             except graph.NoJobs:
                 return
+            self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
             if runskip(job):
                 self._add_job(exec_queue, job)
             else:
                 job.complete()
                 self._logger.info('job ' + job.displayname + ' skipped')
-            self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
 
     def _wait_next_job(self, exec_queue, workflow):
         name = exec_queue.wait()

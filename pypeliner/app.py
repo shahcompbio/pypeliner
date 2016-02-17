@@ -82,6 +82,10 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Do not prune jobs that are not necessary for the requested outputs.  Run
         all jobs.
 
+    interactive
+        Run the pipeline in interactive mode, prompting at each step as to whether the job
+        should be rerun.
+
 """
 
 import sys
@@ -94,6 +98,7 @@ from collections import *
 
 import pypeliner
 import helpers
+import runskip
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -112,6 +117,7 @@ config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporar
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('noprune', bool, False, 'do not prune unecessary jobs'))
+config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -202,10 +208,17 @@ class Pypeline(object):
         self.sch.cleanup = not self.config['nocleanup']
         self.sch.prune = not self.config['noprune']
 
-        self.runskip = BasicRunSkip(
-            repopulate=self.config['repopulate'],
-            rerun=self.config['rerun'],
-        )
+        if self.config['interactive']:
+            default = runskip.BasicRunSkip(
+                repopulate=self.config['repopulate'],
+                rerun=self.config['rerun'],
+            )
+            self.runskip = runskip.InteractiveRunSkip(default)
+        else:
+            self.runskip = runskip.BasicRunSkip(
+                repopulate=self.config['repopulate'],
+                rerun=self.config['rerun'],
+            )
 
     def run(self, workflow):
         with self.exec_queue:

@@ -1,6 +1,7 @@
 import os
 import pickle
 
+import helpers
 import identifiers
 
 
@@ -44,6 +45,8 @@ class Resource(Dependency):
         raise NotImplementedError
     def get_createtime(self, db):
         raise NotImplementedError
+    def touch(self, db):
+        raise NotImplementedError
 
 
 def resolve_user_filename(name, node, fnames=None, template=None):
@@ -77,6 +80,8 @@ class UserResource(Resource):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
+    def touch(self, db):
+        helpers.touch(self.filename)
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.filename)
@@ -96,6 +101,9 @@ class TempFileResource(Resource):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
         return db.resmgr.retrieve_createtime(self.name, self.node, self.get_filename(db))
+    def touch(self, db):
+        helpers.touch(self.get_filename(db))
+        db.resmgr.store_createtime(self.name, self.node, self.get_filename(db))
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.get_filename(db))
@@ -118,6 +126,8 @@ class TempObjResource(Resource):
         if os.path.exists(self.get_filename(db)):
             return os.path.getmtime(self.get_filename(db))
         return None
+    def touch(self, db):
+        pass
 
 
 def obj_equal(obj1, obj2):

@@ -204,6 +204,7 @@ class WorkflowInstance(object):
                 continue
 
             if job.is_subworkflow:
+                self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 if self.runskip(job):
                     send = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname)
@@ -223,9 +224,9 @@ class WorkflowInstance(object):
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')
                     job.complete()
-                self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 continue
             elif job.ctx.get('immediate', False):
+                self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
                 if self.runskip(job):
                     send = job.create_callable()
                     self._logger.info('creating job ' + job.displayname)
