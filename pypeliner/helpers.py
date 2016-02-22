@@ -56,7 +56,7 @@ def makedirs(dirname):
     try:
         os.makedirs(dirname)
     except OSError as e:
-        if e.errno != 17:
+        if e.errno != errno.EEXIST:
             raise
     assert os.path.isdir(dirname)
 
@@ -71,7 +71,7 @@ def symlink(source, link_name):
     try:
         os.remove(link_name)
     except OSError as e:
-        if e.errno != 2:
+        if e.errno != errno.ENOENT:
             raise
     os.symlink(source, link_name)
 
