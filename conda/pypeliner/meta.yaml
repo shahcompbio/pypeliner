@@ -1,0 +1,26 @@
+package:
+  name: pypeliner
+  version: "0.4.1"
+
+source:
+  fn: pypeliner-0.4.1.tar.gz
+  url: https://bitbucket.org/dranew/pypeliner/get/v0.4.1.tar.gz
+
+requirements:
+  build:
+    - python
+    - networkx >=1.11
+
+  run:
+    - python
+    - networkx >=1.11
+
+test:
+  requires:
+    - nose
+
+about:
+  home: http://bitbucket.org/dranew/pypeliner
+  license: MIT
+  summary: 'In memory gene database searchable using an interval tree'
+
