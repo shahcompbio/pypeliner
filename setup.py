@@ -1,9 +1,11 @@
 from setuptools import setup
+import versioneer
 
 setup(
     name='pypeliner',
     packages=['pypeliner'],
-    version='0.4.1',
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     description='A library for creating informatic workflows or pipelines.',
     author='Andrew McPherson',
     author_email='andrew.mcpherson@gmail.com',
