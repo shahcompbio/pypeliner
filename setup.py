@@ -10,7 +10,7 @@ setup(
     author='Andrew McPherson',
     author_email='andrew.mcpherson@gmail.com',
     url='http://bitbucket.org/dranew/pypeliner',
-    download_url='https://bitbucket.org/dranew/pypeliner/get/v0.4.1.tar.gz',
+    download_url='https://bitbucket.org/dranew/pypeliner/get/v{}.tar.gz'.format(versioneer.get_version()),
     keywords=['scientific', 'framework'],
     classifiers=[],
 )

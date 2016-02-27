@@ -37,7 +37,7 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = "v"
-    cfg.parentdir_prefix = "pypeliner-"
+    cfg.parentdir_prefix = "None"
     cfg.versionfile_source = "pypeliner/_version.py"
     cfg.verbose = False
     return cfg
