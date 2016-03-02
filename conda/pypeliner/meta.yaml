@@ -1,10 +1,10 @@
 package:
   name: pypeliner
-  version: "0.4.1"
+  version: "0.4.3"
 
 source:
-  fn: pypeliner-0.4.1.tar.gz
-  url: https://bitbucket.org/dranew/pypeliner/get/v0.4.1.tar.gz
+  fn: pypeliner-0.4.3.tar.gz
+  url: https://bitbucket.org/dranew/pypeliner/get/v0.4.3.tar.gz
 
 requirements:
   build:
