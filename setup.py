@@ -1,9 +1,9 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 import versioneer
 
 setup(
     name='pypeliner',
-    packages=['pypeliner'],
+    packages=find_packages(),
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='A library for creating informatic workflows or pipelines.',
@@ -13,5 +13,6 @@ setup(
     download_url='https://bitbucket.org/dranew/pypeliner/get/v{}.tar.gz'.format(versioneer.get_version()),
     keywords=['scientific', 'framework'],
     classifiers=[],
+    package_data={'pypeliner': ['tests/*.input']},
 )
 

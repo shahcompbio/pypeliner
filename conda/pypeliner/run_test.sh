@@ -1,1 +1,1 @@
-nosetests pypeliner
+nosetests pypeliner.tests
