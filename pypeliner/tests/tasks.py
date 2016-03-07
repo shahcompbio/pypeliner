@@ -112,6 +112,8 @@ def write_files(out_filename_callback):
             f.write('file{0}\n'.format(chunk))
 
 def check_temp(output_filename, temp_filename):
+    with open(temp_filename, 'w'):
+        pass
     with open(output_filename, 'w') as output_file:
         output_file.write(temp_filename)
 

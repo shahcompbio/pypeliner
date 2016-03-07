@@ -1,6 +1,7 @@
 import os
 import logging
 import stat
+import shutil
 import hashlib
 import warnings
 import errno
@@ -78,3 +79,7 @@ def symlink(source, link_name):
 def touch(filename, times=None):
     with open(filename, 'a'):
         os.utime(filename, times)
+
+def removefiledir(filename):
+    saferemove(filename)
+    shutil.rmtree(filename, ignore_errors=True)

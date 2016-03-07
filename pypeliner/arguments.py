@@ -67,8 +67,13 @@ class TempFileArg(Arg):
     def __init__(self, db, name, node):
         self.name = name
         self.node = node
+    def _remove(self, db):
+        helpers.removefiledir(db.resmgr.get_filename(self.name, self.node))
     def resolve(self, db, direct_write):
+        self._remove(db)
         return db.resmgr.get_filename(self.name, self.node)
+    def finalize(self, db):
+        self._remove(db)
 
 
 class MergeTemplateArg(Arg):
