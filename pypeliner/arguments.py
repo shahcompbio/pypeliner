@@ -316,7 +316,7 @@ class TempSplitObjArg(Arg,SplitMergeArg):
         for resource in self.get_resources(db):
             instance_value = self.value.get(self.get_node_chunks(resource.node), None)
             if instance_value is None:
-                raise ValueError('unable to extract ' + str(chunks) + ' from ' + self.name + ' with values ' + str(self.value))
+                raise ValueError('unable to extract ' + str(resource.node) + ' from ' + self.name + ' with values ' + str(self.value))
             resource.finalize(instance_value, db)
 
 
