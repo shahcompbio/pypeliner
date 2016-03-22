@@ -52,8 +52,12 @@ class NodeManager(object):
             subset = set([])
         if len(chunks) == 0:
             raise ValueError('must be at least one chunk per axis')
-        if not isinstance(chunks[0], tuple):
-            chunks = [tuple([a]) for a in chunks]
+        def _convert_tuple(a):
+            if isinstance(a, tuple):
+                return a
+            else:
+                return tuple([a])
+        chunks = [_convert_tuple(a) for a in chunks]
         if len(axes) != len(chunks[0]):
             raise ValueError('for multiple axis, chunks must be a tuple of the same length')
         for level in xrange(len(axes)):
