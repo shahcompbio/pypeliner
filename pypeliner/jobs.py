@@ -5,6 +5,7 @@ import itertools
 import time
 import traceback
 import socket
+import datetime
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -50,6 +51,9 @@ class InputMissingException(Exception):
         self.job = job
     def __str__(self):
         return 'input {0} missing for job {1}'.format(self.input, self.job)
+
+def _pretty_date(ts):
+    return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
@@ -168,16 +172,23 @@ class JobInstance(object):
             status = ''
             if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
                 status = 'new'
-            explanation.append('input {0} {1} {2}'.format(input.build_displayname_filename(self.db, self.workflow.node), input.get_createtime(self.db), status))
+            text = 'input {0} {1} {2}'.format(
+                input.build_displayname_filename(self.db, self.workflow.node),
+                _pretty_date(input.get_createtime(self.db)),
+                status)
+            explanation.append(text)
         for output in self.output_resources:
             status = ''
             if output.get_createtime(self.db) is None:
                 status = 'missing'
             elif newest_input_date is not None and output.get_createtime(self.db) < newest_input_date:
-                status = '{0} old'.format(output.get_createtime(self.db))
+                status = '{0} old'.format(_pretty_date(output.get_createtime(self.db)))
             else:
-                status = '{0}'.format(output.get_createtime(self.db))
-            explanation.append('output {0} {1}'.format(output.build_displayname_filename(self.db, self.workflow.node), status))
+                status = '{0}'.format(_pretty_date(output.get_createtime(self.db)))
+            text = 'output {0} {1}'.format(
+                output.build_displayname_filename(self.db, self.workflow.node),
+                status)
+            explanation.append(text)
         return '\n'.join(explanation)
     @property
     def output_missing(self):
