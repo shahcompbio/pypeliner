@@ -6,10 +6,10 @@ Job scheduling class
 import logging
 import traceback
 
-import helpers
-import graph
-import execqueue
-import database
+import pypeliner.helpers
+import pypeliner.graph
+import pypeliner.execqueue
+import pypeliner.database
 
 
 class PipelineException(Exception):
@@ -47,14 +47,14 @@ class Scheduler(object):
         return self._workflow_dir
     @workflow_dir.setter
     def workflow_dir(self, value):
-        self._workflow_dir = helpers.abspath(value)
+        self._workflow_dir = pypeliner.helpers.abspath(value)
 
     @property
     def logs_dir(self):
         return self._logs_dir
     @logs_dir.setter
     def logs_dir(self, value):
-        self._logs_dir = helpers.abspath(value)
+        self._logs_dir = pypeliner.helpers.abspath(value)
 
     def run(self, workflow_def, exec_queue, runskip):
         """ Run the pipeline
@@ -74,8 +74,8 @@ class Scheduler(object):
         """
         self._active_jobs = dict()
         self._job_exc_dirs = set()
-        with database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
-            workflow = graph.WorkflowInstance(workflow_def, db_factory, runskip, prune=self.prune, cleanup=self.cleanup)
+        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
+            workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, prune=self.prune, cleanup=self.cleanup)
             failing = False
             try:
                 try:
@@ -129,7 +129,7 @@ class Scheduler(object):
         while exec_queue.length < self.max_jobs:
             try:
                 job = workflow.pop_next_job()
-            except graph.NoJobs:
+            except pypeliner.graph.NoJobs:
                 return
             self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
             if runskip(job):
@@ -148,7 +148,7 @@ class Scheduler(object):
 
         try:
             received = exec_queue.receive(name)
-        except execqueue.ReceiveError as e:
+        except pypeliner.execqueue.ReceiveError as e:
             self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc())
             received = None
 

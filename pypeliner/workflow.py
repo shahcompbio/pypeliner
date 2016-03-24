@@ -1,5 +1,5 @@
-import commandline
-import jobs
+import pypeliner.commandline
+import pypeliner.jobs
 
 
 def _setobj_helper(value):
@@ -49,7 +49,7 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name=name, axes=axes, ctx=ctx, func=commandline.execute, args=args)
+        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args)
 
     def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
@@ -87,7 +87,7 @@ class Workflow(object):
             ctx = self.default_ctx
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.JobDefinition(name, axes, ctx, func, jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
     def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
@@ -111,7 +111,7 @@ class Workflow(object):
         """
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.SubWorkflowDefinition(name, axes, func, jobs.CallSet(args=args, kwargs=kwargs))
+        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, func, pypeliner.jobs.CallSet(args=args, kwargs=kwargs))
 
     def changeaxis(self, name='', axes=(), var_name='', old_axis='', new_axis='', exact=True):
         """ Change the axis for a managed variable.  This acts as a regular jobs with
@@ -131,7 +131,7 @@ class Workflow(object):
         """
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis, exact=exact)
+        self.job_definitions[name] = pypeliner.jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis, exact=exact)
 
     def _create_job_instances(self, graph, db):
         """ Create job instances from job definitions given resource and node managers,

@@ -27,9 +27,8 @@ axis, the split axis.
 
 """
 
-import collections
+import pypeliner.arguments
 
-import arguments
 
 class JobArgMismatchException(Exception):
     def __init__(self, name, axes, node):
@@ -85,8 +84,8 @@ class Template(Managed):
     :param axes: The axes to use to resolve `name`.
 
     """
-    normal = arguments.TemplateArg
-    splitmerge = arguments.MergeTemplateArg
+    normal = pypeliner.arguments.TemplateArg
+    splitmerge = pypeliner.arguments.MergeTemplateArg
 
 class TempSpace(Managed):
     """ Represents a temporary file or directory that is not a dependency
@@ -103,7 +102,7 @@ class TempSpace(Managed):
                  axes of the referencing job.
 
     """
-    normal = arguments.TempFileArg
+    normal = pypeliner.arguments.TempFileArg
     splitmerge = None
 
 class InputFile(Managed):
@@ -127,8 +126,8 @@ class InputFile(Managed):
     as specified above, with chunks of the merge axis as keys.
 
     """
-    normal = arguments.InputFileArg
-    splitmerge = arguments.MergeFileArg
+    normal = pypeliner.arguments.InputFileArg
+    splitmerge = pypeliner.arguments.MergeFileArg
 
 class OutputFile(Managed):
     """ Interface class used to represent a user specified managed file output
@@ -151,8 +150,8 @@ class OutputFile(Managed):
     for that chunk.
 
     """
-    normal = arguments.OutputFileArg
-    splitmerge = arguments.SplitFileArg
+    normal = pypeliner.arguments.OutputFileArg
+    splitmerge = pypeliner.arguments.SplitFileArg
 
 class File(Managed):
     """ Interface class used to represent a user specified managed file
@@ -179,8 +178,8 @@ class TempInputObj(Managed):
     with chunks of the merge axis as keys.
 
     """
-    normal = arguments.TempInputObjArg
-    splitmerge = arguments.TempMergeObjArg
+    normal = pypeliner.arguments.TempInputObjArg
+    splitmerge = pypeliner.arguments.TempMergeObjArg
     def prop(self, prop_name):
         """
         Resolve to a property of the object instead of the object itself.
@@ -224,14 +223,14 @@ class TempOutputObj(Managed):
     with chunks of the split axis as keys.
 
     """
-    normal = arguments.TempOutputObjArg
-    splitmerge = arguments.TempSplitObjArg
+    normal = pypeliner.arguments.TempOutputObjArg
+    splitmerge = pypeliner.arguments.TempSplitObjArg
 
 class TempInputObjExtract(Managed):
     """ Interface class used to represent a property of a managed
     input object """
-    normal = arguments.TempInputObjArg
-    splitmerge = arguments.TempMergeObjArg
+    normal = pypeliner.arguments.TempInputObjArg
+    splitmerge = pypeliner.arguments.TempMergeObjArg
     def __init__(self, name, axes, func):
         Managed.__init__(self, name, *axes)
         self.kwargs['func'] = func
@@ -261,8 +260,8 @@ class TempInputFile(Managed):
     with chunks of the merge axis as keys.
 
     """
-    normal = arguments.TempInputFileArg
-    splitmerge = arguments.TempMergeFileArg
+    normal = pypeliner.arguments.TempInputFileArg
+    splitmerge = pypeliner.arguments.TempMergeFileArg
 
 class TempOutputFile(Managed):
     """ Interface class used to represent a managed temporary file output
@@ -279,8 +278,8 @@ class TempOutputFile(Managed):
     for that chunk.
 
     """
-    normal = arguments.TempOutputFileArg
-    splitmerge = arguments.TempSplitFileArg
+    normal = pypeliner.arguments.TempOutputFileArg
+    splitmerge = pypeliner.arguments.TempSplitFileArg
 
 class TempFile(Managed):
     """ Interface class used to represent a managed temporary file
@@ -305,7 +304,7 @@ class Instance(Managed):
     def __init__(self, axis):
         self.axis = axis
     def create_arg(self, job):
-        arg = arguments.InputInstanceArg(job.db, job.node, self.axis)
+        arg = pypeliner.arguments.InputInstanceArg(job.db, job.node, self.axis)
         job.args.append(arg)
         return arg
 
@@ -323,7 +322,7 @@ class InputChunks(Managed):
 
     """
     normal = None
-    splitmerge = arguments.InputChunksArg
+    splitmerge = pypeliner.arguments.InputChunksArg
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
 
@@ -342,7 +341,7 @@ class OutputChunks(Managed):
 
     """
     normal = None
-    splitmerge = arguments.OutputChunksArg
+    splitmerge = pypeliner.arguments.OutputChunksArg
     def __init__(self, *axes, **kwargs):
         Managed.__init__(self, 'chunks', *axes, **kwargs)
 

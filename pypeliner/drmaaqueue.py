@@ -5,8 +5,8 @@ import time
 
 from execqueue import LocalJobQueue, ReceiveError, qsub_format_name
 
-import delegator
-import helpers
+import pypeliner.delegator
+import pypeliner.helpers
 
 decode_status = {
     drmaa.JobState.UNDETERMINED: 'process status cannot be determined',
@@ -30,7 +30,7 @@ class DrmaaJob(object):
         self.session = session
         self.temps_dir = temps_dir
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = pypeliner.delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         
         self.debug_filenames = dict()
@@ -38,7 +38,7 @@ class DrmaaJob(object):
         self.debug_filenames['job stderr'] = os.path.join(self.temps_dir, 'job.err')
         self.debug_filenames['resources'] = os.path.join(self.temps_dir, 'resources.txt')
         for filename in self.debug_filenames.itervalues():
-            helpers.saferemove(filename)
+            pypeliner.helpers.saferemove(filename)
         
         job_template = self.session.createJobTemplate()
         job_template.remoteCommand = self.command[0]

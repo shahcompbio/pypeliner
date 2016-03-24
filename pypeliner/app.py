@@ -88,9 +88,9 @@ import string
 import datetime
 from collections import *
 
-import pypeliner
-import helpers
-import runskip
+import pypeliner.execqueue
+import pypeliner.helpers
+import pypeliner.runskip
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -170,13 +170,13 @@ class Pypeline(object):
         datetime_log_prefix = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
         self.logs_dir = os.path.join(self.config['tmpdir'], 'log', datetime_log_prefix)
         self.pipeline_log_filename = os.path.join(self.logs_dir, 'pipeline.log')
-        helpers.makedirs(self.logs_dir)
-        helpers.symlink(self.logs_dir, os.path.join(self.config['tmpdir'], 'log', 'latest'))
+        pypeliner.helpers.makedirs(self.logs_dir)
+        pypeliner.helpers.symlink(self.logs_dir, os.path.join(self.config['tmpdir'], 'log', 'latest'))
         logging.basicConfig(level=logging.DEBUG, filename=self.pipeline_log_filename, filemode='a')
         console = logging.StreamHandler()
         console.setLevel(self.config['loglevel'])
         logging.getLogger('').addHandler(console)
-        logfmt = helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
+        logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
 
@@ -190,8 +190,8 @@ class Pypeline(object):
         elif self.config['submit'] == 'pbs':
             self.exec_queue = pypeliner.execqueue.PbsJobQueue(self.modules, self.config['nativespec'], 20)
         elif self.config['submit'] == 'drmaa':
-            from pypeliner import drmaaqueue
-            self.exec_queue = drmaaqueue.DrmaaJobQueue(self.modules, self.config['nativespec'])
+            import pypeliner.drmaaqueue
+            self.exec_queue = pypeliner.drmaaqueue.DrmaaJobQueue(self.modules, self.config['nativespec'])
 
         self.sch = pypeliner.scheduler.Scheduler()
 
@@ -202,13 +202,13 @@ class Pypeline(object):
         self.sch.prune = not self.config['noprune']
 
         if self.config['interactive']:
-            default = runskip.BasicRunSkip(
+            default = pypeliner.runskip.BasicRunSkip(
                 repopulate=self.config['repopulate'],
                 rerun=self.config['rerun'],
             )
-            self.runskip = runskip.InteractiveRunSkip(default)
+            self.runskip = pypeliner.runskip.InteractiveRunSkip(default)
         else:
-            self.runskip = runskip.BasicRunSkip(
+            self.runskip = pypeliner.runskip.BasicRunSkip(
                 repopulate=self.config['repopulate'],
                 rerun=self.config['rerun'],
             )

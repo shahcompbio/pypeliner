@@ -3,8 +3,8 @@ import subprocess
 import time
 import logging
 
-import helpers
-import delegator
+import pypeliner.helpers
+import pypeliner.delegator
 
 
 class JobQueue(object):
@@ -84,7 +84,7 @@ class LocalJob(object):
     def __init__(self, ctx, name, sent, temps_dir, modules):
         self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = pypeliner.delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
@@ -125,7 +125,7 @@ class QsubJob(object):
     def __init__(self, ctx, name, sent, temps_dir, modules, qsub_bin, native_spec):
         self.name = name
         self.logger = logging.getLogger('execqueue')
-        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = pypeliner.delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
@@ -136,7 +136,7 @@ class QsubJob(object):
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
-        helpers.set_executable(self.script_filename)
+        pypeliner.helpers.set_executable(self.script_filename)
         self.submit_command = self.create_submit_command(ctx, self.name, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             self.debug_files.append(open(self.debug_filenames['submit stdout'], 'w'))
@@ -234,7 +234,7 @@ class QsubJobQueue(SubProcessJobQueue):
     """ Queue of qsub jobs """
     def __init__(self, modules, native_spec):
         super(QsubJobQueue, self).__init__(modules)
-        self.qsub_bin = helpers.which('qsub')
+        self.qsub_bin = pypeliner.helpers.which('qsub')
         self.native_spec = native_spec
         self.local_queue = LocalJobQueue(modules)
     def create(self, ctx, name, sent, temps_dir):
@@ -260,7 +260,7 @@ class AsyncQsubJob(object):
         self.qacct_failures = 0
         self.logger = logging.getLogger('execqueue')
 
-        self.delegated = delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = pypeliner.delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
 
         self.debug_filenames = dict()
@@ -271,12 +271,12 @@ class AsyncQsubJob(object):
         self.debug_filenames['qacct stdout'] = os.path.join(temps_dir, 'qacct.out')
         self.debug_filenames['qacct stderr'] = os.path.join(temps_dir, 'qacct.err')
         for filename in self.debug_filenames.itervalues():
-            helpers.saferemove(filename)
+            pypeliner.helpers.saferemove(filename)
 
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
-        helpers.set_executable(self.script_filename)
+        pypeliner.helpers.set_executable(self.script_filename)
 
         self.submit_command = self.create_submit_command(ctx, name, self.script_filename, self.qenv.qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
 
@@ -491,10 +491,10 @@ class QstatJobStatus(object):
 class QEnv(object):
     """ Paths to qsub, qstat, qdel """
     def __init__(self):
-        self.qsub_bin = helpers.which('qsub')
-        self.qstat_bin = helpers.which('qstat')
-        self.qacct_bin = helpers.which('qacct')
-        self.qdel_bin = helpers.which('qdel')
+        self.qsub_bin = pypeliner.helpers.which('qsub')
+        self.qstat_bin = pypeliner.helpers.which('qstat')
+        self.qacct_bin = pypeliner.helpers.which('qacct')
+        self.qdel_bin = pypeliner.helpers.which('qdel')
 
 class AsyncQsubJobQueue(JobQueue):
     """ Class for a queue of jobs run using subprocesses.  Maintains

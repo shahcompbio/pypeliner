@@ -1,8 +1,8 @@
 import os
 import pickle
 
-import helpers
-import identifiers
+import pypeliner.helpers
+import pypeliner.identifiers
 
 
 class OutputMissingException(Exception):
@@ -20,7 +20,7 @@ class Dependency(object):
     @property
     def id(self):
         return (self.name, self.node)
-    def build_displayname(self, base_node=identifiers.Node()):
+    def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         name = '/' + self.name
         if self.node.displayname != '':
             name = '/' + self.node.displayname + name
@@ -32,7 +32,7 @@ class Dependency(object):
 class Resource(Dependency):
     """ Abstract input/output in the dependency graph
     associated with a file tracked using creation time """
-    def build_displayname_filename(self, db, base_node=identifiers.Node()):
+    def build_displayname_filename(self, db, base_node=pypeliner.identifiers.Node()):
         displayname = self.build_displayname(base_node)
         filename = self.get_filename(db)
         if displayname != filename:
@@ -72,7 +72,7 @@ class UserResource(Resource):
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
     def get_filename(self, db):
         return self.filename
-    def build_displayname(self, base_node=identifiers.Node()):
+    def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     def get_exists(self, db):
         return os.path.exists(self.filename)
@@ -81,7 +81,7 @@ class UserResource(Resource):
             return os.path.getmtime(self.filename)
         return None
     def touch(self, db):
-        helpers.touch(self.filename)
+        pypeliner.helpers.touch(self.filename)
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.filename)
@@ -102,7 +102,7 @@ class TempFileResource(Resource):
     def get_createtime(self, db):
         return db.resmgr.retrieve_createtime(self.name, self.node)
     def touch(self, db):
-        helpers.touch(self.get_filename(db))
+        pypeliner.helpers.touch(self.get_filename(db))
         db.resmgr.store_createtime(self.name, self.node)
     def finalize(self, write_filename, db):
         try:

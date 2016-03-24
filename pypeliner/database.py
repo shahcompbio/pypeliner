@@ -2,15 +2,13 @@ import collections
 import errno
 import itertools
 import os
-import errno
 import pickle
 import logging
 import shutil
 
-import helpers
-import resources
-import managed
-import identifiers
+import pypeliner.helpers
+import pypeliner.resources
+import pypeliner.identifiers
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
@@ -20,13 +18,13 @@ class NodeManager(object):
         self.cached_chunks = dict()
     def retrieve_nodes(self, axes, base_node=None):
         if base_node is None:
-            base_node = identifiers.Node()
-        assert isinstance(base_node, identifiers.Node)
+            base_node = pypeliner.identifiers.Node()
+        assert isinstance(base_node, pypeliner.identifiers.Node)
         if len(axes) == 0:
             yield base_node
         else:
             for chunk in self.retrieve_axis_chunks(axes[0], base_node):
-                for node in self.retrieve_nodes(axes[1:], base_node + identifiers.AxisInstance(axes[0], chunk)):
+                for node in self.retrieve_nodes(axes[1:], base_node + pypeliner.identifiers.AxisInstance(axes[0], chunk)):
                     yield node
     def get_chunks_filename(self, axis, node):
         return os.path.join(self.nodes_dir, node.subdir, axis+'_chunks')
@@ -36,7 +34,7 @@ class NodeManager(object):
             yield ()
         else:
             for chunk in self.retrieve_axis_chunks(axes[0], node):
-                for chunks_rest in self.retrieve_chunks(axes[1:], node + identifiers.AxisInstance(axes[0], chunk)):
+                for chunks_rest in self.retrieve_chunks(axes[1:], node + pypeliner.identifiers.AxisInstance(axes[0], chunk)):
                     yield (chunk,) + chunks_rest
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
@@ -66,30 +64,30 @@ class NodeManager(object):
             for pre_chunks, level_chunks in itertools.groupby(sorted(chunks), lambda a: a[:level]):
                 level_node = node
                 for idx in xrange(level):
-                    level_node += identifiers.AxisInstance(axes[idx], pre_chunks[idx])
+                    level_node += pypeliner.identifiers.AxisInstance(axes[idx], pre_chunks[idx])
                 level_chunks = set([a[level] for a in level_chunks])
                 self.store_axis_chunks(axes[level], level_node, level_chunks)
     def store_axis_chunks(self, axis, node, chunks):
         for chunk in chunks:
-            new_node = node + identifiers.AxisInstance(axis, chunk)
-            helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
+            new_node = node + pypeliner.identifiers.AxisInstance(axis, chunk)
+            pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         chunks_filename = self.get_chunks_filename(axis, node)
-        helpers.makedirs(os.path.dirname(chunks_filename))
+        pypeliner.helpers.makedirs(os.path.dirname(chunks_filename))
         temp_chunks_filename = chunks_filename + '.tmp'
         with open(temp_chunks_filename, 'wb') as f:
             pickle.dump(chunks, f)
-        helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
+        pypeliner.helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
             subset = set([])
         subset = set(range(len(axes))).difference(subset)
-        return self.get_splitmerge(axes, node, subset, resources.ChunksResource)
+        return self.get_splitmerge(axes, node, subset, pypeliner.resources.ChunksResource)
     def get_split_outputs(self, axes, node, subset=None):
         if subset is None:
             subset = set([])
-        return self.get_splitmerge(axes, node, subset, resources.Dependency)
+        return self.get_splitmerge(axes, node, subset, pypeliner.resources.Dependency)
     def get_splitmerge(self, axes, node, subset, factory):
         if 0 in subset:
             yield factory(axes[0], node)
@@ -100,7 +98,7 @@ class NodeManager(object):
                 yield factory(axes[level], level_node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
-            yield resources.Dependency(node[-1][0], node[:-1])
+            yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
@@ -126,7 +124,7 @@ class ResourceManager(object):
     def store_createtime(self, name, node):
         filename = self.get_filename(name, node)
         placeholder_filename = self._get_createtime_placeholder(name, node)
-        helpers.touch(placeholder_filename)
+        pypeliner.helpers.touch(placeholder_filename)
         shutil.copystat(filename, placeholder_filename)
     def retrieve_createtime(self, name, node):
         filename = self.get_filename(name, node)
@@ -167,8 +165,8 @@ class WorkflowDatabase(object):
         self.instance_subdir = instance_subdir
         nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
-        helpers.makedirs(nodes_dir)
-        helpers.makedirs(temps_dir)
+        pypeliner.helpers.makedirs(nodes_dir)
+        pypeliner.helpers.makedirs(temps_dir)
         self.resmgr = ResourceManager(temps_dir)
         self.nodemgr = NodeManager(nodes_dir, temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
@@ -188,7 +186,7 @@ class WorkflowDatabaseFactory(object):
     def _add_lock(self, instance_subdir):
         lock_directory = os.path.join(self.workflow_dir, 'locks', instance_subdir, '_lock')
         try:
-            helpers.makedirs(os.path.join(lock_directory, os.path.pardir))
+            pypeliner.helpers.makedirs(os.path.join(lock_directory, os.path.pardir))
             os.mkdir(lock_directory)
         except OSError as e:
             if e.errno == errno.EEXIST:

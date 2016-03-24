@@ -6,17 +6,17 @@ import time
 import traceback
 import socket
 
-import helpers
-import arguments
-import commandline
-import managed
-import resources
-import identifiers
+import pypeliner.helpers
+import pypeliner.arguments
+import pypeliner.commandline
+import pypeliner.managed
+import pypeliner.resources
+import pypeliner.identifiers
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
     def __init__(self, ret=None, args=None, kwargs=None):
-        if ret is not None and not isinstance(ret, managed.Managed):
+        if ret is not None and not isinstance(ret, pypeliner.managed.Managed):
             raise ValueError('ret must be a managed object')
         self.ret = ret
         if args is None:
@@ -61,11 +61,11 @@ class JobInstance(object):
         self.args = list()
         try:
             self.argset = copy.deepcopy(self.job_def.argset, {'_job':self})
-        except managed.JobArgMismatchException as e:
+        except pypeliner.managed.JobArgMismatchException as e:
             e.job_name = self.displayname
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
-        helpers.makedirs(self.logs_dir)
+        pypeliner.helpers.makedirs(self.logs_dir)
         self.is_subworkflow = False
         self.is_immediate = False
         self.retry_idx = 0
@@ -85,7 +85,7 @@ class JobInstance(object):
     @property
     def _inputs(self):
         for arg in self.args:
-            if isinstance(arg, arguments.Arg):
+            if isinstance(arg, pypeliner.arguments.Arg):
                 for input in arg.get_inputs(self.db):
                     yield input
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
@@ -93,27 +93,27 @@ class JobInstance(object):
     @property
     def _outputs(self):
         for arg in self.args:
-            if isinstance(arg, arguments.Arg):
+            if isinstance(arg, pypeliner.arguments.Arg):
                 for output in arg.get_outputs(self.db):
                     yield output
     @property
     def input_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.Resource), self._inputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self._inputs)
     @property
     def output_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.Resource), self._outputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self._outputs)
     @property
     def input_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.Dependency), self._inputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self._inputs)
     @property
     def output_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.Dependency), self._outputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self._outputs)
     @property
     def input_user_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.UserResource), self._inputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self._inputs)
     @property
     def output_user_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, resources.UserResource), self._outputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self._outputs)
     @property
     def pipeline_inputs(self):
         return (dep.id for dep in self.input_user_resources)
@@ -189,7 +189,7 @@ class JobInstance(object):
             output.touch(self.db)
     def check_require_regenerate(self):
         for arg in self.args:
-            if isinstance(arg, arguments.Arg):
+            if isinstance(arg, pypeliner.arguments.Arg):
                 if arg.is_split:
                     return True
         return False
@@ -197,7 +197,7 @@ class JobInstance(object):
         return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir, self.direct_write)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
-        helpers.makedirs(exc_dir)
+        pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
     def finalize(self, callable):
         callable.finalize(self.db)
@@ -259,7 +259,7 @@ class JobCallable(object):
         return text
     @property
     def displaycommand(self):
-        if self.func == commandline.execute:
+        if self.func == pypeliner.commandline.execute:
             return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
         else:
             return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
@@ -337,7 +337,7 @@ class ChangeAxisInstance(JobInstance):
     @property
     def _inputs(self):
         for node in self.db.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
-            yield resources.Dependency(self.job_def.var_name, node)
+            yield pypeliner.resources.Dependency(self.job_def.var_name, node)
         for dependency in self.db.nodemgr.get_merge_inputs((self.job_def.old_axis,), self.node):
             yield dependency
         for depenency in self.db.nodemgr.get_merge_inputs((self.job_def.new_axis,), self.node):
@@ -347,7 +347,7 @@ class ChangeAxisInstance(JobInstance):
     @property
     def _outputs(self):
         for node in self.db.nodemgr.retrieve_nodes((self.job_def.new_axis,), self.node):
-            yield resources.Dependency(self.job_def.var_name, node)
+            yield pypeliner.resources.Dependency(self.job_def.var_name, node)
     @property
     def out_of_date(self):
         return True
@@ -359,8 +359,8 @@ class ChangeAxisInstance(JobInstance):
         for chunks in old_chunks:
             if len(chunks) > 1:
                 raise NotImplementedError('only single axis changes currently supported')
-            old_node = self.node + identifiers.AxisInstance(self.job_def.old_axis, chunks[0])
-            new_node = self.node + identifiers.AxisInstance(self.job_def.new_axis, chunks[0])
+            old_node = self.node + pypeliner.identifiers.AxisInstance(self.job_def.old_axis, chunks[0])
+            new_node = self.node + pypeliner.identifiers.AxisInstance(self.job_def.new_axis, chunks[0])
             self.db.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
     def complete(self):
         self.workflow.notify_completed(self)

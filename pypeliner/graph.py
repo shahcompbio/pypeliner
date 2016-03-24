@@ -3,9 +3,8 @@ import networkx
 import itertools
 import logging
 
-import helpers
-import identifiers
-import database
+import pypeliner.helpers
+import pypeliner.identifiers
 import pypeliner.workflow
 
 class IncompleteWorkflowException(Exception):
@@ -134,7 +133,7 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, db_factory, runskip, node=identifiers.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), prune=False, cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.db_factory = db_factory
@@ -174,7 +173,7 @@ class WorkflowInstance(object):
 
             # Pop the next finished workflow if it exists
             try:
-                job, received, workflow = helpers.pop_if(self.subworkflows, lambda (j, r, w): w.finished)
+                job, received, workflow = pypeliner.helpers.pop_if(self.subworkflows, lambda (j, r, w): w.finished)
             except IndexError:
                 return
 
@@ -221,7 +220,7 @@ class WorkflowInstance(object):
                     if not isinstance(workflow_def, pypeliner.workflow.Workflow):
                         self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text())
                         raise IncompleteWorkflowException()
-                    node = self.node + job.node + identifiers.Namespace(job.job_def.name)
+                    node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, prune=self.prune, cleanup=self.cleanup)
                     self.subworkflows.append((job, received, workflow))
                 else:
