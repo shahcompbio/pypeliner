@@ -4,8 +4,8 @@ import itertools
 import os
 import errno
 import pickle
-import shelve
 import logging
+import shutil
 
 import helpers
 import resources
@@ -101,8 +101,6 @@ class NodeManager(object):
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield resources.Dependency(node[-1][0], node[:-1])
-    def close(self):
-        pass
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
@@ -122,15 +120,22 @@ class ResourceManager(object):
         self.disposable = collections.defaultdict(set)
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
-        self.createtimes_shelf = shelve.open(os.path.join(self.db_dir, 'createtimes'))
     def get_filename_creator(self, suffix):
         return FilenameCreator(self.temps_dir, suffix)
-    def store_createtime(self, name, node, filename):
-        self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
-    def retrieve_createtime(self, name, node, filename):
+    def _get_createtime_placeholder(self, name, node):
+        return self.get_filename(name, node) + '._placeholder'
+    def store_createtime(self, name, node):
+        filename = self.get_filename(name, node)
+        placeholder_filename = self._get_createtime_placeholder(name, node)
+        helpers.touch(placeholder_filename)
+        shutil.copystat(filename, placeholder_filename)
+    def retrieve_createtime(self, name, node):
+        filename = self.get_filename(name, node)
+        placeholder_filename = self._get_createtime_placeholder(name, node)
         if os.path.exists(filename):
-            self.createtimes_shelf[str((name, node))] = os.path.getmtime(filename)
-        return self.createtimes_shelf.get(str((name, node)), None)
+            return os.path.getmtime(filename)
+        elif os.path.exists(placeholder_filename):
+            return os.path.getmtime(placeholder_filename)
     def get_filename(self, name, node):
         if (name, node) in self.aliases:
             return self.get_filename(*self.aliases[(name, node)])
@@ -144,8 +149,6 @@ class ResourceManager(object):
             yield (alias_name, alias_node)
             for alias_name_recurse, alias_node_recurse in self.get_aliases(alias_name, alias_node):
                 yield (alias_name_recurse, alias_node_recurse)
-    def is_temp_file(self, name, node):
-        return str((name, node)) in self.createtimes_shelf
     def register_disposable(self, name, node, filename):
         self.disposable[(name, node)].add(filename)
     def cleanup(self, depgraph):
@@ -159,8 +162,6 @@ class ResourceManager(object):
                         logging.getLogger('resourcemgr').debug('removing ' + filename)
                         os.remove(filename)
             depgraph.obsolete.remove((name, node))
-    def close(self):
-        self.createtimes_shelf.close()
 
 class WorkflowDatabase(object):
     def __init__(self, workflow_dir, logs_dir, instance_subdir):
@@ -174,9 +175,6 @@ class WorkflowDatabase(object):
         self.resmgr = ResourceManager(temps_dir, db_dir)
         self.nodemgr = NodeManager(nodes_dir, temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
-    def close(self):
-        self.resmgr.close()
-        self.nodemgr.close()
 
 class PipelineLockedError(Exception):
     pass
@@ -185,12 +183,10 @@ class WorkflowDatabaseFactory(object):
     def __init__(self, workflow_dir, logs_dir):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
-        self.dbs = list()
         self.lock_directories = list()
     def create(self, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(self.workflow_dir, self.logs_dir, instance_subdir)
-        self.dbs.append(db)
         return db
     def _add_lock(self, instance_subdir):
         lock_directory = os.path.join(self.workflow_dir, 'locks', instance_subdir, '_lock')
@@ -206,11 +202,6 @@ class WorkflowDatabaseFactory(object):
     def __enter__(self):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        for db in self.dbs:
-            try:
-                db.close()
-            except:
-                logging.exception('unable to close ' + db.instance_subdir)
         for lock_directory in self.lock_directories:
             try:
                 os.rmdir(lock_directory)

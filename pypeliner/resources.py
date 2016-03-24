@@ -100,16 +100,16 @@ class TempFileResource(Resource):
     def get_exists(self, db):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
-        return db.resmgr.retrieve_createtime(self.name, self.node, self.get_filename(db))
+        return db.resmgr.retrieve_createtime(self.name, self.node)
     def touch(self, db):
         helpers.touch(self.get_filename(db))
-        db.resmgr.store_createtime(self.name, self.node, self.get_filename(db))
+        db.resmgr.store_createtime(self.name, self.node)
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.get_filename(db))
         except OSError:
             raise OutputMissingException(write_filename)
-        db.resmgr.store_createtime(self.name, self.node, self.get_filename(db))
+        db.resmgr.store_createtime(self.name, self.node)
 
 
 class TempObjResource(Resource):
