@@ -114,9 +114,8 @@ class FilenameCreator(object):
 
 class ResourceManager(object):
     """ Manages file resources """
-    def __init__(self, temps_dir, db_dir):
+    def __init__(self, temps_dir):
         self.temps_dir = temps_dir
-        self.db_dir = db_dir
         self.disposable = collections.defaultdict(set)
         self.aliases = dict()
         self.rev_alias = collections.defaultdict(list)
@@ -166,13 +165,11 @@ class ResourceManager(object):
 class WorkflowDatabase(object):
     def __init__(self, workflow_dir, logs_dir, instance_subdir):
         self.instance_subdir = instance_subdir
-        db_dir = os.path.join(workflow_dir, 'db', instance_subdir)
         nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
-        helpers.makedirs(db_dir)
         helpers.makedirs(nodes_dir)
         helpers.makedirs(temps_dir)
-        self.resmgr = ResourceManager(temps_dir, db_dir)
+        self.resmgr = ResourceManager(temps_dir)
         self.nodemgr = NodeManager(nodes_dir, temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
 
