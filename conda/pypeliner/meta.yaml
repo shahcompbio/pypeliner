@@ -22,5 +22,5 @@ test:
 about:
   home: http://bitbucket.org/dranew/pypeliner
   license: MIT
-  summary: 'In memory gene database searchable using an interval tree'
+  summary: "Library for creating informatic workflows"
 
