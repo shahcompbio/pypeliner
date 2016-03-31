@@ -46,11 +46,12 @@ class JobDefinition(object):
             yield JobInstance(self, workflow, db, node)
 
 class InputMissingException(Exception):
-    def __init__(self, input, job):
+    def __init__(self, input, filename, job):
         self.input = input
+        self.filename = filename
         self.job = job
     def __str__(self):
-        return 'input {0} missing for job {1}'.format(self.input, self.job)
+        return 'input {0}, filename {1}, missing for job {2}'.format(self.input, self.filename, self.job)
 
 def _pretty_date(ts):
     return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
@@ -133,7 +134,7 @@ class JobInstance(object):
     def check_inputs(self):
         for input in self.input_resources:
             if input.get_createtime(self.db) is None:
-                raise InputMissingException(input.id, self.id)
+                raise InputMissingException(input.id, input.get_filename(self.db), self.id)
     @property
     def out_of_date(self):
         self.check_inputs()
