@@ -91,6 +91,11 @@ from collections import *
 import pypeliner.execqueue
 import pypeliner.helpers
 import pypeliner.runskip
+try:
+    import pypeliner.drmaaqueue
+except ImportError:
+    pass
+
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -190,7 +195,6 @@ class Pypeline(object):
         elif self.config['submit'] == 'pbs':
             self.exec_queue = pypeliner.execqueue.PbsJobQueue(self.modules, self.config['nativespec'], 20)
         elif self.config['submit'] == 'drmaa':
-            import pypeliner.drmaaqueue
             self.exec_queue = pypeliner.drmaaqueue.DrmaaJobQueue(self.modules, self.config['nativespec'])
 
         self.sch = pypeliner.scheduler.Scheduler()
