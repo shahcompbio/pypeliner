@@ -64,16 +64,19 @@ class TempFileArg(Arg):
     Resolves to a filename contained within the temporary files directory.
 
     """
-    def __init__(self, db, name, node):
+    def __init__(self, db, name, node, cleanup='both'):
         self.name = name
         self.node = node
+        self.cleanup = cleanup
     def _remove(self, db):
         pypeliner.helpers.removefiledir(db.resmgr.get_filename(self.name, self.node))
     def resolve(self, db, direct_write):
-        self._remove(db)
+        if self.cleanup in ('before', 'both'):
+            self._remove(db)
         return db.resmgr.get_filename(self.name, self.node)
     def finalize(self, db):
-        self._remove(db)
+        if self.cleanup in ('after', 'both'):
+            self._remove(db)
 
 
 class MergeTemplateArg(Arg):
