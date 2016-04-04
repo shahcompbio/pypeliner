@@ -12,8 +12,9 @@ class OutputMissingException(Exception):
         return 'expected output {0} missing'.format(self.filename)
 
 
-class Dependency(object):
-    """ An input/output in the dependency graph """
+class Resource(object):
+    """ Abstract input/output in the dependency graph
+    associated with a file tracked using creation time """
     def __init__(self, name, node):
         self.name = name
         self.node = node
@@ -27,11 +28,6 @@ class Dependency(object):
         if base_node.displayname != '':
             name = '/' + base_node.displayname + name
         return name
-
-
-class Resource(Dependency):
-    """ Abstract input/output in the dependency graph
-    associated with a file tracked using creation time """
     def build_displayname_filename(self, db, base_node=pypeliner.identifiers.Node()):
         displayname = self.build_displayname(base_node)
         filename = self.get_filename(db)
@@ -66,6 +62,7 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
+    is_temp = False
     def __init__(self, name, node, fnames=None, template=None):
         self.name = name
         self.node = node
@@ -91,6 +88,7 @@ class UserResource(Resource):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
+    is_temp = True
     def __init__(self, name, node, db):
         self.name = name
         self.node = node
@@ -114,6 +112,7 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
+    is_temp = True
     def __init__(self, name, node, is_input=True):
         self.name = name
         self.node = node
@@ -170,21 +169,4 @@ class TempObjManager(object):
         if not obj_equal(obj, self.get_obj(db)):
             with open(self.input.get_filename(db), 'wb') as f:
                 pickle.dump(obj, f)
-
-
-class ChunksResource(Resource):
-    """ A resource representing a list of chunks for an axis """
-    def __init__(self, name, node):
-        self.name = name
-        self.node = node
-    @property
-    def id(self):
-        return (self.name, self.node)
-    def get_filename(self, db):
-        return db.nodemgr.get_chunks_filename(self.name, self.node)
-    def get_exists(self, db):
-        return os.path.exists(self.get_filename(db))
-    def get_createtime(self, db):
-        if self.get_exists(db):
-            return os.path.getmtime(db.nodemgr.get_chunks_filename(self.name, self.node))
 

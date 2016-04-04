@@ -59,9 +59,9 @@ class DependencyGraph:
             self.G.add_node(('resource', resource), resource=resource)
         for job in jobs:
             for input in job.inputs:
-                self.G.add_edge(('resource', input), ('job', job.id))
+                self.G.add_edge(('resource', input.id), ('job', job.id))
             for output in job.outputs:
-                self.G.add_edge(('job', job.id), ('resource', output))
+                self.G.add_edge(('job', job.id), ('resource', output.id))
 
         # Check for cycles
         try:
@@ -110,12 +110,12 @@ class DependencyGraph:
         self.running.remove(job.id)
         self.completed.add(job.id)
         for input in job.inputs:
-            if all([otherjob_id in self.completed for _, otherjob_id in self.G[('resource', input)]]):
-                self.obsolete.add(input)
+            if all([otherjob_id in self.completed for _, otherjob_id in self.G[('resource', input.id)]]):
+                self.obsolete.add(input.id)
         for output in job.outputs:
-            if ('resource', output) not in self.G:
-                self.obsolete.add(output)
-        self._notify_created([output for output in job.outputs])
+            if ('resource', output.id) not in self.G:
+                self.obsolete.add(output.id)
+        self._notify_created([output.id for output in job.outputs])
 
     def _notify_created(self, outputs):
         """ A resource was created, update current state.
@@ -124,7 +124,7 @@ class DependencyGraph:
         for output in outputs:
             for job_node in self.G[('resource', output)]:
                 job = self.G.node[job_node]['job']
-                if all([input in self.created for input in job.inputs]) and job.id not in self.running and job.id not in self.completed:
+                if all([input.id in self.created for input in job.inputs]) and job.id not in self.running and job.id not in self.completed:
                     self.ready.add(job.id)
 
     @property
@@ -156,11 +156,11 @@ class WorkflowInstance(object):
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
 
-        inputs = set((input for job in jobs.itervalues() for input in job.pipeline_inputs))
+        inputs = set((input.id for job in jobs.itervalues() for input in job.pipeline_inputs))
         if self.prune:
-            outputs = set((output for job in jobs.itervalues() for output in job.pipeline_outputs))
+            outputs = set((output.id for job in jobs.itervalues() for output in job.pipeline_outputs))
         else:
-            outputs = set((output for job in jobs.itervalues() for output in job.outputs))
+            outputs = set((output.id for job in jobs.itervalues() for output in job.outputs))
         inputs = inputs.difference(outputs)
 
         self.graph.regenerate(inputs, outputs, jobs.values())

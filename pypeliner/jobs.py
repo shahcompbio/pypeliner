@@ -87,7 +87,7 @@ class JobInstance(object):
             name = '/' + self.workflow.node.displayname + name
         return name
     @property
-    def _inputs(self):
+    def inputs(self):
         for arg in self.args:
             if isinstance(arg, pypeliner.arguments.Arg):
                 for input in arg.get_inputs(self.db):
@@ -95,50 +95,26 @@ class JobInstance(object):
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             yield node_input
     @property
-    def _outputs(self):
+    def outputs(self):
         for arg in self.args:
             if isinstance(arg, pypeliner.arguments.Arg):
                 for output in arg.get_outputs(self.db):
                     yield output
     @property
-    def input_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self._inputs)
-    @property
-    def output_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self._outputs)
-    @property
-    def input_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self._inputs)
-    @property
-    def output_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self._outputs)
-    @property
-    def input_user_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self._inputs)
-    @property
-    def output_user_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self._outputs)
-    @property
     def pipeline_inputs(self):
-        return (dep.id for dep in self.input_user_resources)
+        return itertools.ifilter(lambda a: not a.is_temp, self.inputs)
     @property
     def pipeline_outputs(self):
-        return (dep.id for dep in self.output_user_resources)
-    @property
-    def inputs(self):
-        return (dep.id for dep in self.input_dependencies)
-    @property
-    def outputs(self):
-        return (dep.id for dep in self.output_dependencies)
+        return itertools.ifilter(lambda a: not a.is_temp, self.outputs)
     def check_inputs(self):
-        for input in self.input_resources:
+        for input in self.inputs:
             if input.get_createtime(self.db) is None:
                 raise InputMissingException(input.id, input.get_filename(self.db), self.id)
     @property
     def out_of_date(self):
         self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
-        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
+        input_dates = [input.get_createtime(self.db) for input in self.inputs]
+        output_dates = [output.get_createtime(self.db) for output in self.outputs]
         if len(input_dates) == 0 or len(output_dates) == 0:
             return True
         if None in output_dates:
@@ -146,8 +122,8 @@ class JobInstance(object):
         return max(input_dates) > min(output_dates)
     def explain(self):
         self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
-        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
+        input_dates = [input.get_createtime(self.db) for input in self.inputs]
+        output_dates = [output.get_createtime(self.db) for output in self.outputs]
         try:
             newest_input_date = max(input_dates)
         except ValueError:
@@ -168,7 +144,7 @@ class JobInstance(object):
             explanation = ['out of date outputs']
         else:
             explanation = ['up to date']
-        for input in self.input_resources:
+        for input in self.inputs:
             status = ''
             if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
                 status = 'new'
@@ -177,7 +153,7 @@ class JobInstance(object):
                 _pretty_date(input.get_createtime(self.db)),
                 status)
             explanation.append(text)
-        for output in self.output_resources:
+        for output in self.outputs:
             status = ''
             if output.get_createtime(self.db) is None:
                 status = 'missing'
@@ -192,9 +168,9 @@ class JobInstance(object):
         return '\n'.join(explanation)
     @property
     def output_missing(self):
-        return not all([output.get_exists(self.db) for output in self.output_resources])
+        return not all([output.get_exists(self.db) for output in self.outputs])
     def touch_outputs(self):
-        for output in self.output_resources:
+        for output in self.outputs:
             if not output.get_exists(self.db):
                 raise Exception('cannot touch missing output')
             output.touch(self.db)

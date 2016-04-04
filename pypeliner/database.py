@@ -12,7 +12,8 @@ import pypeliner.identifiers
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
-    def __init__(self, nodes_dir, temps_dir):
+    def __init__(self, db, nodes_dir, temps_dir):
+        self.db = db
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
@@ -38,12 +39,11 @@ class NodeManager(object):
                     yield (chunk,) + chunks_rest
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
-            chunks_filename = self.get_chunks_filename(axis, node)
-            if not os.path.exists(chunks_filename):
-                return (None,)
-            else:
-                with open(chunks_filename, 'rb') as f:
-                    self.cached_chunks[(axis, node)] = pickle.load(f)
+            resource = pypeliner.resources.TempObjManager(axis, node)
+            chunks = resource.get_obj(self.db)
+            if chunks is None:
+                chunks = (None,)
+            self.cached_chunks[(axis, node)] = chunks
         return self.cached_chunks[(axis, node)]
     def store_chunks(self, axes, node, chunks, subset=None):
         if subset is None:
@@ -70,35 +70,35 @@ class NodeManager(object):
     def store_axis_chunks(self, axis, node, chunks):
         for chunk in chunks:
             new_node = node + pypeliner.identifiers.AxisInstance(axis, chunk)
-            pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
+            pypeliner.helpers.makedirs(os.path.join(self.db.resmgr.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
-        chunks_filename = self.get_chunks_filename(axis, node)
-        pypeliner.helpers.makedirs(os.path.dirname(chunks_filename))
-        temp_chunks_filename = chunks_filename + '.tmp'
-        with open(temp_chunks_filename, 'wb') as f:
-            pickle.dump(chunks, f)
-        pypeliner.helpers.overwrite_if_different(temp_chunks_filename, chunks_filename)
+        resource = pypeliner.resources.TempObjManager(axis, node)
+        resource.finalize(chunks, self.db)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
             subset = set([])
         subset = set(range(len(axes))).difference(subset)
-        return self.get_splitmerge(axes, node, subset, pypeliner.resources.ChunksResource)
+        resources = self.get_chunks_resource(axes, node, subset)
+        inputs = [resource.input for resource in resources]
+        return inputs
     def get_split_outputs(self, axes, node, subset=None):
         if subset is None:
             subset = set([])
-        return self.get_splitmerge(axes, node, subset, pypeliner.resources.Dependency)
-    def get_splitmerge(self, axes, node, subset, factory):
+        resources = self.get_chunks_resource(axes, node, subset)
+        outputs = [resource.output for resource in resources]
+        return outputs
+    def get_chunks_resource(self, axes, node, subset):
         if 0 in subset:
-            yield factory(axes[0], node)
+            yield pypeliner.resources.TempObjManager(axes[0], node)
         for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
-                yield factory(axes[level], level_node)
+                yield pypeliner.resources.TempObjManager(axes[level], level_node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
-            yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
+            yield pypeliner.resources.TempObjManager(node[-1][0], node[:-1]).input
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
@@ -151,7 +151,7 @@ class WorkflowDatabase(object):
         pypeliner.helpers.makedirs(nodes_dir)
         pypeliner.helpers.makedirs(temps_dir)
         self.resmgr = ResourceManager(temps_dir)
-        self.nodemgr = NodeManager(nodes_dir, temps_dir)
+        self.nodemgr = NodeManager(self, nodes_dir, temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
 
 class PipelineLockedError(Exception):
