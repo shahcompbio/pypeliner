@@ -2,6 +2,7 @@ import unittest
 import shutil
 import os
 import logging
+import time
 
 import pypeliner
 import pypeliner.runskip
@@ -381,41 +382,47 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, [os.path.join(pipeline_dir, 'tmp/temp_space')])
 
-    def notworking_remove(self):
+    def test_missing_temporary(self):
 
         workflow = pypeliner.workflow.Workflow()
 
+        workflow.setobj(mgd.OutputChunks('byfile'), (1, 2))
+
         workflow.transform(
             name='read',
-            func=read_stuff,
-            ret=mgd.TempOutputObj('input_data'),
-            args=(mgd.InputFile(self.input_filename),))
-
-        workflow.transform(
-            name='do',
-            func=do_stuff,
-            ret=mgd.TempOutputObj('output_data'),
-            args=(mgd.TempInputObj('input_data').prop('some_string'),))
-
-        workflow.transform(
-            name='write',
-            func=do_assert,
+            axes=('byfile',),
+            func=do_file_stuff,
             args=(
-                mgd.TempInputObj('output_data'),
+                mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                mgd.TempOutputFile('temp_files', 'byfile'),
+                'extras'))
+
+        workflow.transform(
+            name='merge_files',
+            func=merge_file_byline,
+            args=(
+                mgd.TempInputFile('temp_files', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
 
-        failed = not scheduler.run(exec_queue)
-        self.assertTrue(failed)
-        
-        os.remove(os.path.join(pipeline_dir, 'tmp/output_data'))
-        
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        time.sleep(1)
+        os.utime(self.input_1_filename, None)
+        os.remove(self.output_filename)
+
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
 
-        self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
+        expected_output = []
+        for file_id in xrange(1, 2+1):
+            for line in xrange(1, 8+1):
+                expected_output.append('{}{}line{}\n'.format(line-1, 'extras', line))
+
+        self.assertEqual(output, expected_output)
 
     def test_simple_create_all(self):
 
@@ -963,7 +970,6 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, ['line1!\n', 'line2!\n', 'line3!\n', 'line4!\n', 'line5!\n', 'line6!\n', 'line7!\n', 'line8!\n'])
 
-
     def test_rerun_multiple_file_split(self):
 
         workflow = pypeliner.workflow.Workflow()
@@ -1127,7 +1133,6 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, ['line1!\n', 'line2!\n', 'line3!\n', 'line4!\n', 'line5!\n', 'line6!\n', 'line7!\n', 'line8!\n'])
 
-
     def test_object_identical(self):
 
         workflow = pypeliner.workflow.Workflow()
@@ -1163,6 +1168,9 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
 
         self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
+
+        print 'restarting'
+        time.sleep(1)
 
         workflow = pypeliner.workflow.Workflow()
 

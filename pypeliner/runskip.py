@@ -8,7 +8,15 @@ class BasicRunSkip(object):
         self.rerun = rerun
 
     def __call__(self, job):
-        return job.out_of_date or self.rerun or self.repopulate and job.output_missing
+        if self.rerun:
+            return True
+        if job.out_of_date():
+            return True
+        if job.is_required_downstream:
+            return True
+        if self.repopulate and job.output_missing():
+            return True
+        return False
 
 
 class PatternMatcher(object):

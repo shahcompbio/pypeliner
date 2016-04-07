@@ -75,6 +75,7 @@ class JobInstance(object):
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.direct_write = False
+        self.is_required_downstream = False
     @property
     def id(self):
         return (self.node, self.job_def.name)
@@ -110,9 +111,9 @@ class JobInstance(object):
         for input in self.inputs:
             if input.get_createtime(self.db) is None:
                 raise InputMissingException(input.id, input.get_filename(self.db), self.id)
-    @property
-    def out_of_date(self):
-        self.check_inputs()
+    def out_of_date(self, check_inputs=True):
+        if check_inputs:
+            self.check_inputs()
         input_dates = [input.get_createtime(self.db) for input in self.inputs]
         output_dates = [output.get_createtime(self.db) for output in self.outputs]
         if len(input_dates) == 0 or len(output_dates) == 0:
@@ -142,6 +143,8 @@ class JobInstance(object):
             explanation = ['missing outputs']
         elif newest_input_date > oldest_output_date:
             explanation = ['out of date outputs']
+        elif self.is_required_downstream:
+            explanation = ['outputs required by downstream job']
         else:
             explanation = ['up to date']
         for input in self.inputs:
@@ -166,7 +169,6 @@ class JobInstance(object):
                 status)
             explanation.append(text)
         return '\n'.join(explanation)
-    @property
     def output_missing(self):
         return not all([output.get_exists(self.db) for output in self.outputs])
     def touch_outputs(self):

@@ -36,9 +36,12 @@ class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
 
-    def __init__(self):
+    def __init__(self, db):
+        self.db = db
         self.completed = set()
         self.created = set()
+        self.standby_jobs = list()
+        self.standby_resources = set()
         self.ready = set()
         self.running = set()
         self.obsolete = set()
@@ -54,14 +57,18 @@ class DependencyGraph:
         # Create the graph
         self.G = networkx.DiGraph()
         for job in jobs:
-            self.G.add_node(('job', job.id), job=job)
-        for resource in itertools.chain(inputs, outputs):
-            self.G.add_node(('resource', resource), resource=resource)
-        for job in jobs:
+            job_node = ('job', job.id)
+            self.G.add_node(job_node, job=job)
             for input in job.inputs:
-                self.G.add_edge(('resource', input.id), ('job', job.id))
+                resource_node = ('resource', input.id)
+                if resource_node not in self.G:
+                    self.G.add_node(resource_node, resource=input)
+                self.G.add_edge(resource_node, job_node)
             for output in job.outputs:
-                self.G.add_edge(('job', job.id), ('resource', output.id))
+                resource_node = ('resource', output.id)
+                if resource_node not in self.G:
+                    self.G.add_node(resource_node, resource=output)
+                self.G.add_edge(job_node, resource_node)
 
         # Check for cycles
         try:
@@ -94,10 +101,13 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        if len(self.ready) == 0:
+        if len(self.ready) > 0:
+            job_id = self.ready.pop()
+        elif len(self.standby_jobs) > 0:
+            job_id = self.standby_jobs.pop(0)
+        else:
             raise NoJobs()
 
-        job_id = self.ready.pop()
         job_node = ('job', job_id)
 
         self.running.add(job_id)
@@ -124,8 +134,50 @@ class DependencyGraph:
         for output in outputs:
             for job_node in self.G[('resource', output)]:
                 job = self.G.node[job_node]['job']
-                if all([input.id in self.created for input in job.inputs]) and job.id not in self.running and job.id not in self.completed:
-                    self.ready.add(job.id)
+                if job.id in self.running:
+                    continue
+                if job.id in self.completed:
+                    continue
+                job_inputs = set([input.id for input in job.inputs])
+                not_created_inputs = job_inputs.difference(self.created)
+                not_created_standby_inputs = not_created_inputs.intersection(self.standby_resources)
+                if len(not_created_inputs) == 0:
+                    if not job.out_of_date() and job.output_missing():
+                        self.standby_jobs.append(job.id)
+                        for output in job.outputs:
+                            if not output.get_exists(self.db):
+                                self.standby_resources.add(output.id)
+                    else:
+                        self.ready.add(job.id)
+                elif len(not_created_standby_inputs) > 0:
+                    self._notify_required(not_created_standby_inputs)
+
+    def _notify_required(self, required):
+        """
+
+        Visit all jobs upstream of the out of date resources,
+        mark the jobs outputting those resources as required
+        by downstream jobs.
+
+        For any inputs of the job that do not exist, mark
+        those inputs as required and visit.
+        """
+
+        required_resources = set()
+        visit_resources = set(required)
+        while len(visit_resources) > 0:
+            resource_id = visit_resources.pop()
+            resource_node = ('resource', resource_id)
+            resource = self.G.node[resource_node]['resource']
+            if resource.get_exists(self.db):
+                continue
+            for job_node in self.G.predecessors_iter(resource_node):
+                job = self.G.node[job_node]['job']
+                job.is_required_downstream = True
+                for input in job.inputs:
+                    if input.id not in required_resources:
+                        required_resources.add(input.id)
+                        visit_resources.add(input.id)
 
     @property
     def finished(self):
@@ -140,7 +192,7 @@ class WorkflowInstance(object):
         self.runskip = runskip
         self.db = db_factory.create(node.subdir)
         self.node = node
-        self.graph = DependencyGraph()
+        self.graph = DependencyGraph(self.db)
         self.subworkflows = list()
         self.prune = prune
         self.cleanup = cleanup
