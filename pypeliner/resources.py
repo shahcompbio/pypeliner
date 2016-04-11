@@ -1,5 +1,6 @@
 import os
 import pickle
+import shutil
 
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -95,19 +96,29 @@ class TempFileResource(Resource):
         db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
     def get_filename(self, db):
         return db.resmgr.get_filename(self.name, self.node)
+    def _get_createtime_placeholder(self, db):
+        return self.get_filename(db) + '._placeholder'
+    def _save_createtime(self, db):
+        placeholder_filename = self._get_createtime_placeholder(db)
+        pypeliner.helpers.touch(placeholder_filename)
+        shutil.copystat(self.get_filename(db), placeholder_filename)
     def get_exists(self, db):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
-        return db.resmgr.retrieve_createtime(self.name, self.node)
+        if os.path.exists(self.get_filename(db)):
+            return os.path.getmtime(self.get_filename(db))
+        placeholder_filename = self._get_createtime_placeholder(db)
+        if os.path.exists(placeholder_filename):
+            return os.path.getmtime(placeholder_filename)
     def touch(self, db):
         pypeliner.helpers.touch(self.get_filename(db))
-        db.resmgr.store_createtime(self.name, self.node)
+        self._save_createtime(db)
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.get_filename(db))
         except OSError:
             raise OutputMissingException(write_filename)
-        db.resmgr.store_createtime(self.name, self.node)
+        self._save_createtime(db)
 
 
 class TempObjResource(Resource):

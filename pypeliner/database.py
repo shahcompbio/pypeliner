@@ -117,20 +117,6 @@ class ResourceManager(object):
         self.disposable = collections.defaultdict(set)
     def get_filename_creator(self, suffix):
         return FilenameCreator(self.temps_dir, suffix)
-    def _get_createtime_placeholder(self, name, node):
-        return self.get_filename(name, node) + '._placeholder'
-    def store_createtime(self, name, node):
-        filename = self.get_filename(name, node)
-        placeholder_filename = self._get_createtime_placeholder(name, node)
-        pypeliner.helpers.touch(placeholder_filename)
-        shutil.copystat(filename, placeholder_filename)
-    def retrieve_createtime(self, name, node):
-        filename = self.get_filename(name, node)
-        placeholder_filename = self._get_createtime_placeholder(name, node)
-        if os.path.exists(filename):
-            return os.path.getmtime(filename)
-        elif os.path.exists(placeholder_filename):
-            return os.path.getmtime(placeholder_filename)
     def get_filename(self, name, node):
         return os.path.join(self.temps_dir, node.subdir, name)
     def register_disposable(self, name, node, filename):
