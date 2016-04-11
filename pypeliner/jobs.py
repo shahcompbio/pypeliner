@@ -72,7 +72,6 @@ class JobInstance(object):
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
         pypeliner.helpers.makedirs(self.logs_dir)
         self.is_subworkflow = False
-        self.is_immediate = False
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.direct_write = False
@@ -312,68 +311,4 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
         self.is_subworkflow = True
-        self.is_immediate = False
         self.direct_write = True
-
-class ChangeAxisDefinition(object):
-    """ Represents an abstract aliasing """
-    def __init__(self, name, axes, var_name, old_axis, new_axis, exact=True):
-        self.name = name
-        self.axes = axes
-        self.var_name = var_name
-        self.old_axis = old_axis
-        self.new_axis = new_axis
-        self.exact = exact
-    def create_job_instances(self, workflow, db):
-        for node in db.nodemgr.retrieve_nodes(self.axes):
-            yield ChangeAxisInstance(self, workflow, db, node, exact=self.exact)
-
-class ChangeAxisException(Exception):
-    def __init__(self, old, new):
-        self.old = old
-        self.new = new
-    def __str__(self):
-        return 'axis change from {0} to {1}'.format(self.old, self.new)
-
-class ChangeAxisInstance(JobInstance):
-    """ Creates an alias of a managed object """
-    def __init__(self, job_def, workflow, db, node, exact=True):
-        self.job_def = job_def
-        self.workflow = workflow
-        self.db = db
-        self.node = node
-        self.exact = exact
-        self.is_subworkflow = False
-        self.is_immediate = True
-        self.trigger_regenerate = False
-    @property
-    def _inputs(self):
-        for node in self.db.nodemgr.retrieve_nodes((self.job_def.old_axis,), self.node):
-            yield pypeliner.resources.Dependency(self.job_def.var_name, node)
-        for dependency in self.db.nodemgr.get_merge_inputs((self.job_def.old_axis,), self.node):
-            yield dependency
-        for depenency in self.db.nodemgr.get_merge_inputs((self.job_def.new_axis,), self.node):
-            yield dependency
-        for node_input in self.db.nodemgr.get_node_inputs(self.node):
-            yield node_input
-    @property
-    def _outputs(self):
-        for node in self.db.nodemgr.retrieve_nodes((self.job_def.new_axis,), self.node):
-            yield pypeliner.resources.Dependency(self.job_def.var_name, node)
-    @property
-    def out_of_date(self):
-        return True
-    def finalize(self):
-        old_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.old_axis,), self.node))
-        new_chunks = set(self.db.nodemgr.retrieve_chunks((self.job_def.new_axis,), self.node))
-        if self.exact and new_chunks != old_chunks or not self.exact and not new_chunks.issubset(old_chunks):
-            raise ChangeAxisException(old_chunks, new_chunks)
-        for chunks in old_chunks:
-            if len(chunks) > 1:
-                raise NotImplementedError('only single axis changes currently supported')
-            old_node = self.node + pypeliner.identifiers.AxisInstance(self.job_def.old_axis, chunks[0])
-            new_node = self.node + pypeliner.identifiers.AxisInstance(self.job_def.new_axis, chunks[0])
-            self.db.resmgr.add_alias(self.job_def.var_name, old_node, self.job_def.var_name, new_node)
-    def complete(self):
-        self.workflow.notify_completed(self)
-

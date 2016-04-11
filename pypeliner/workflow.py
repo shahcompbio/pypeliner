@@ -113,26 +113,6 @@ class Workflow(object):
             raise ValueError('Job already defined')
         self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, func, pypeliner.jobs.CallSet(args=args, kwargs=kwargs))
 
-    def changeaxis(self, name='', axes=(), var_name='', old_axis='', new_axis='', exact=True):
-        """ Change the axis for a managed variable.  This acts as a regular jobs with
-        input dependencies and output dependents as for jobs created using transform.
-
-        :param name: unique name of the change axis job, used to identify the job in logs
-                     and when submitting instances to the exec queue
-        :param axes: base axes of the managed object for which the axis change is requested.
-                     only the last axis may be changed, thus all previous axes should be
-                     given here as a list
-        :param var_name: name of the managed object for which the axis change is requested.
-        :param old_axis: previous axis on which the managed object is defined.
-        :param new_axis: new axis for the new managed object.  The new object will be defined
-                         on this axis and will be equivalent to the previous object.
-        :param exact: if true chunks must match, otherwise new must be a subset of old
-
-        """
-        if name in self.job_definitions:
-            raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.ChangeAxisDefinition(name, axes, var_name, old_axis, new_axis, exact=exact)
-
     def _create_job_instances(self, graph, db):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.

@@ -199,12 +199,6 @@ class WorkflowInstance(object):
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
-            # Change axis jobs, to be depracated
-            if job.is_immediate:
-                job.finalize()
-                job.complete()
-                continue
-
             if job.is_subworkflow:
                 self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 if self.runskip(job):

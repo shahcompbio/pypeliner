@@ -115,8 +115,6 @@ class ResourceManager(object):
     def __init__(self, temps_dir):
         self.temps_dir = temps_dir
         self.disposable = collections.defaultdict(set)
-        self.aliases = dict()
-        self.rev_alias = collections.defaultdict(list)
     def get_filename_creator(self, suffix):
         return FilenameCreator(self.temps_dir, suffix)
     def _get_createtime_placeholder(self, name, node):
@@ -134,30 +132,15 @@ class ResourceManager(object):
         elif os.path.exists(placeholder_filename):
             return os.path.getmtime(placeholder_filename)
     def get_filename(self, name, node):
-        if (name, node) in self.aliases:
-            return self.get_filename(*self.aliases[(name, node)])
-        else:
-            return os.path.join(self.temps_dir, node.subdir, name)
-    def add_alias(self, name, node, alias_name, alias_node):
-        self.aliases[(alias_name, alias_node)] = (name, node)
-        self.rev_alias[(name, node)].append((alias_name, alias_node))
-    def get_aliases(self, name, node):
-        for alias_name, alias_node in self.rev_alias[(name, node)]:
-            yield (alias_name, alias_node)
-            for alias_name_recurse, alias_node_recurse in self.get_aliases(alias_name, alias_node):
-                yield (alias_name_recurse, alias_node_recurse)
+        return os.path.join(self.temps_dir, node.subdir, name)
     def register_disposable(self, name, node, filename):
         self.disposable[(name, node)].add(filename)
     def cleanup(self, depgraph):
         for name, node in set(depgraph.obsolete):
-            if (name, node) in self.aliases:
-                continue
-            alias_ids = set([(name, node)] + list(self.get_aliases(name, node)))
-            if alias_ids.issubset(depgraph.obsolete):
-                for filename in self.disposable.get((name, node), ()):
-                    if os.path.exists(filename):
-                        logging.getLogger('resourcemgr').debug('removing ' + filename)
-                        os.remove(filename)
+            for filename in self.disposable.get((name, node), ()):
+                if os.path.exists(filename):
+                    logging.getLogger('resourcemgr').debug('removing ' + filename)
+                    os.remove(filename)
             depgraph.obsolete.remove((name, node))
 
 class WorkflowDatabase(object):
