@@ -7,6 +7,7 @@ import time
 import tempfile
 import shutil
 import subprocess
+import traceback
 
 import pypeliner.helpers
 
@@ -67,11 +68,16 @@ if __name__ == "__main__":
         return True
     sys.path = filter(not_pypeliner_path, sys.path)
     sys.path.extend(sys.argv[3:])
-    with open(before_filename, 'rb') as before:
-        job = pickle.load(before)
-    if job is None:
-        raise ValueError('no job data in ' + before_filename)
-    job()
-    with open(after_filename, 'wb') as after:
-        pickle.dump(job, after)
+    job = None
+    try:
+        with open(before_filename, 'rb') as before:
+            job = pickle.load(before)
+        if job is None:
+            raise ValueError('no job data in ' + before_filename)
+        job()
+    except:
+        sys.stderr.write(traceback.format_exc())
+    finally:
+        with open(after_filename, 'wb') as after:
+            pickle.dump(job, after)
 
