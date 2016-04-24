@@ -106,7 +106,7 @@ class DrmaaJob(object):
         error_text.append('qsub id: {0}'.format(self.job_id))
         
         if self.job_info.wasAborted:
-            raise error_text.append('job was aborted')
+            error_text.append('job was aborted')
      
         elif self.job_info.hasSignal:
             error_text.append('job finished due to signal {0}.'.format(self.job_info.terminatedSignal))
@@ -121,7 +121,7 @@ class DrmaaJob(object):
         
         error_text.append('delegator command: {0}'.format(cmd_str))
 
-        error_text.append('memory consumed: {0}'.format(self.job_info.resourceUsage['maxvmem']))
+        error_text.append('memory consumed: {0}'.format(self.job_info.resourceUsage.get('maxvmem', 'unknown, values are: ' + repr(self.job_info.resourceUsage))))
             
         error_text.append('job exit status: {0}'.format(self.job_info.exitStatus))
 
