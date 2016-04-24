@@ -11,10 +11,13 @@ class Workflow(object):
 
     """
     def __init__(self, default_ctx=None):
+        self.default_ctx = {
+            'mem': 4,
+            'num_retry': 3,
+            'mem_retry_factor': 2,
+        }
         if default_ctx is not None:
-            self.default_ctx = default_ctx
-        else:
-            self.default_ctx = {}
+            self.default_ctx.update(default_ctx)
         self.job_definitions = dict()
 
     def setobj(self, obj=None, value=None, axes=()):
@@ -83,11 +86,12 @@ class Workflow(object):
         derived class.
 
         """
-        if ctx is None:
-            ctx = self.default_ctx
+        job_ctx = self.default_ctx.copy()
+        if ctx is not None:
+            job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
     def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
