@@ -18,6 +18,9 @@ class BasicRunSkip(object):
             return True
         return False
 
+    def close(self):
+        pass
+
 
 class PatternMatcher(object):
     def __init__(self):
@@ -30,6 +33,10 @@ class PatternMatcher(object):
 
     def add(self, key, match):
         self._patterns.append((key, match))
+
+    def print_patterns(self):
+        for key, match in self._patterns:
+            print key, match
 
 
 class RunSkipCmd(cmd.Cmd):
@@ -98,4 +105,9 @@ class InteractiveRunSkip(object):
             runskip_cmd.cmdloop()
             if not runskip_cmd.success:
                 raise Exception('failed to obtain user input')
+
+    def close(self):
+        print 'run skip commands:'
+        self.patterns.print_patterns()
+
 

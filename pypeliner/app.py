@@ -219,5 +219,6 @@ class Pypeline(object):
             try:
                 self.sch.run(workflow, self.exec_queue, self.runskip)
             finally:
+                self.runskip.close()
                 print 'log file:', self.pipeline_log_filename
 
