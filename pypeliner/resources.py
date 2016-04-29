@@ -79,6 +79,8 @@ class UserResource(Resource):
             return os.path.getmtime(self.filename)
         return None
     def touch(self, db):
+        if not self.get_exists(db):
+            raise Exception('cannot touch missing user output')
         pypeliner.helpers.touch(self.filename)
     def finalize(self, write_filename, db):
         try:
@@ -112,8 +114,12 @@ class TempFileResource(Resource):
         if os.path.exists(placeholder_filename):
             return os.path.getmtime(placeholder_filename)
     def touch(self, db):
-        pypeliner.helpers.touch(self.get_filename(db))
-        self._save_createtime(db)
+        if self.get_exists(db):
+            pypeliner.helpers.touch(self.get_filename(db))
+            self._save_createtime(db)
+        else:
+            placeholder_filename = self._get_createtime_placeholder(db)
+            pypeliner.helpers.touch(placeholder_filename)
     def finalize(self, write_filename, db):
         try:
             os.rename(write_filename, self.get_filename(db))
