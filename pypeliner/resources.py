@@ -100,6 +100,7 @@ class TempFileResource(Resource):
         return self.get_filename(db) + '._placeholder'
     def _save_createtime(self, db):
         placeholder_filename = self._get_createtime_placeholder(db)
+        pypeliner.helpers.saferemove(placeholder_filename)
         pypeliner.helpers.touch(placeholder_filename)
         shutil.copystat(self.get_filename(db), placeholder_filename)
     def get_exists(self, db):
