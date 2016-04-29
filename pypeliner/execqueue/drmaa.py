@@ -1,12 +1,16 @@
+from __future__ import absolute_import
 import drmaa
 import logging
 import os
 import time
 
-from execqueue import LocalJobQueue, ReceiveError, qsub_format_name
-
 import pypeliner.delegator
 import pypeliner.helpers
+import pypeliner.execqueue.base
+import pypeliner.execqueue.local
+import pypeliner.execqueue.qcmd
+import pypeliner.execqueue.utils
+
 
 decode_status = {
     drmaa.JobState.UNDETERMINED: 'process status cannot be determined',
@@ -21,11 +25,13 @@ decode_status = {
     drmaa.JobState.FAILED: 'job finished, but failed'
 }
 
+
 class DrmaaJob(object):
     """ Encapsulate a running job created using drmaa
     """
-    def __init__(self, ctx, name, sent, temps_dir, modules, native_spec, session):
+    def __init__(self, ctx, name, sent, temps_dir, modules, qenv, native_spec, session):
         self.name = name
+        self.qenv = qenv
         self.native_spec = native_spec
         self.session = session
         self.temps_dir = temps_dir
@@ -37,6 +43,8 @@ class DrmaaJob(object):
         self.debug_filenames['job stdout'] = os.path.join(self.temps_dir, 'job.out')
         self.debug_filenames['job stderr'] = os.path.join(self.temps_dir, 'job.err')
         self.debug_filenames['resources'] = os.path.join(self.temps_dir, 'resources.txt')
+        self.debug_filenames['qacct stdout'] = os.path.join(temps_dir, 'qacct.out')
+        self.debug_filenames['qacct stderr'] = os.path.join(temps_dir, 'qacct.err')
         for filename in self.debug_filenames.itervalues():
             pypeliner.helpers.saferemove(filename)
         
@@ -52,29 +60,38 @@ class DrmaaJob(object):
         job_template.nativeSpecification = self._create_native_spec(native_spec, ctx)
         job_template.outputPath = ':' + self.debug_filenames['job stdout']
         job_template.errorPath = ':' + self.debug_filenames['job stderr']
-        job_template.jobName = qsub_format_name(self.name)
+        job_template.jobName = pypeliner.execqueue.utils.qsub_format_name(self.name)
         
         self.job_id = self.session.runJob(job_template)
         self.session.deleteJobTemplate(job_template)
 
         self.job_info = None
-    
+
+        self.qacct = pypeliner.execqueue.qcmd.QacctWrapper(
+            self.qenv, self.job_id,
+            self.debug_filenames['qacct stdout'],
+            self.debug_filenames['qacct stderr'],
+        )
+
     @property
     def finished(self):
         """ Get job finished boolean.
         """
-        if self.job_info is not None:
-            return True
-        
-        job_status = self.session.jobStatus(self.job_id)
-            
-        if job_status in [drmaa.JobState.QUEUED_ACTIVE, drmaa.JobState.RUNNING, drmaa.JobState.UNDETERMINED]:
-            return False
-        
-        else:
+        if self.job_info is None:
+            job_status = self.session.jobStatus(self.job_id)
+                
+            if job_status in [drmaa.JobState.QUEUED_ACTIVE, drmaa.JobState.RUNNING, drmaa.JobState.UNDETERMINED]:
+                return False
+
             self.job_info = self.session.wait(self.job_id)
-       
-            return True
+
+        if self.qacct.results is None:
+            try:
+                self.qacct.check()
+            except pypeliner.execqueue.qcmd.QacctError:
+                return True
+        
+        return self.qacct.results is not None
     
     def finalize(self):
         assert self.finished
@@ -82,12 +99,12 @@ class DrmaaJob(object):
         self._write_resource_usage()
         
         if int(self.job_info.exitStatus) != 0:
-            raise ReceiveError(self._create_error_text('drmma error'))
+            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text('drmma error'))
         
         self.received = self.delegated.finalize()
                     
         if self.received is None:
-            raise ReceiveError(self._create_error_text('receive error'))
+            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text('receive error'))
     
     def _create_error_text(self, desc):
         """ Create error text string.
@@ -187,8 +204,9 @@ class DrmaaJob(object):
             
             resources_text.append(out_str)
             
-        with open(self.debug_filenames['resources'], 'w') as fh:    
+        with open(self.debug_filenames['resources'], 'w') as fh:
             fh.write('\n'.join(resources_text))
+
 
 class DrmaaJobQueue:
     """ Maintain a list of running jobs executed synchronously using
@@ -198,12 +216,14 @@ class DrmaaJobQueue:
         self.modules = modules
         
         self.native_spec = native_spec
+
+        self.qenv = pypeliner.execqueue.qcmd.QEnv()
         
         self.jobs = dict()
         
         self.name_islocal = dict()
         
-        self.local_queue = LocalJobQueue(modules)
+        self.local_queue = pypeliner.execqueue.local.LocalJobQueue(modules)
     
     def __enter__(self):
         self.local_queue.__enter__()
@@ -222,7 +242,7 @@ class DrmaaJobQueue:
         self.session.exit()
     
     def create(self, ctx, name, sent, temps_dir):
-        return DrmaaJob(ctx, name, sent, temps_dir, self.modules, self.native_spec, self.session)
+        return DrmaaJob(ctx, name, sent, temps_dir, self.modules, self.qenv, self.native_spec, self.session)
     
     def send(self, ctx, name, sent, temps_dir):
         if ctx.get('local', False):
@@ -266,8 +286,10 @@ class DrmaaJobQueue:
     def empty(self):
         return self.length == 0
 
+
 class QsubError(object):
     pass
+
 
 class ContextError(Exception):
     pass

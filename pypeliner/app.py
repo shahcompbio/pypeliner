@@ -81,17 +81,16 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
 
 """
 
-import sys
 import logging
 import os
 import argparse
-import string
 import datetime
 from collections import *
 
 import pypeliner.execqueue
 import pypeliner.helpers
 import pypeliner.runskip
+import pypeliner.execqueue.factory
 
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
@@ -183,20 +182,8 @@ class Pypeline(object):
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
 
-        self.exec_queue = None
-        if self.config['submit'] is None:
-            raise Exception('No submit queue specified')
-        elif self.config['submit'] == 'local':
-            self.exec_queue = pypeliner.execqueue.LocalJobQueue(self.modules)
-        elif self.config['submit'] == 'qsub':
-            self.exec_queue = pypeliner.execqueue.QsubJobQueue(self.modules, self.config['nativespec'])
-        elif self.config['submit'] == 'asyncqsub':
-            self.exec_queue = pypeliner.execqueue.AsyncQsubJobQueue(self.modules, self.config['nativespec'], 20)
-        elif self.config['submit'] == 'pbs':
-            self.exec_queue = pypeliner.execqueue.PbsJobQueue(self.modules, self.config['nativespec'], 20)
-        elif self.config['submit'] == 'drmaa':
-            from pypeliner import drmaaqueue
-            self.exec_queue = drmaaqueue.DrmaaJobQueue(self.modules, self.config['nativespec'])
+        self.exec_queue = pypeliner.execqueue.factory.create(
+            self.config['submit'], self.modules, native_spec=self.config['nativespec'])
 
         self.sch = pypeliner.scheduler.Scheduler()
 

@@ -8,7 +8,7 @@ import traceback
 
 import pypeliner.helpers
 import pypeliner.graph
-import pypeliner.execqueue
+import pypeliner.execqueue.base
 import pypeliner.database
 
 
@@ -148,7 +148,7 @@ class Scheduler(object):
 
         try:
             received = exec_queue.receive(name)
-        except pypeliner.execqueue.ReceiveError as e:
+        except pypeliner.execqueue.base.ReceiveError as e:
             self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc())
             received = None
 
