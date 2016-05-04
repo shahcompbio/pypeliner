@@ -52,7 +52,6 @@ class DrmaaJob(object):
         job_template.remoteCommand = self.command[0]
         job_template.args = self.command[1:]
         
-        ctx, native_spec = self._parse_native_ctx(ctx)
         native_spec, export_local_env = self._parse_native_spec(native_spec)
         if export_local_env:
             job_template.jobEnvironment = os.environ
@@ -159,17 +158,6 @@ class DrmaaJob(object):
     def _create_native_spec(self, native_spec, ctx):
         return '-w w ' + native_spec.format(**ctx)
     
-    def _parse_native_ctx(self, ctx):
-        if 'native_spec' in ctx:
-            native_spec = ctx['native_spec']
-            
-            del ctx['native_spec']
-        
-        else:
-            native_spec = self.native_spec
-            
-        return ctx, native_spec
-    
     def _parse_native_spec(self, native_spec):
         if '-V' in native_spec:
             native_spec = native_spec.replace('-V', '')
@@ -208,7 +196,7 @@ class DrmaaJob(object):
             fh.write('\n'.join(resources_text))
 
 
-class DrmaaJobQueue:
+class DrmaaJobQueue(object):
     """ Maintain a list of running jobs executed synchronously using
     drmaa, with the ability to wait for jobs and return completed jobs
     """
@@ -287,9 +275,3 @@ class DrmaaJobQueue:
         return self.length == 0
 
 
-class QsubError(object):
-    pass
-
-
-class ContextError(Exception):
-    pass
