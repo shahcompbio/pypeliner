@@ -15,13 +15,6 @@ import pypeliner.database
 class PipelineException(Exception):
     pass
 
-class IncompleteJobException(Exception):
-    pass
-
-
-def _setobj_helper(value):
-    return value
-
 
 class Scheduler(object):
     """ Job scheduling class for queueing a set of jobs and running
@@ -166,7 +159,7 @@ class Scheduler(object):
             if self._retry_job(exec_queue, job):
                 return
             else:
-                raise IncompleteJobException()
+                raise pypeliner.graph.IncompleteJobException()
 
         job.finalize(received)
         job.complete()

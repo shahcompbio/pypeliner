@@ -44,3 +44,6 @@ class Node(tuple):
     @property
     def displayname(self):
         return '/'.join([a.displayname for a in self])
+
+def create_undefined_node(axes):
+    return Node([AxisInstance(a, None) for a in axes])

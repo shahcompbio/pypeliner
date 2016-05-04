@@ -71,7 +71,6 @@ class JobInstance(object):
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
         pypeliner.helpers.makedirs(self.logs_dir)
-        self.is_subworkflow = False
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.direct_write = False
@@ -271,6 +270,26 @@ class JobCallable(object):
         for arg in self.callargs:
             arg.finalize(db)
 
+def _setobj_helper(value):
+    return value
+
+class SetObjDefinition(JobDefinition):
+    def __init__(self, name, axes, obj, value):
+        super(SetObjDefinition, self).__init__(
+            name, axes, {}, _setobj_helper,
+            CallSet(ret=obj, args=(value,)))
+    def create_job_instances(self, workflow, db):
+        for node in db.nodemgr.retrieve_nodes(self.axes):
+            yield SetObjInstance(self, workflow, db, node)
+
+class SetObjInstance(JobInstance):
+    """ Represents a sub workflow. """
+    def __init__(self, job_def, workflow, db, node):
+        super(SetObjInstance, self).__init__(job_def, workflow, db, node)
+        obj_node = pypeliner.identifiers.create_undefined_node(job_def.argset.ret.axes)
+        obj_res = pypeliner.resources.Resource(job_def.argset.ret.name, node + obj_node)
+        self.obj_displayname = obj_res.build_displayname(workflow.node)
+
 class SubWorkflowDefinition(JobDefinition):
     def __init__(self, name, axes, func, argset):
         self.name = name
@@ -286,5 +305,4 @@ class SubWorkflowInstance(JobInstance):
     """ Represents a sub workflow. """
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
-        self.is_subworkflow = True
         self.direct_write = True

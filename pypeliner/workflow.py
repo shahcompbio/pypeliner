@@ -2,10 +2,6 @@ import pypeliner.commandline
 import pypeliner.jobs
 
 
-def _setobj_helper(value):
-    return value
-
-
 class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
@@ -40,7 +36,9 @@ class Workflow(object):
 
         """
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
-        self.transform(name=name, axes=axes, ctx={'immediate':True}, func=_setobj_helper, ret=obj, args=(value,))
+        if name in self.job_definitions:
+            raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
+        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
 
     def commandline(self, name='', axes=(), ctx=None, args=None):
         """ Add a command line based transform to the pipeline

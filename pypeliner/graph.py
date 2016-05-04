@@ -7,6 +7,9 @@ import pypeliner.helpers
 import pypeliner.identifiers
 import pypeliner.workflow
 
+class IncompleteJobException(Exception):
+    pass
+
 class IncompleteWorkflowException(Exception):
     pass
 
@@ -251,7 +254,7 @@ class WorkflowInstance(object):
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
-            if job.is_subworkflow:
+            if isinstance(job, pypeliner.jobs.SubWorkflowInstance):
                 self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 if self.runskip(job):
                     send = job.create_callable()
@@ -273,22 +276,16 @@ class WorkflowInstance(object):
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')
                     job.complete()
                 continue
-            elif job.ctx.get('immediate', False):
-                self._logger.debug('job ' + job.displayname + ' explanation: ' + job.explain())
-                if self.runskip(job):
-                    send = job.create_callable()
-                    self._logger.info('creating job ' + job.displayname)
-                    self._logger.info('job ' + job.displayname + ' -> ' + send.displaycommand)
-                    send()
-                    received = send
-                    if not received.finished:
-                        self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
-                        raise IncompleteWorkflowException()
-                    job.finalize(received)
-                    job.complete()
-                else:
-                    self._logger.info('job ' + job.displayname + ' skipped')
-                    job.complete()
+            elif isinstance(job, pypeliner.jobs.SetObjInstance):
+                self._logger.debug('setting object ' + job.obj_displayname)
+                send = job.create_callable()
+                send()
+                received = send
+                if not received.finished:
+                    self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + received.log_text())
+                    raise IncompleteJobException()
+                job.finalize(received)
+                job.complete()
             else:
                 return job
 
