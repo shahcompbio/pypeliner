@@ -35,6 +35,23 @@ class DependencyCycleException(Exception):
 class NoJobs(Exception):
     pass
 
+
+class unique_list(object):
+    def __init__(self):
+        self.l = list()
+        self.s = set()
+    def __len__(self):
+        return len(self.l)
+    def append(self, v):
+        if v not in self.s:
+            self.l.append(v)
+            self.s.add(v)
+    def pop_front(self):
+        v = self.l.pop(0)
+        self.s.remove(v)
+        return v
+
+
 class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
@@ -43,7 +60,7 @@ class DependencyGraph:
         self.db = db
         self.completed = set()
         self.created = set()
-        self.standby_jobs = list()
+        self.standby_jobs = unique_list()
         self.standby_resources = set()
         self.ready = set()
         self.running = set()
@@ -107,11 +124,14 @@ class DependencyGraph:
         if len(self.ready) > 0:
             job_id = self.ready.pop()
         elif len(self.standby_jobs) > 0:
-            job_id = self.standby_jobs.pop(0)
+            job_id = self.standby_jobs.pop_front()
         else:
             raise NoJobs()
 
         job_node = ('job', job_id)
+
+        assert job_id not in self.running
+        assert job_id not in self.completed
 
         self.running.add(job_id)
 
