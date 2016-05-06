@@ -425,6 +425,53 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, expected_output)
 
+    def test_missing_temporary2(self):
+
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.transform(
+            name='do_file_stuff_1',
+            func=do_file_stuff,
+            args=(
+                mgd.InputFile(self.input_filename),
+                mgd.TempOutputFile('temp_file1'),
+                '1'))
+
+        workflow.transform(
+            name='do_file_stuff_2',
+            func=do_file_stuff,
+            args=(
+                mgd.TempInputFile('temp_file1'),
+                mgd.TempOutputFile('temp_file2'),
+                '2'))
+
+        workflow.transform(
+            name='do_file_stuff_3',
+            func=do_file_stuff,
+            args=(
+                mgd.TempInputFile('temp_file2'),
+                mgd.OutputFile(self.output_filename),
+                '3'))
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        time.sleep(1)
+        os.remove(self.output_filename)
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        with open(self.output_filename, 'r') as output_file:
+            output = output_file.readlines()
+
+        expected_output = []
+        for file_id in xrange(1, 2+1):
+            for line in xrange(1, 8+1):
+                expected_output.append('{}{}line{}\n'.format(line-1, 'extras', line))
+
+        self.assertEqual(output, expected_output)
+
     def test_simple_create_all(self):
 
         workflow = pypeliner.workflow.Workflow()
