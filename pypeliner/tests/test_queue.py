@@ -13,7 +13,7 @@ class BasicJob():
         self.success = True
 
 
-def run_basic_test(exec_queue, base_temps_dir):
+def run_basic(exec_queue, base_temps_dir):
 
     assert exec_queue.empty
 
@@ -61,6 +61,6 @@ if __name__ == '__main__':
     exec_queue = pypeliner.execqueue.factory.create(args['submit'], [test_queue], native_spec=args['nativespec'])
 
     with exec_queue:
-        run_basic_test(exec_queue, base_temps_dir)
+        run_basic(exec_queue, base_temps_dir)
 
 
