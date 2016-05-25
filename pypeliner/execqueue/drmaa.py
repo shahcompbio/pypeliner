@@ -72,12 +72,21 @@ class DrmaaJob(object):
             self.debug_filenames['qacct stderr'],
         )
 
+        self.unrecoverable_error = False
+
     @property
     def finished(self):
         """ Get job finished boolean.
         """
+        if self.unrecoverable_error:
+            return True
+
         if self.job_info is None:
-            job_status = self.session.jobStatus(self.job_id)
+            try:
+                job_status = self.session.jobStatus(self.job_id)
+            except:
+                self.unrecoverable_error = True
+                return True
                 
             if job_status in [drmaa.JobState.QUEUED_ACTIVE, drmaa.JobState.RUNNING, drmaa.JobState.UNDETERMINED]:
                 return False
