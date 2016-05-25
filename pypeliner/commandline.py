@@ -79,7 +79,7 @@ def execute(*args):
         with open(input, 'rb') as infile:
             _call_processes(args, command_list, infile, sys.stdout)
     elif output:
-        # Call processes with input
+        # Call processes with output
         with open(output, 'wb') as outfile:
             _call_processes(args, command_list, None, outfile)
     else:
