@@ -98,7 +98,7 @@ class NodeManager(object):
                 yield pypeliner.resources.TempObjManager(axes[level], level_node)
     def get_node_inputs(self, node):
         if len(node) >= 1:
-            yield pypeliner.resources.TempObjManager(node[-1][0], node[:-1]).input
+            yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
 
 class FilenameCreator(object):
     """ Function object for creating filenames from name node pairs """

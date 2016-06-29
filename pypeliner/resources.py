@@ -13,9 +13,14 @@ class OutputMissingException(Exception):
         return 'expected output {0} missing'.format(self.filename)
 
 
-class Resource(object):
-    """ Abstract input/output in the dependency graph
-    associated with a file tracked using creation time """
+class Dependency(object):
+    """ An input/output in the dependency graph
+    
+    This class is mainly used for tracking dependencies in the
+    dependency graph for which it is not appropriate to check
+    timestamps, in particular for an axis chunk input to a job
+    parallelized on that axis.
+    """
     def __init__(self, name, node):
         self.name = name
         self.node = node
@@ -29,6 +34,11 @@ class Resource(object):
         if base_node.displayname != '':
             name = '/' + base_node.displayname + name
         return name
+
+
+class Resource(Dependency):
+    """ Abstract input/output in the dependency graph
+    associated with a file tracked using creation time """
     def build_displayname_filename(self, db, base_node=pypeliner.identifiers.Node()):
         displayname = self.build_displayname(base_node)
         filename = self.get_filename(db)
@@ -63,7 +73,6 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    is_temp = False
     def __init__(self, name, node, fnames=None, template=None):
         self.name = name
         self.node = node
@@ -91,7 +100,6 @@ class UserResource(Resource):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    is_temp = True
     def __init__(self, name, node, db):
         self.name = name
         self.node = node
@@ -130,7 +138,6 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    is_temp = True
     def __init__(self, name, node, is_input=True):
         self.name = name
         self.node = node

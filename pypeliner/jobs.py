@@ -101,20 +101,32 @@ class JobInstance(object):
                 for output in arg.get_outputs(self.db):
                     yield output
     @property
+    def input_resources(self):
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
+    @property
+    def output_resources(self):
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
+    @property
+    def input_dependencies(self):
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self.inputs)
+    @property
+    def output_dependencies(self):
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self.outputs)
+    @property
     def pipeline_inputs(self):
-        return itertools.ifilter(lambda a: not a.is_temp, self.inputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.inputs)
     @property
     def pipeline_outputs(self):
-        return itertools.ifilter(lambda a: not a.is_temp, self.outputs)
+        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.outputs)
     def check_inputs(self):
-        for input in self.inputs:
+        for input in self.input_resources:
             if input.get_createtime(self.db) is None:
                 raise InputMissingException(input.id, input.get_filename(self.db), self.id)
     def out_of_date(self, check_inputs=True):
         if check_inputs:
             self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.inputs]
-        output_dates = [output.get_createtime(self.db) for output in self.outputs]
+        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
+        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
         if len(input_dates) == 0 or len(output_dates) == 0:
             return True
         if None in output_dates:
@@ -122,8 +134,8 @@ class JobInstance(object):
         return max(input_dates) > min(output_dates)
     def explain(self):
         self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.inputs]
-        output_dates = [output.get_createtime(self.db) for output in self.outputs]
+        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
+        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
         try:
             newest_input_date = max(input_dates)
         except ValueError:
@@ -146,7 +158,7 @@ class JobInstance(object):
             explanation = ['outputs required by downstream job']
         else:
             explanation = ['up to date']
-        for input in self.inputs:
+        for input in self.input_resources:
             status = ''
             if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
                 status = 'new'
@@ -155,7 +167,7 @@ class JobInstance(object):
                 _pretty_date(input.get_createtime(self.db)),
                 status)
             explanation.append(text)
-        for output in self.outputs:
+        for output in self.output_resources:
             status = ''
             if output.get_createtime(self.db) is None:
                 status = 'missing'
@@ -169,9 +181,11 @@ class JobInstance(object):
             explanation.append(text)
         return '\n'.join(explanation)
     def output_missing(self):
-        return not all([output.get_exists(self.db) for output in self.outputs])
+        return not all([output.get_exists(self.db) for output in self.output_resources])
     def touch_outputs(self):
-        for output in self.outputs:
+        for output in self.output_resources:
+            if not output.get_exists(self.db):
+                raise Exception('cannot touch missing output')
             output.touch(self.db)
     def check_require_regenerate(self):
         for arg in self.args:
