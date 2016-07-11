@@ -27,6 +27,8 @@ class Dependency(object):
     @property
     def id(self):
         return (self.name, self.node)
+    def get_exists(self, db):
+        return True
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         name = '/' + self.name
         if self.node.displayname != '':
