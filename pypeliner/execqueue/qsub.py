@@ -5,6 +5,7 @@ import time
 
 import pypeliner.helpers
 import pypeliner.execqueue.local
+import pypeliner.execqueue.qcmd
 import pypeliner.delegator
 
 
