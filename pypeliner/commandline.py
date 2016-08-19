@@ -137,6 +137,20 @@ def _call_processes(args, command_list, infile, outfile):
             raise CommandLineException(args, command_list[idx][0], process.returncode)
 
 def _call_process(command, stdin, stdout, stderr):
+
+    # Check that stdout/stderr are proper files, required by subprocess
+    # otherwise set to None.  Fixes issues with using commandline module
+    # in ipython
+    try:
+        stdout.fileno()
+    except:
+        stdout = None
+
+    try:
+        stderr.fileno()
+    except:
+        stderr = None
+
     try:
         return subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=stderr)
     except OSError as e:
