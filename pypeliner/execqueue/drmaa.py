@@ -84,8 +84,9 @@ class DrmaaJob(object):
         if self.job_info is None:
             try:
                 job_status = self.session.jobStatus(self.job_id)
-            except:
+            except Exception as e:
                 self.unrecoverable_error = True
+                self.unrecoverable_exception = str(e)
                 return True
                 
             if job_status in [drmaa.JobState.QUEUED_ACTIVE, drmaa.JobState.RUNNING, drmaa.JobState.UNDETERMINED]:
@@ -103,7 +104,10 @@ class DrmaaJob(object):
     
     def finalize(self):
         assert self.finished
-        
+
+        if self.unrecoverable_error:
+            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text('unrecoverable error: ' + self.unrecoverable_exception))
+
         self._write_resource_usage()
         
         if int(self.job_info.exitStatus) != 0:
@@ -129,28 +133,32 @@ class DrmaaJob(object):
         error_text.append('{0} for job: {1}'.format(desc, self.name))
                 
         error_text.append('qsub id: {0}'.format(self.job_id))
-        
-        if self.job_info.wasAborted:
-            error_text.append('job was aborted')
-     
-        elif self.job_info.hasSignal:
-            error_text.append('job finished due to signal {0}.'.format(self.job_info.terminatedSignal))
-        
-            if self.job_info.hasCoreDump:
-                error_text.append('a core dump is available for job')
-        
-        else:
-            error_text.append('job finished with unclear conditions')
-                
+
         cmd_str = ' '.join(self.command)
         
         error_text.append('delegator command: {0}'.format(cmd_str))
 
         error_text.append('native specification: {}'.format(self.native_spec))
 
-        error_text.append('memory consumed: {0}'.format(self.job_info.resourceUsage.get('maxvmem', 'unknown, values are: ' + repr(self.job_info.resourceUsage))))
-            
-        error_text.append('job exit status: {0}'.format(self.job_info.exitStatus))
+        if self.job_info is not None:
+            if self.job_info.wasAborted:
+                error_text.append('job was aborted')
+
+            elif self.job_info.hasSignal:
+                error_text.append('job finished due to signal {0}.'.format(self.job_info.terminatedSignal))
+
+                if self.job_info.hasCoreDump:
+                    error_text.append('a core dump is available for job')
+
+            else:
+                error_text.append('job finished with unclear conditions')
+
+            error_text.append('memory consumed: {0}'.format(self.job_info.resourceUsage.get('maxvmem', 'unknown, values are: ' + repr(self.job_info.resourceUsage))))
+
+            error_text.append('job exit status: {0}'.format(self.job_info.exitStatus))
+
+        else:
+            error_text.append('no job info available')
 
         for debug_type, debug_filename in self.debug_filenames.iteritems():
             if not os.path.exists(debug_filename):
