@@ -559,6 +559,8 @@ class scheduler_test(unittest.TestCase):
             args=(
                 'cat',
                 mgd.InputFile(self.input_filename),
+                '|',
+                'cat',
                 '>', mgd.OutputFile(self.output_filename),))
 
         scheduler = self.create_scheduler()
