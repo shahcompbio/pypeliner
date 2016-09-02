@@ -518,7 +518,7 @@ class scheduler_test(unittest.TestCase):
         
         workflow.transform(
             name='job5',
-            func=job5,
+            func=do_assert,
             args=(
                 mgd.TempInputFile('samples.align.true'),
                 mgd.OutputFile(self.output_filename),
@@ -526,14 +526,15 @@ class scheduler_test(unittest.TestCase):
         )
 
         scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
 
         time.sleep(1)
-        os.remove(self.output_filename)
         
         for name, job in workflow.job_definitions.iteritems():
             if name != 'job5':
                 job.func = do_assert
+            else:
+                job.func = job5
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
