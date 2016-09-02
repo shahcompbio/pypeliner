@@ -425,7 +425,7 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, expected_output)
 
-    def failing_missing_temporary2(self):
+    def test_missing_temporary2(self):
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -471,6 +471,72 @@ class scheduler_test(unittest.TestCase):
                 expected_output.append('{}{}line{}\n'.format(line-1, 'extras', line))
 
         self.assertEqual(output, expected_output)
+
+    def test_missing_temporary3(self):
+        
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.transform(
+            name='bamdisc',
+            func=job1,
+            args=(
+                mgd.InputFile(self.input_filename),
+                mgd.TempOutputFile('stats.txt'),
+                mgd.TempOutputFile('reads1.fq.gz'),
+                mgd.TempOutputFile('sample1.fq.gz'),
+            ),
+        )
+
+        workflow.transform(
+            name='readstats',
+            func=job2,
+            ret=mgd.TempOutputObj('stats'),
+            args=(
+                mgd.TempInputFile('stats.txt'),
+            ),
+        )
+
+        workflow.transform(
+            name='prepseed_sample',
+            func=job3,
+            args=(
+                mgd.TempInputFile('sample1.fq.gz'),
+                mgd.TempOutputFile('sample.seed'),
+            ),
+        )
+
+        workflow.transform(
+            name='bwtrealign_sample',
+            func=job4,
+            args=(
+                mgd.TempInputFile('sample.seed'),
+                mgd.TempInputFile('sample1.fq.gz'),
+                mgd.TempInputObj('stats'),
+                mgd.TempOutputFile('samples.align.true'),
+            ),
+        )
+        
+        workflow.transform(
+            name='job5',
+            func=job5,
+            args=(
+                mgd.TempInputFile('samples.align.true'),
+                mgd.OutputFile(self.output_filename),
+            ),
+        )
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        time.sleep(1)
+        os.remove(self.output_filename)
+        
+        for name, job in workflow.job_definitions.iteritems():
+            if name != 'job5':
+                job.func = do_assert
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
 
     def test_simple_create_all(self):
 

@@ -174,3 +174,31 @@ def create_workflow_1(input_filename, output_filename):
 
     return workflow
 
+
+def touch(f):
+    with open(f, 'w'):
+        pass
+
+
+def job1(i1, o1, o2, o3):
+    touch(o1)
+    touch(o2)
+    touch(o3)
+
+
+def job2(i1):
+    return 'data'
+
+
+def job3(i1, o1):
+    touch(o1)
+
+
+def job4(i1, i2, i3, o1):
+    touch(o1)
+
+
+def job5(i1, o1):
+    touch(o1)
+
+
