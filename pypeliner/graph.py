@@ -167,12 +167,14 @@ class DependencyGraph:
                 if len(not_created_inputs) == 0:
                     if not job.out_of_date() and job.output_missing():
                         self.standby_jobs.append(job.id)
+                        logging.getLogger('jobgraph').debug('job {} in standby'.format(job.id))
                         for output in job.outputs:
                             if not output.get_exists(self.db):
                                 self.standby_resources.add(output.id)
                     else:
                         self.ready.add(job.id)
                 elif len(not_created_standby_inputs) > 0:
+                    logging.getLogger('jobgraph').debug('job {} notify required'.format(job.id) + str(not_created_standby_inputs))
                     self._notify_required(not_created_standby_inputs)
 
     def _notify_required(self, required):
