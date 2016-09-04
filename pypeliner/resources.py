@@ -107,7 +107,7 @@ class TempFileResource(Resource):
         self.node = node
         db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
     def get_filename(self, db):
-        return db.resmgr.get_filename(self.name, self.node)
+        return db.get_filename(self.name, self.node)
     def _get_createtime_placeholder(self, db):
         return self.get_filename(db) + '._placeholder'
     def _save_createtime(self, db):
@@ -145,7 +145,7 @@ class TempObjResource(Resource):
         self.node = node
         self.is_input = is_input
     def get_filename(self, db):
-        return db.resmgr.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
+        return db.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
     def get_exists(self, db):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):

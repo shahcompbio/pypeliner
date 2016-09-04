@@ -115,10 +115,6 @@ class ResourceManager(object):
     def __init__(self, temps_dir):
         self.temps_dir = temps_dir
         self.disposable = collections.defaultdict(set)
-    def get_filename_creator(self, suffix):
-        return FilenameCreator(self.temps_dir, suffix)
-    def get_filename(self, name, node):
-        return os.path.join(self.temps_dir, node.subdir, name)
     def register_disposable(self, name, node, filename):
         self.disposable[(name, node)].add(filename)
     def cleanup(self, depgraph):
@@ -132,15 +128,17 @@ class ResourceManager(object):
 class WorkflowDatabase(object):
     def __init__(self, workflow_dir, logs_dir, instance_subdir):
         self.instance_subdir = instance_subdir
-        nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
-        temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
-        pypeliner.helpers.makedirs(nodes_dir)
-        pypeliner.helpers.makedirs(temps_dir)
-        self.resmgr = ResourceManager(temps_dir)
-        self.nodemgr = NodeManager(self, nodes_dir, temps_dir)
+        self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
+        self.temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
+        pypeliner.helpers.makedirs(self.nodes_dir)
+        pypeliner.helpers.makedirs(self.temps_dir)
+        self.resmgr = ResourceManager(self.temps_dir)
+        self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
         self.resources = {}
         self.resource_types = {}
+    def get_filename(self, name, node):
+        return os.path.join(self.temps_dir, node.subdir, name)
     def create_resource(self, typ, name, node, **kwargs):
         if (name, node) not in self.resources:
             self.resources[(name, node)] = typ(self, name, node, **kwargs)

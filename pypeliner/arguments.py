@@ -69,11 +69,11 @@ class TempFileArg(Arg):
         self.node = node
         self.cleanup = cleanup
     def _remove(self, db):
-        pypeliner.helpers.removefiledir(db.resmgr.get_filename(self.name, self.node))
+        pypeliner.helpers.removefiledir(db.get_filename(self.name, self.node))
     def resolve(self, db, direct_write):
         if self.cleanup in ('before', 'both'):
             self._remove(db)
-        return db.resmgr.get_filename(self.name, self.node)
+        return db.get_filename(self.name, self.node)
     def finalize(self, db):
         if self.cleanup in ('after', 'both'):
             self._remove(db)
@@ -437,7 +437,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self, db.resmgr.get_filename_creator(suffix))
+        self.resolved = FilenameCallback(self, pypeliner.database.FilenameCreator(db.temps_dir, suffix))
         return self.resolved
     def updatedb(self, db):
         if self.is_split:
