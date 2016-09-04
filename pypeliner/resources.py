@@ -21,7 +21,7 @@ class Dependency(object):
     timestamps, in particular for an axis chunk input to a job
     parallelized on that axis.
     """
-    def __init__(self, name, node):
+    def __init__(self, db, name, node):
         self.name = name
         self.node = node
     @property
@@ -75,7 +75,7 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, fnames=None, template=None):
+    def __init__(self, db, name, node, fnames=None, template=None):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
@@ -102,7 +102,7 @@ class UserResource(Resource):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, db):
+    def __init__(self, db, name, node):
         self.name = name
         self.node = node
         db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
@@ -176,7 +176,7 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node):
+    def __init__(self, db, name, node):
         self.name = name
         self.node = node
     @property

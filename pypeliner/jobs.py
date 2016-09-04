@@ -299,7 +299,7 @@ class SetObjInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SetObjInstance, self).__init__(job_def, workflow, db, node)
         obj_node = pypeliner.identifiers.create_undefined_node(job_def.argset.ret.axes)
-        obj_res = pypeliner.resources.Resource(job_def.argset.ret.name, node + obj_node)
+        obj_res = pypeliner.resources.Resource(db, job_def.argset.ret.name, node + obj_node)
         self.obj_displayname = obj_res.build_displayname(workflow.node)
 
 class SubWorkflowDefinition(JobDefinition):
