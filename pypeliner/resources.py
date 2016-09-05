@@ -21,7 +21,7 @@ class Dependency(object):
     timestamps, in particular for an axis chunk input to a job
     parallelized on that axis.
     """
-    def __init__(self, db, name, node):
+    def __init__(self, db, name, node, **kwargs):
         self.name = name
         self.node = node
     @property
@@ -75,7 +75,7 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node, fnames=None, template=None):
+    def __init__(self, db, name, node, fnames=None, template=None, **kwargs):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
@@ -100,14 +100,19 @@ class UserResource(Resource):
             raise OutputMissingException(write_filename)
 
 
+def get_temp_filename(temps_dir, name, node):
+    return os.path.join(temps_dir, node.subdir, name)
+
+
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node):
+    def __init__(self, db, name, node, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
+        self.temps_dir = temps_dir
         db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
     def get_filename(self, db):
-        return db.get_filename(self.name, self.node)
+        return get_temp_filename(self.temps_dir, self.name, self.node)
     def _get_createtime_placeholder(self, db):
         return self.get_filename(db) + '._placeholder'
     def _save_createtime(self, db):
@@ -140,12 +145,13 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, is_input=True):
+    def __init__(self, name, node, is_input=True, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
         self.is_input = is_input
+        self.temps_dir = temps_dir
     def get_filename(self, db):
-        return db.get_filename(self.name, self.node) + ('._i', '._o')[self.is_input]
+        return get_temp_filename(self.temps_dir, self.name, self.node) + ('._i', '._o')[self.is_input]
     def get_exists(self, db):
         return os.path.exists(self.get_filename(db))
     def get_createtime(self, db):
@@ -176,15 +182,16 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node):
+    def __init__(self, db, name, node, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
+        self.temps_dir = temps_dir
     @property
     def input(self):
-        return TempObjResource(self.name, self.node, is_input=True)
+        return TempObjResource(self.name, self.node, is_input=True, temps_dir=self.temps_dir)
     @property
     def output(self):
-        return TempObjResource(self.name, self.node, is_input=False)
+        return TempObjResource(self.name, self.node, is_input=False, temps_dir=self.temps_dir)
     def get_obj(self, db):
         try:
             with open(self.input.get_filename(db), 'rb') as f:

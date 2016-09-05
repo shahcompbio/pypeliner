@@ -39,7 +39,7 @@ class NodeManager(object):
                     yield (chunk,) + chunks_rest
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
-            resource = pypeliner.resources.TempObjManager(self.db, axis, node)
+            resource = pypeliner.resources.TempObjManager(self.db, axis, node, temps_dir=self.db.temps_dir)
             chunks = resource.get_obj(self.db)
             if chunks is None:
                 chunks = (None,)
@@ -73,7 +73,7 @@ class NodeManager(object):
             pypeliner.helpers.makedirs(os.path.join(self.db.resmgr.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
-        resource = pypeliner.resources.TempObjManager(self.db, axis, node)
+        resource = pypeliner.resources.TempObjManager(self.db, axis, node, temps_dir=self.db.temps_dir)
         resource.finalize(chunks, self.db)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
@@ -90,12 +90,12 @@ class NodeManager(object):
         return outputs
     def get_chunks_resource(self, axes, node, subset):
         if 0 in subset:
-            yield pypeliner.resources.TempObjManager(self.db, axes[0], node)
+            yield pypeliner.resources.TempObjManager(self.db, axes[0], node, temps_dir=self.db.temps_dir)
         for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
-                yield pypeliner.resources.TempObjManager(self.db, axes[level], level_node)
+                yield pypeliner.resources.TempObjManager(self.db, axes[level], level_node, temps_dir=self.db.temps_dir)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield pypeliner.resources.Dependency(self.db, node[-1][0], node[:-1])
@@ -137,11 +137,9 @@ class WorkflowDatabase(object):
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
         self.resources = {}
         self.resource_types = {}
-    def get_filename(self, name, node):
-        return os.path.join(self.temps_dir, node.subdir, name)
     def create_resource(self, typ, name, node, **kwargs):
         if (name, node) not in self.resources:
-            self.resources[(name, node)] = typ(self, name, node, **kwargs)
+            self.resources[(name, node)] = typ(self, name, node, temps_dir=self.temps_dir, **kwargs)
             self.resource_types[(name, node)] = typ
         if typ != self.resource_types[(name, node)]:
             raise Exception('resource {}, {} with type {} and {} in workflow {}'.format(

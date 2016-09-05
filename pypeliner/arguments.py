@@ -68,12 +68,13 @@ class TempFileArg(Arg):
         self.name = name
         self.node = node
         self.cleanup = cleanup
+        self.filename = pypeliner.resources.get_temp_filename(db.temps_dir, name, node)
     def _remove(self, db):
-        pypeliner.helpers.removefiledir(db.get_filename(self.name, self.node))
+        pypeliner.helpers.removefiledir(self.filename)
     def resolve(self, db, direct_write):
         if self.cleanup in ('before', 'both'):
             self._remove(db)
-        return db.get_filename(self.name, self.node)
+        return self.filename
     def finalize(self, db):
         if self.cleanup in ('after', 'both'):
             self._remove(db)
