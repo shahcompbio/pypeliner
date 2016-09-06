@@ -169,7 +169,7 @@ class DependencyGraph:
                         self.standby_jobs.append(job.id)
                         logging.getLogger('jobgraph').debug('job {} in standby'.format(job.id))
                         for output in job.outputs:
-                            if not output.get_exists(self.db):
+                            if not output.exists:
                                 self.standby_resources.add(output.id)
                     else:
                         self.ready.add(job.id)
@@ -194,7 +194,7 @@ class DependencyGraph:
             resource_id = visit_resources.pop()
             resource_node = ('resource', resource_id)
             resource = self.G.node[resource_node]['resource']
-            if resource.get_exists(self.db):
+            if resource.exists:
                 continue
             for job_node in self.G.predecessors_iter(resource_node):
                 job = self.G.node[job_node]['job']

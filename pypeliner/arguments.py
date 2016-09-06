@@ -69,15 +69,15 @@ class TempFileArg(Arg):
         self.node = node
         self.cleanup = cleanup
         self.filename = pypeliner.resources.get_temp_filename(db.temps_dir, name, node)
-    def _remove(self, db):
+    def _remove(self):
         pypeliner.helpers.removefiledir(self.filename)
     def resolve(self, db, direct_write):
         if self.cleanup in ('before', 'both'):
-            self._remove(db)
+            self._remove()
         return self.filename
     def finalize(self, db):
         if self.cleanup in ('after', 'both'):
-            self._remove(db)
+            self._remove()
 
 
 class MergeTemplateArg(Arg):
@@ -233,7 +233,7 @@ class TempInputObjArg(Arg):
     def get_inputs(self, db):
         yield self.resource.input
     def resolve(self, db, direct_write):
-        obj = self.resource.get_obj(db)
+        obj = self.resource.get_obj()
         if self.func is not None:
             obj = self.func(obj)
         return obj
@@ -263,7 +263,7 @@ class TempMergeObjArg(Arg,SplitMergeArg):
     def resolve(self, db, direct_write):
         resolved = dict()
         for resource in self.get_resources(db):
-            obj = resource.get_obj(db)
+            obj = resource.get_obj()
             if self.func is not None:
                 obj = self.func(obj)
             resolved[self.get_node_chunks(resource.node)] = obj
@@ -335,7 +335,7 @@ class TempInputFileArg(Arg):
     def get_inputs(self, db):
         yield self.resource
     def resolve(self, db, direct_write):
-        return self.resource.get_filename(db)
+        return self.resource.filename
 
 
 class TempMergeFileArg(Arg,SplitMergeArg):
@@ -359,7 +359,7 @@ class TempMergeFileArg(Arg,SplitMergeArg):
     def resolve(self, db, direct_write):
         resolved = dict()
         for resource in self.get_resources(db):
-            resolved[self.get_node_chunks(resource.node)] = resource.get_filename(db)
+            resolved[self.get_node_chunks(resource.node)] = resource.filename
         return resolved
 
 
@@ -375,7 +375,7 @@ class TempOutputFileArg(Arg):
         yield self.resource
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = self.resource.get_filename(db) + suffix
+        self.resolved = self.resource.filename + suffix
         return self.resolved
     def finalize(self, db):
         self.resource.finalize(self.resolved, db)

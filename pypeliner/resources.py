@@ -27,7 +27,8 @@ class Dependency(object):
     @property
     def id(self):
         return (self.name, self.node)
-    def get_exists(self, db):
+    @property
+    def exists(self):
         return True
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         name = '/' + self.name
@@ -41,20 +42,19 @@ class Dependency(object):
 class Resource(Dependency):
     """ Abstract input/output in the dependency graph
     associated with a file tracked using creation time """
-    def build_displayname_filename(self, db, base_node=pypeliner.identifiers.Node()):
+    def build_displayname_filename(self, base_node=pypeliner.identifiers.Node()):
         displayname = self.build_displayname(base_node)
-        filename = self.get_filename(db)
-        if displayname != filename:
-            return ' '.join([displayname, filename])
+        if displayname != self.filename:
+            return ' '.join([displayname, self.filename])
         else:
             return displayname
-    def get_filename(self, db):
+    @property
+    def exists(self):
         raise NotImplementedError
-    def get_exists(self, db):
+    @property
+    def createtime(self):
         raise NotImplementedError
-    def get_createtime(self, db):
-        raise NotImplementedError
-    def touch(self, db):
+    def touch(self):
         raise NotImplementedError
 
 
@@ -79,18 +79,18 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
-    def get_filename(self, db):
-        return self.filename
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
-    def get_exists(self, db):
+    @property
+    def exists(self):
         return os.path.exists(self.filename)
-    def get_createtime(self, db):
+    @property
+    def createtime(self):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
         return None
-    def touch(self, db):
-        if not self.get_exists(db):
+    def touch(self):
+        if not self.exists:
             raise Exception('cannot touch missing user output')
         pypeliner.helpers.touch(self.filename)
     def finalize(self, write_filename, db):
@@ -109,38 +109,38 @@ class TempFileResource(Resource):
     def __init__(self, db, name, node, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
-        self.temps_dir = temps_dir
-        db.resmgr.register_disposable(self.name, self.node, self.get_filename(db))
-    def get_filename(self, db):
-        return get_temp_filename(self.temps_dir, self.name, self.node)
-    def _get_createtime_placeholder(self, db):
-        return self.get_filename(db) + '._placeholder'
-    def _save_createtime(self, db):
-        placeholder_filename = self._get_createtime_placeholder(db)
+        self.filename = get_temp_filename(temps_dir, name, node)
+        db.resmgr.register_disposable(self.name, self.node, self.filename)
+    def _get_createtime_placeholder(self):
+        return self.filename + '._placeholder'
+    def _save_createtime(self):
+        placeholder_filename = self._get_createtime_placeholder()
         pypeliner.helpers.saferemove(placeholder_filename)
         pypeliner.helpers.touch(placeholder_filename)
-        shutil.copystat(self.get_filename(db), placeholder_filename)
-    def get_exists(self, db):
-        return os.path.exists(self.get_filename(db))
-    def get_createtime(self, db):
-        if os.path.exists(self.get_filename(db)):
-            return os.path.getmtime(self.get_filename(db))
-        placeholder_filename = self._get_createtime_placeholder(db)
+        shutil.copystat(self.filename, placeholder_filename)
+    @property
+    def exists(self):
+        return os.path.exists(self.filename)
+    @property
+    def createtime(self):
+        if os.path.exists(self.filename):
+            return os.path.getmtime(self.filename)
+        placeholder_filename = self._get_createtime_placeholder()
         if os.path.exists(placeholder_filename):
             return os.path.getmtime(placeholder_filename)
-    def touch(self, db):
-        if self.get_exists(db):
-            pypeliner.helpers.touch(self.get_filename(db))
-            self._save_createtime(db)
+    def touch(self):
+        if self.exists:
+            pypeliner.helpers.touch(self.filename)
+            self._save_createtime()
         else:
-            placeholder_filename = self._get_createtime_placeholder(db)
+            placeholder_filename = self._get_createtime_placeholder()
             pypeliner.helpers.touch(placeholder_filename)
     def finalize(self, write_filename, db):
         try:
-            os.rename(write_filename, self.get_filename(db))
+            os.rename(write_filename, self.filename)
         except OSError:
             raise OutputMissingException(write_filename)
-        self._save_createtime(db)
+        self._save_createtime()
 
 
 class TempObjResource(Resource):
@@ -149,19 +149,19 @@ class TempObjResource(Resource):
         self.name = name
         self.node = node
         self.is_input = is_input
-        self.temps_dir = temps_dir
-    def get_filename(self, db):
-        return get_temp_filename(self.temps_dir, self.name, self.node) + ('._i', '._o')[self.is_input]
-    def get_exists(self, db):
-        return os.path.exists(self.get_filename(db))
-    def get_createtime(self, db):
-        if os.path.exists(self.get_filename(db)):
-            return os.path.getmtime(self.get_filename(db))
+        self.filename = get_temp_filename(temps_dir, name, node) + ('._i', '._o')[is_input]
+    @property
+    def exists(self):
+        return os.path.exists(self.filename)
+    @property
+    def createtime(self):
+        if os.path.exists(self.filename):
+            return os.path.getmtime(self.filename)
         return None
-    def touch(self, db):
-        if not self.get_exists(db):
+    def touch(self):
+        if not self.exists:
             raise Exception('cannot touch missing user output')
-        pypeliner.helpers.touch(self.get_filename(db))
+        pypeliner.helpers.touch(self.filename)
 
 
 def obj_equal(obj1, obj2):
@@ -192,17 +192,17 @@ class TempObjManager(object):
     @property
     def output(self):
         return TempObjResource(self.name, self.node, is_input=False, temps_dir=self.temps_dir)
-    def get_obj(self, db):
+    def get_obj(self):
         try:
-            with open(self.input.get_filename(db), 'rb') as f:
+            with open(self.input.filename, 'rb') as f:
                 return pickle.load(f)
         except IOError as e:
             if e.errno == 2:
                 pass
     def finalize(self, obj, db):
-        with open(self.output.get_filename(db), 'wb') as f:
+        with open(self.output.filename, 'wb') as f:
             pickle.dump(obj, f)
-        if not obj_equal(obj, self.get_obj(db)):
-            with open(self.input.get_filename(db), 'wb') as f:
+        if not obj_equal(obj, self.get_obj()):
+            with open(self.input.filename, 'wb') as f:
                 pickle.dump(obj, f)
 

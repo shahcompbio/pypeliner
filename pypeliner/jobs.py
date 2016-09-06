@@ -120,13 +120,13 @@ class JobInstance(object):
         return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.outputs)
     def check_inputs(self):
         for input in self.input_resources:
-            if input.get_createtime(self.db) is None:
-                raise InputMissingException(input.id, input.get_filename(self.db), self.id)
+            if input.createtime is None:
+                raise InputMissingException(input.id, input.filename, self.id)
     def out_of_date(self, check_inputs=True):
         if check_inputs:
             self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
-        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
+        input_dates = [input.createtime for input in self.input_resources]
+        output_dates = [output.createtime for output in self.output_resources]
         if len(input_dates) == 0 or len(output_dates) == 0:
             return True
         if None in output_dates:
@@ -134,8 +134,8 @@ class JobInstance(object):
         return max(input_dates) > min(output_dates)
     def explain(self):
         self.check_inputs()
-        input_dates = [input.get_createtime(self.db) for input in self.input_resources]
-        output_dates = [output.get_createtime(self.db) for output in self.output_resources]
+        input_dates = [input.createtime for input in self.input_resources]
+        output_dates = [output.createtime for output in self.output_resources]
         try:
             newest_input_date = max(input_dates)
         except ValueError:
@@ -160,28 +160,28 @@ class JobInstance(object):
             explanation = ['up to date']
         for input in self.input_resources:
             status = ''
-            if oldest_output_date is not None and input.get_createtime(self.db) > oldest_output_date:
+            if oldest_output_date is not None and input.createtime > oldest_output_date:
                 status = 'new'
             text = 'input {0} {1} {2}'.format(
-                input.build_displayname_filename(self.db, self.workflow.node),
-                _pretty_date(input.get_createtime(self.db)),
+                input.build_displayname_filename(self.workflow.node),
+                _pretty_date(input.createtime),
                 status)
             explanation.append(text)
         for output in self.output_resources:
             status = ''
-            if output.get_createtime(self.db) is None:
+            if output.createtime is None:
                 status = 'missing'
-            elif newest_input_date is not None and output.get_createtime(self.db) < newest_input_date:
-                status = '{0} old'.format(_pretty_date(output.get_createtime(self.db)))
+            elif newest_input_date is not None and output.createtime < newest_input_date:
+                status = '{0} old'.format(_pretty_date(output.createtime))
             else:
-                status = '{0}'.format(_pretty_date(output.get_createtime(self.db)))
+                status = '{0}'.format(_pretty_date(output.createtime))
             text = 'output {0} {1}'.format(
-                output.build_displayname_filename(self.db, self.workflow.node),
+                output.build_displayname_filename(self.workflow.node),
                 status)
             explanation.append(text)
         return '\n'.join(explanation)
     def output_missing(self):
-        return not all([output.get_exists(self.db) for output in self.output_resources])
+        return not all([output.exists for output in self.output_resources])
     def touch_outputs(self):
         for output in self.output_resources:
             output.touch(self.db)

@@ -40,7 +40,7 @@ class NodeManager(object):
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             resource = pypeliner.resources.TempObjManager(self.db, axis, node, temps_dir=self.db.temps_dir)
-            chunks = resource.get_obj(self.db)
+            chunks = resource.get_obj()
             if chunks is None:
                 chunks = (None,)
             self.cached_chunks[(axis, node)] = chunks
