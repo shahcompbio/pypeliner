@@ -3,7 +3,9 @@ import os
 import subprocess
 
 import pypeliner.delegator
+import pypeliner.execqueue.base
 import pypeliner.execqueue.subproc
+import pypeliner.execqueue.utils
 
 
 class LocalJob(object):
