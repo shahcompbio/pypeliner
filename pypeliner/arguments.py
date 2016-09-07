@@ -412,6 +412,17 @@ class FilenameCallback(object):
             resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)], db)
 
 
+class FilenameCreator(object):
+    """ Function object for creating filenames from name node pairs """
+    def __init__(self, file_dir='', file_suffix=''):
+        self.file_dir = file_dir
+        self.file_suffix = file_suffix
+    def __call__(self, name, node):
+        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
+    def __repr__(self):
+        return '{0}.{1}({2})'.format(FilenameCreator.__module__, FilenameCreator.__name__, ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
+
+
 class TempSplitFileArg(Arg,SplitMergeArg):
     """ Temp output file arguments from a split
 
@@ -438,7 +449,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self, pypeliner.database.FilenameCreator(db.temps_dir, suffix))
+        self.resolved = FilenameCallback(self, FilenameCreator(db.temps_dir, suffix))
         return self.resolved
     def updatedb(self, db):
         if self.is_split:

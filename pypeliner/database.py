@@ -100,16 +100,6 @@ class NodeManager(object):
         if len(node) >= 1:
             yield pypeliner.resources.Dependency(self.db, node[-1][0], node[:-1])
 
-class FilenameCreator(object):
-    """ Function object for creating filenames from name node pairs """
-    def __init__(self, file_dir='', file_suffix=''):
-        self.file_dir = file_dir
-        self.file_suffix = file_suffix
-    def __call__(self, name, node):
-        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
-    def __repr__(self):
-        return '{0}.{1}({2})'.format(FilenameCreator.__module__, FilenameCreator.__name__, ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
-
 class ResourceManager(object):
     """ Manages file resources """
     def __init__(self, temps_dir):
