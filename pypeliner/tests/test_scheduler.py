@@ -566,7 +566,6 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempOutputFile('output_file')))
 
         scheduler = self.create_scheduler()
-        scheduler.prune = False
         scheduler.cleanup = False
         scheduler.run(workflow, exec_queue, runskip)
 

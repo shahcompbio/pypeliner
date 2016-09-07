@@ -71,10 +71,6 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Do not clean up temporary files.  Does not recreate files that were garbage
         collected in a previous run of the pipeline.
 
-    noprune
-        Do not prune jobs that are not necessary for the requested outputs.  Run
-        all jobs.
-
     interactive
         Run the pipeline in interactive mode, prompting at each step as to whether the job
         should be rerun.
@@ -110,7 +106,6 @@ config_infos.append(ConfigInfo('maxjobs', int, 1, 'maximum number of parallel jo
 config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporaries'))
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
-config_infos.append(ConfigInfo('noprune', bool, False, 'do not prune unecessary jobs'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
@@ -191,7 +186,6 @@ class Pypeline(object):
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
-        self.sch.prune = not self.config['noprune']
 
         if self.config['interactive']:
             default = pypeliner.runskip.BasicRunSkip(

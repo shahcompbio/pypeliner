@@ -210,7 +210,7 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), prune=False, cleanup=False):
+    def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), cleanup=False):
         self._logger = logging.getLogger('workflowgraph')
         self.workflow_def = workflow_def
         self.db_factory = db_factory
@@ -219,7 +219,6 @@ class WorkflowInstance(object):
         self.node = node
         self.graph = DependencyGraph(self.db)
         self.subworkflows = list()
-        self.prune = prune
         self.cleanup = cleanup
         self.regenerate()
 
@@ -234,10 +233,7 @@ class WorkflowInstance(object):
             jobs[job_inst.id] = job_inst
 
         inputs = set((input.id for job in jobs.itervalues() for input in job.pipeline_inputs))
-        if self.prune:
-            outputs = set((output.id for job in jobs.itervalues() for output in job.pipeline_outputs))
-        else:
-            outputs = set((output.id for job in jobs.itervalues() for output in job.outputs))
+        outputs = set((output.id for job in jobs.itervalues() for output in job.outputs))
         inputs = inputs.difference(outputs)
 
         self.graph.regenerate(inputs, outputs, jobs.values())
@@ -292,7 +288,7 @@ class WorkflowInstance(object):
                         self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text())
                         raise IncompleteWorkflowException()
                     node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
-                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, prune=self.prune, cleanup=self.cleanup)
+                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, cleanup=self.cleanup)
                     self.subworkflows.append((job, received, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped')
