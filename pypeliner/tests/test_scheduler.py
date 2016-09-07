@@ -466,9 +466,8 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
 
         expected_output = []
-        for file_id in xrange(1, 2+1):
-            for line in xrange(1, 8+1):
-                expected_output.append('{}{}line{}\n'.format(line-1, 'extras', line))
+        for line in xrange(1, 8+1):
+            expected_output.append('{}3{}2{}1line{}\n'.format(line-1, line-1, line-1, line))
 
         self.assertEqual(output, expected_output)
 
