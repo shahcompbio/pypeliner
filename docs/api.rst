@@ -23,7 +23,7 @@ Managed Objects
 .. autoclass:: InputFile
 .. autoclass:: OutputFile
 .. autoclass:: TempInputObj
-	:members: prop, extract
+    :members: prop, extract
 .. autoclass:: TempOutputObj
 .. autoclass:: TempInputFile
 .. autoclass:: TempOutputFile
@@ -39,7 +39,7 @@ Pypeline Object
 .. autofunction:: add_arguments
 
 .. autoclass:: Pypeline
-	:members:
+    :members:
 
 Command Line Helper
 -------------------

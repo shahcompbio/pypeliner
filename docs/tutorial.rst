@@ -381,24 +381,24 @@ Continuing our example, perhaps we would like to extract the reads from a bam an
     bam_filename = 'sample.bam'
     alignments_filename = 'alignments.sam'
 
-	workflow = pypeliner.workflow.Workflow()
+    workflow = pypeliner.workflow.Workflow()
 
-    workflow.subworkflow(
-    	name='extract_reads',
-    	func=extract_reads,
-    	args=(
-    		managed.InputFile(bam_filename),
-    		managed.TempOutputFile('reads.fastq'),
-    	),
+    workflow.transform(
+        name='extract_reads',
+        func=extract_reads,
+        args=(
+            managed.InputFile(bam_filename),
+            managed.TempOutputFile('reads.fastq'),
+        ),
     )
 
     workflow.subworkflow(
         name='bwa_workflow',
         func=create_bwa_align_workflow,
         args=(
-        	genome_filename,
+            genome_filename,
             managed.TempInputFile('reads.fastq'),
-        	managed.OutputFile(alignments_filename),
+            managed.OutputFile(alignments_filename),
         ),
     )
 
