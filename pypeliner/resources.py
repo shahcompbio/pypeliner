@@ -153,7 +153,9 @@ class TempObjResource(Resource):
             return os.path.getmtime(self.get_filename(db))
         return None
     def touch(self, db):
-        pass
+        if not self.get_exists(db):
+            raise Exception('cannot touch missing user output')
+        pypeliner.helpers.touch(self.get_filename(db))
 
 
 def obj_equal(obj1, obj2):

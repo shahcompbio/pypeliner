@@ -184,8 +184,6 @@ class JobInstance(object):
         return not all([output.get_exists(self.db) for output in self.output_resources])
     def touch_outputs(self):
         for output in self.output_resources:
-            if not output.get_exists(self.db):
-                raise Exception('cannot touch missing output')
             output.touch(self.db)
     def check_require_regenerate(self):
         for arg in self.args:
