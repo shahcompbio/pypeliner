@@ -1,4 +1,5 @@
 import os
+import errno
 
 import pypeliner.execqueue.base
 
@@ -35,7 +36,13 @@ class SubProcessJobQueue(pypeliner.execqueue.base.JobQueue):
                 if process_id is None:
                     return None
             else:
-                process_id, returncode = os.wait()
+                try:
+                    process_id, returncode = os.wait()
+                except OSError as e:
+                    if e.errno == errno.EINTR:
+                        continue
+                    else:
+                        raise
             try:
                 name = self.pid_names.pop(process_id)
             except KeyError:
