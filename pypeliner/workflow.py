@@ -16,6 +16,10 @@ class Workflow(object):
             self.default_ctx.update(default_ctx)
         self.job_definitions = dict()
 
+    @property
+    def empty(self):
+        return len(self.job_definitions) == 0
+
     def setobj(self, obj=None, value=None, axes=()):
         """ Set a managed temp object with a specified value.
 

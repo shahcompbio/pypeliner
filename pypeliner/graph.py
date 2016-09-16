@@ -287,6 +287,8 @@ class WorkflowInstance(object):
                     if not isinstance(workflow_def, pypeliner.workflow.Workflow):
                         self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text())
                         raise IncompleteWorkflowException()
+                    if workflow_def.empty:
+                        self._logger.warning('subworkflow ' + job.displayname + ' returned an empty workflow\n' + received.log_text())
                     node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, cleanup=self.cleanup)
                     self.subworkflows.append((job, received, workflow))
