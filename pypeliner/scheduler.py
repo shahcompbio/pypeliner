@@ -10,6 +10,7 @@ import pypeliner.helpers
 import pypeliner.graph
 import pypeliner.execqueue.base
 import pypeliner.database
+import pypeliner.fstatcache
 
 
 class PipelineException(Exception):
@@ -64,6 +65,8 @@ class Scheduler(object):
         and the second interrupt will attempt to cleanly cancel all jobs.
 
         """
+        pypeliner.fstatcache.invalidate_all()
+        
         self._active_jobs = dict()
         self._job_exc_dirs = set()
         with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:

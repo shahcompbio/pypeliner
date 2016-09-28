@@ -4,6 +4,7 @@ import shutil
 
 import pypeliner.helpers
 import pypeliner.identifiers
+import pypeliner.fstatcache
 
 
 class OutputMissingException(Exception):
@@ -79,22 +80,23 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
+        pypeliner.fstatcache.invalidate_cached_state(self.filename)
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
     def exists(self):
-        return os.path.exists(self.filename)
+        return pypeliner.fstatcache.get_exists(self.filename)
     @property
     def createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
-        return None
+        return pypeliner.fstatcache.get_createtime(self.filename)
     def touch(self):
         if not self.exists:
             raise Exception('cannot touch missing user output')
+        pypeliner.fstatcache.invalidate_cached_state(self.filename)
         pypeliner.helpers.touch(self.filename)
     def finalize(self, write_filename, db):
         try:
+            pypeliner.fstatcache.invalidate_cached_state(self.filename)
             os.rename(write_filename, self.filename)
         except OSError:
             raise OutputMissingException(write_filename)
@@ -110,33 +112,35 @@ class TempFileResource(Resource):
         self.name = name
         self.node = node
         self.filename = get_temp_filename(temps_dir, name, node)
+        self.placeholder_filename = self.filename + '._placeholder'
+        pypeliner.fstatcache.invalidate_cached_state(self.filename)
+        pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
         db.resmgr.register_disposable(self.name, self.node, self.filename)
-    def _get_createtime_placeholder(self):
-        return self.filename + '._placeholder'
     def _save_createtime(self):
-        placeholder_filename = self._get_createtime_placeholder()
-        pypeliner.helpers.saferemove(placeholder_filename)
-        pypeliner.helpers.touch(placeholder_filename)
-        shutil.copystat(self.filename, placeholder_filename)
+        pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
+        pypeliner.helpers.saferemove(self.placeholder_filename)
+        pypeliner.helpers.touch(self.placeholder_filename)
+        shutil.copystat(self.filename, self.placeholder_filename)
     @property
     def exists(self):
-        return os.path.exists(self.filename)
+        return pypeliner.fstatcache.get_exists(self.filename)
     @property
     def createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
-        placeholder_filename = self._get_createtime_placeholder()
-        if os.path.exists(placeholder_filename):
-            return os.path.getmtime(placeholder_filename)
+        if pypeliner.fstatcache.get_exists(self.filename):
+            return pypeliner.fstatcache.get_createtime(self.filename)
+        if pypeliner.fstatcache.get_exists(self.placeholder_filename):
+            return pypeliner.fstatcache.get_createtime(self.placeholder_filename)
     def touch(self):
         if self.exists:
+            pypeliner.fstatcache.invalidate_cached_state(self.filename)
             pypeliner.helpers.touch(self.filename)
             self._save_createtime()
         else:
-            placeholder_filename = self._get_createtime_placeholder()
-            pypeliner.helpers.touch(placeholder_filename)
+            pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
+            pypeliner.helpers.touch(self.placeholder_filename)
     def finalize(self, write_filename, db):
         try:
+            pypeliner.fstatcache.invalidate_cached_state(self.filename)
             os.rename(write_filename, self.filename)
         except OSError:
             raise OutputMissingException(write_filename)
@@ -152,15 +156,14 @@ class TempObjResource(Resource):
         self.filename = get_temp_filename(temps_dir, name, node) + ('._i', '._o')[is_input]
     @property
     def exists(self):
-        return os.path.exists(self.filename)
+        return pypeliner.fstatcache.get_exists(self.filename)
     @property
     def createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
-        return None
+        return pypeliner.fstatcache.get_createtime(self.filename)
     def touch(self):
         if not self.exists:
-            raise Exception('cannot touch missing user output')
+            raise Exception('cannot touch missing object')
+        pypeliner.fstatcache.invalidate_cached_state(self.filename)
         pypeliner.helpers.touch(self.filename)
 
 
@@ -205,4 +208,7 @@ class TempObjManager(object):
         if not obj_equal(obj, self.get_obj()):
             with open(self.input.filename, 'wb') as f:
                 pickle.dump(obj, f)
+        pypeliner.fstatcache.invalidate_cached_state(self.input.filename)
+        pypeliner.fstatcache.invalidate_cached_state(self.output.filename)
+
 
