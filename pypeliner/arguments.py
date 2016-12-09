@@ -318,9 +318,10 @@ class TempSplitObjArg(Arg,SplitMergeArg):
         db.nodemgr.store_chunks(self.axes, self.node, self.value.keys(), subset=self.axes_origin)
     def finalize(self, db):
         for resource in self.get_resources(db):
-            instance_value = self.value.get(self.get_node_chunks(resource.node), None)
-            if instance_value is None:
+            node_chunks = self.get_node_chunks(resource.node)
+            if node_chunks not in self.value:
                 raise ValueError('unable to extract ' + str(resource.node) + ' from ' + self.name + ' with values ' + str(self.value))
+            instance_value = self.value[node_chunks]
             resource.finalize(instance_value)
 
 

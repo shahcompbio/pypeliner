@@ -214,7 +214,7 @@ class TempObjManager(object):
     def finalize(self, obj):
         with open(self.output.filename, 'wb') as f:
             pickle.dump(obj, f)
-        if not obj_equal(obj, self.get_obj()):
+        if not self.input.exists or not obj_equal(obj, self.get_obj()):
             with open(self.input.filename, 'wb') as f:
                 pickle.dump(obj, f)
         pypeliner.fstatcache.invalidate_cached_state(self.input.filename)
