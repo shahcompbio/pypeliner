@@ -12,9 +12,8 @@ class BasicRunSkip(object):
             return True
         if job.out_of_date():
             return True
-        # TODO: fix regeneration of missing temporaries
-        # if job.is_required_downstream:
-        #     return True
+        if job.is_required_downstream:
+            return True
         if self.repopulate and job.output_missing():
             return True
         return False

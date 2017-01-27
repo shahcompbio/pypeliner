@@ -179,7 +179,7 @@ class OutputFileArg(Arg):
         pypeliner.helpers.makedirs(os.path.dirname(self.resolved))
         return self.resolved
     def finalize(self, db):
-        self.resource.finalize(self.resolved, db)
+        self.resource.finalize(self.resolved)
 
 
 class SplitFileArg(Arg,SplitMergeArg):
@@ -285,7 +285,7 @@ class TempOutputObjArg(Arg):
     def resolve(self, db, direct_write):
         return self
     def finalize(self, db):
-        self.resource.finalize(self.value, db)
+        self.resource.finalize(self.value)
 
 
 class TempSplitObjArg(Arg,SplitMergeArg):
@@ -321,7 +321,7 @@ class TempSplitObjArg(Arg,SplitMergeArg):
             instance_value = self.value.get(self.get_node_chunks(resource.node), None)
             if instance_value is None:
                 raise ValueError('unable to extract ' + str(resource.node) + ' from ' + self.name + ' with values ' + str(self.value))
-            resource.finalize(instance_value, db)
+            resource.finalize(instance_value)
 
 
 class TempInputFileArg(Arg):
@@ -378,7 +378,7 @@ class TempOutputFileArg(Arg):
         self.resolved = self.resource.filename + suffix
         return self.resolved
     def finalize(self, db):
-        self.resource.finalize(self.resolved, db)
+        self.resource.finalize(self.resolved)
 
 
 class FilenameCallback(object):
@@ -409,7 +409,7 @@ class FilenameCallback(object):
         db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys(), subset=self.arg.axes_origin)
     def finalize(self, db):
         for resource in self.arg.get_resources(db):
-            resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)], db)
+            resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)])
 
 
 class FilenameCreator(object):

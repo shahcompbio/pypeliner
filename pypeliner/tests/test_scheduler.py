@@ -410,7 +410,15 @@ class scheduler_test(unittest.TestCase):
 
         time.sleep(1)
         os.utime(self.input_1_filename, None)
+        print 'restarting'
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        time.sleep(1)
+        os.utime(self.input_1_filename, None)
         os.remove(self.output_filename)
+        print 'restarting again'
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -528,6 +536,8 @@ class scheduler_test(unittest.TestCase):
         self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
 
         time.sleep(1)
+
+        print 'restarting'
         
         for name, job in workflow.job_definitions.iteritems():
             if name != 'job5':
@@ -1315,6 +1325,93 @@ class scheduler_test(unittest.TestCase):
                 mgd.OutputFile(self.output_filename),))
 
         scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+        
+    def test_regenerate_temporaries_remixt_1(self):
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.setobj(obj=mgd.TempOutputObj('config'), value={})
+
+        workflow.transform(
+            name='calc_fragment_stats',
+            func=calculate_fragment_stats,
+            ret=mgd.TempOutputObj('fragstats'),
+            args=(mgd.InputFile(self.input_1_filename),)
+        )
+
+        workflow.transform(
+            name='sample_gc',
+            func=sample_gc,
+            args=(
+                mgd.TempOutputFile('gcsamples.tsv'),
+                mgd.InputFile(self.input_1_filename),
+                mgd.TempInputObj('fragstats').prop('fragment_mean'),
+                mgd.TempInputObj('config'),
+                '',
+            )
+        )
+
+        workflow.transform(
+            name='gc_lowess',
+            func=gc_lowess,
+            args=(
+                mgd.TempInputFile('gcsamples.tsv'),
+                mgd.TempOutputFile('gcloess.tsv'),
+                mgd.TempOutputFile('gctable.tsv'),
+            )
+        )
+
+        workflow.transform(
+            name='split_segments',
+            func=split_table,
+            args=(
+                mgd.TempOutputFile('segments.tsv', 'segment_rows_idx'),
+                mgd.InputFile(self.input_2_filename),
+                100,
+            ),
+        )
+
+        workflow.transform(
+            name='gc_map_bias',
+            axes=('segment_rows_idx',),
+            func=gc_map_bias,
+            args=(
+                mgd.TempInputFile('segments.tsv', 'segment_rows_idx'),
+                mgd.TempInputObj('fragstats').prop('fragment_mean'),
+                mgd.TempInputObj('fragstats').prop('fragment_stddev'),
+                mgd.TempInputFile('gcloess.tsv'),
+                mgd.TempOutputFile('biases.tsv', 'segment_rows_idx'),
+                mgd.TempInputObj('config'),
+                '',
+            )
+        )
+
+        workflow.transform(
+            name='merge_biases',
+            func=merge_tables,
+            args=(
+                mgd.TempOutputFile('biases.tsv'),
+                mgd.TempInputFile('biases.tsv', 'segment_rows_idx'),
+            ),
+        )
+
+        workflow.transform(
+            name='biased_length',
+            func=biased_length,
+            args=(
+                mgd.OutputFile(self.output_filename),
+                mgd.TempInputFile('biases.tsv'),
+            ),
+        )
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        time.sleep(1)
+        os.utime(self.input_2_filename, None)
+        
+        print 'restarting'
+
         scheduler.run(workflow, exec_queue, runskip)
 
 

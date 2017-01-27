@@ -1,6 +1,7 @@
 import os
 import pickle
 import shutil
+import logging
 
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -22,7 +23,8 @@ class Dependency(object):
     timestamps, in particular for an axis chunk input to a job
     parallelized on that axis.
     """
-    def __init__(self, db, name, node, **kwargs):
+    is_temp = False
+    def __init__(self, name, node, **kwargs):
         self.name = name
         self.node = node
     @property
@@ -38,6 +40,8 @@ class Dependency(object):
         if base_node.displayname != '':
             name = '/' + base_node.displayname + name
         return name
+    def cleanup(self):
+        pass
 
 
 class Resource(Dependency):
@@ -76,7 +80,7 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node, fnames=None, template=None, **kwargs):
+    def __init__(self, name, node, fnames=None, template=None, **kwargs):
         self.name = name
         self.node = node
         self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
@@ -94,7 +98,7 @@ class UserResource(Resource):
             raise Exception('cannot touch missing user output')
         pypeliner.fstatcache.invalidate_cached_state(self.filename)
         pypeliner.helpers.touch(self.filename)
-    def finalize(self, write_filename, db):
+    def finalize(self, write_filename):
         try:
             pypeliner.fstatcache.invalidate_cached_state(self.filename)
             os.rename(write_filename, self.filename)
@@ -103,19 +107,21 @@ class UserResource(Resource):
 
 
 def get_temp_filename(temps_dir, name, node):
+    if os.path.isabs(name):
+        raise Exception('name {} is an absolute path'.format(name))
     return os.path.join(temps_dir, node.subdir, name)
 
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node, temps_dir=None, **kwargs):
+    def __init__(self, name, node, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
+        self.is_temp = True
         self.filename = get_temp_filename(temps_dir, name, node)
         self.placeholder_filename = self.filename + '._placeholder'
         pypeliner.fstatcache.invalidate_cached_state(self.filename)
         pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
-        db.resmgr.register_disposable(self.name, self.node, self.filename)
     def _save_createtime(self):
         pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
         pypeliner.helpers.saferemove(self.placeholder_filename)
@@ -138,13 +144,18 @@ class TempFileResource(Resource):
         else:
             pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
             pypeliner.helpers.touch(self.placeholder_filename)
-    def finalize(self, write_filename, db):
+    def finalize(self, write_filename):
         try:
             pypeliner.fstatcache.invalidate_cached_state(self.filename)
             os.rename(write_filename, self.filename)
         except OSError:
             raise OutputMissingException(write_filename)
         self._save_createtime()
+    def cleanup(self):
+        if self.exists:
+            logging.getLogger('resources').debug('removing ' + self.filename)
+            pypeliner.fstatcache.invalidate_cached_state(self.filename)
+            os.remove(self.filename)
 
 
 class TempObjResource(Resource):
@@ -154,6 +165,8 @@ class TempObjResource(Resource):
         self.node = node
         self.is_input = is_input
         self.filename = get_temp_filename(temps_dir, name, node) + ('._i', '._o')[is_input]
+        self.is_temp = True
+        pypeliner.fstatcache.invalidate_cached_state(self.filename)
     @property
     def exists(self):
         return pypeliner.fstatcache.get_exists(self.filename)
@@ -185,16 +198,12 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, db, name, node, temps_dir=None, **kwargs):
+    def __init__(self, name, node, temps_dir=None, **kwargs):
         self.name = name
         self.node = node
         self.temps_dir = temps_dir
-    @property
-    def input(self):
-        return TempObjResource(self.name, self.node, is_input=True, temps_dir=self.temps_dir)
-    @property
-    def output(self):
-        return TempObjResource(self.name, self.node, is_input=False, temps_dir=self.temps_dir)
+        self.input = TempObjResource(self.name, self.node, is_input=True, temps_dir=self.temps_dir)
+        self.output = TempObjResource(self.name, self.node, is_input=False, temps_dir=self.temps_dir)
     def get_obj(self):
         try:
             with open(self.input.filename, 'rb') as f:
@@ -202,7 +211,7 @@ class TempObjManager(object):
         except IOError as e:
             if e.errno == 2:
                 pass
-    def finalize(self, obj, db):
+    def finalize(self, obj):
         with open(self.output.filename, 'wb') as f:
             pickle.dump(obj, f)
         if not obj_equal(obj, self.get_obj()):

@@ -56,8 +56,7 @@ class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self):
         self.completed = set()
         self.created = set()
         self.standby_jobs = unique_list()
@@ -144,10 +143,10 @@ class DependencyGraph:
         self.completed.add(job.id)
         for input in job.inputs:
             if all([otherjob_id in self.completed for _, otherjob_id in self.G[('resource', input.id)]]):
-                self.obsolete.add(input.id)
+                self.obsolete.add(input)
         for output in job.outputs:
             if ('resource', output.id) not in self.G:
-                self.obsolete.add(output.id)
+                self.obsolete.add(output)
         self._notify_created([output.id for output in job.outputs])
 
     def _notify_created(self, outputs):
@@ -207,6 +206,11 @@ class DependencyGraph:
     @property
     def finished(self):
         return all([output in self.created for output in self.outputs])
+        
+    def cleanup_obsolete(self):
+        for resource in self.obsolete:
+            resource.cleanup()
+        self.obsolete = set()
 
 
 class WorkflowInstance(object):
@@ -217,7 +221,7 @@ class WorkflowInstance(object):
         self.runskip = runskip
         self.db = db_factory.create(node.subdir)
         self.node = node
-        self.graph = DependencyGraph(self.db)
+        self.graph = DependencyGraph()
         self.subworkflows = list()
         self.cleanup = cleanup
         self.regenerate()
@@ -273,8 +277,9 @@ class WorkflowInstance(object):
             job = self.graph.pop_next_job()
 
             if isinstance(job, pypeliner.jobs.SubWorkflowInstance):
-                self._logger.debug('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
+                self._logger.info('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
                 if self.runskip(job):
+                    job.check_inputs()
                     send = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname)
                     self._logger.info('subworkflow ' + job.displayname + ' -> ' + send.displaycommand)
@@ -297,7 +302,7 @@ class WorkflowInstance(object):
                     job.complete()
                 continue
             elif isinstance(job, pypeliner.jobs.SetObjInstance):
-                self._logger.debug('setting object ' + job.obj_displayname)
+                self._logger.info('setting object ' + job.obj_displayname)
                 send = job.create_callable()
                 send()
                 received = send
@@ -312,7 +317,7 @@ class WorkflowInstance(object):
     def notify_completed(self, job):
         self.graph.notify_completed(job)
         if self.cleanup:
-            self.db.resmgr.cleanup(self.graph)
+            self.graph.cleanup_obsolete()
 
     @property
     def finished(self):

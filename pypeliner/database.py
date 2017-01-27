@@ -12,8 +12,7 @@ import pypeliner.identifiers
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
-    def __init__(self, db, nodes_dir, temps_dir):
-        self.db = db
+    def __init__(self, nodes_dir, temps_dir):
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
@@ -39,7 +38,7 @@ class NodeManager(object):
                     yield (chunk,) + chunks_rest
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
-            resource = pypeliner.resources.TempObjManager(self.db, axis, node, temps_dir=self.db.temps_dir)
+            resource = pypeliner.resources.TempObjManager(axis, node, temps_dir=self.temps_dir)
             chunks = resource.get_obj()
             if chunks is None:
                 chunks = (None,)
@@ -70,11 +69,11 @@ class NodeManager(object):
     def store_axis_chunks(self, axis, node, chunks):
         for chunk in chunks:
             new_node = node + pypeliner.identifiers.AxisInstance(axis, chunk)
-            pypeliner.helpers.makedirs(os.path.join(self.db.resmgr.temps_dir, new_node.subdir))
+            pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
-        resource = pypeliner.resources.TempObjManager(self.db, axis, node, temps_dir=self.db.temps_dir)
-        resource.finalize(chunks, self.db)
+        resource = pypeliner.resources.TempObjManager(axis, node, temps_dir=self.temps_dir)
+        resource.finalize(chunks)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
             subset = set([])
@@ -90,30 +89,15 @@ class NodeManager(object):
         return outputs
     def get_chunks_resource(self, axes, node, subset):
         if 0 in subset:
-            yield pypeliner.resources.TempObjManager(self.db, axes[0], node, temps_dir=self.db.temps_dir)
+            yield pypeliner.resources.TempObjManager(axes[0], node, temps_dir=self.temps_dir)
         for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
-                yield pypeliner.resources.TempObjManager(self.db, axes[level], level_node, temps_dir=self.db.temps_dir)
+                yield pypeliner.resources.TempObjManager(axes[level], level_node, temps_dir=self.temps_dir)
     def get_node_inputs(self, node):
         if len(node) >= 1:
-            yield pypeliner.resources.Dependency(self.db, node[-1][0], node[:-1])
-
-class ResourceManager(object):
-    """ Manages file resources """
-    def __init__(self, temps_dir):
-        self.temps_dir = temps_dir
-        self.disposable = collections.defaultdict(set)
-    def register_disposable(self, name, node, filename):
-        self.disposable[(name, node)].add(filename)
-    def cleanup(self, depgraph):
-        for name, node in set(depgraph.obsolete):
-            for filename in self.disposable.get((name, node), ()):
-                if os.path.exists(filename):
-                    logging.getLogger('resourcemgr').debug('removing ' + filename)
-                    os.remove(filename)
-            depgraph.obsolete.remove((name, node))
+            yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
 
 class WorkflowDatabase(object):
     def __init__(self, workflow_dir, logs_dir, instance_subdir):
@@ -122,14 +106,13 @@ class WorkflowDatabase(object):
         self.temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
         pypeliner.helpers.makedirs(self.nodes_dir)
         pypeliner.helpers.makedirs(self.temps_dir)
-        self.resmgr = ResourceManager(self.temps_dir)
-        self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
+        self.nodemgr = NodeManager(self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
         self.resources = {}
         self.resource_types = {}
     def create_resource(self, typ, name, node, **kwargs):
         if (name, node) not in self.resources:
-            self.resources[(name, node)] = typ(self, name, node, temps_dir=self.temps_dir, **kwargs)
+            self.resources[(name, node)] = typ(name, node, temps_dir=self.temps_dir, **kwargs)
             self.resource_types[(name, node)] = typ
         if typ != self.resource_types[(name, node)]:
             raise Exception('resource {}, {} with type {} and {} in workflow {}'.format(

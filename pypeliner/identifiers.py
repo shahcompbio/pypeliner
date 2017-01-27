@@ -13,6 +13,9 @@ class AxisInstance(AxisInstanceBase):
     @property
     def displayname(self):
         return ':'.join([self.axis, str((self.chunk, '?')[self.chunk is None])])
+    @property
+    def undefined(self):
+        return self.chunk is None
 
 class Namespace(str):
     @property
@@ -21,6 +24,9 @@ class Namespace(str):
     @property
     def displayname(self):
         return self
+    @property
+    def undefined(self):
+        return False
 
 class Node(tuple):
     def __add__(self, a):
@@ -44,6 +50,9 @@ class Node(tuple):
     @property
     def displayname(self):
         return '/'.join([a.displayname for a in self])
+    @property
+    def undefined(self):
+        return any([a.undefined for a in self])
 
 def create_undefined_node(axes):
     return Node([AxisInstance(a, None) for a in axes])

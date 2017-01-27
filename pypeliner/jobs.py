@@ -120,11 +120,9 @@ class JobInstance(object):
         return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.outputs)
     def check_inputs(self):
         for input in self.input_resources:
-            if input.createtime is None:
+            if not input.exists:
                 raise InputMissingException(input.id, input.filename, self.id)
-    def out_of_date(self, check_inputs=True):
-        if check_inputs:
-            self.check_inputs()
+    def out_of_date(self):
         input_dates = [input.createtime for input in self.input_resources]
         output_dates = [output.createtime for output in self.output_resources]
         if len(input_dates) == 0 or len(output_dates) == 0:
@@ -133,7 +131,6 @@ class JobInstance(object):
             return True
         return max(input_dates) > min(output_dates)
     def explain(self):
-        self.check_inputs()
         input_dates = [input.createtime for input in self.input_resources]
         output_dates = [output.createtime for output in self.output_resources]
         try:
@@ -170,11 +167,13 @@ class JobInstance(object):
         for output in self.output_resources:
             status = ''
             if output.createtime is None:
-                status = 'missing'
+                status = ''
             elif newest_input_date is not None and output.createtime < newest_input_date:
                 status = '{0} old'.format(_pretty_date(output.createtime))
             else:
                 status = '{0}'.format(_pretty_date(output.createtime))
+            if not output.exists:
+                status += ' missing'
             text = 'output {0} {1}'.format(
                 output.build_displayname_filename(self.workflow.node),
                 status)
@@ -184,7 +183,7 @@ class JobInstance(object):
         return not all([output.exists for output in self.output_resources])
     def touch_outputs(self):
         for output in self.output_resources:
-            output.touch(self.db)
+            output.touch()
     def check_require_regenerate(self):
         for arg in self.args:
             if isinstance(arg, pypeliner.arguments.Arg):
@@ -299,7 +298,7 @@ class SetObjInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SetObjInstance, self).__init__(job_def, workflow, db, node)
         obj_node = pypeliner.identifiers.create_undefined_node(job_def.argset.ret.axes)
-        obj_res = pypeliner.resources.Resource(db, job_def.argset.ret.name, node + obj_node)
+        obj_res = pypeliner.resources.Resource(job_def.argset.ret.name, node + obj_node)
         self.obj_displayname = obj_res.build_displayname(workflow.node)
 
 class SubWorkflowDefinition(JobDefinition):

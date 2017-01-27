@@ -178,27 +178,78 @@ def create_workflow_1(input_filename, output_filename):
 def touch(f):
     with open(f, 'w'):
         pass
+        
+        
+def checkexists(f):
+    assert os.path.exists(f)
 
 
 def job1(i1, o1, o2, o3):
+    checkexists(i1)
     touch(o1)
     touch(o2)
     touch(o3)
 
 
 def job2(i1):
+    checkexists(i1)
     return 'data'
 
 
 def job3(i1, o1):
+    checkexists(i1)
     touch(o1)
 
 
 def job4(i1, i2, i3, o1):
+    checkexists(i1)
+    checkexists(i2)
     touch(o1)
 
 
 def job5(i1, o1):
+    checkexists(i1)
     touch(o1)
 
+
+class Test(object):
+    fragment_mean = None
+    fragment_stddev = None
+    
+def calculate_fragment_stats(i1):
+    checkexists(i1)
+    return Test()
+    
+
+def sample_gc(o1, i1, i2, i3, i4):
+    checkexists(i1)
+    touch(o1)
+
+
+def gc_lowess(i1, o1, o2):
+    checkexists(i1)
+    touch(o1)
+    touch(o2)
+
+
+def split_table(o1, i1, i2):
+    checkexists(i1)
+    touch(o1[0])
+    touch(o1[1])
+    touch(o1[2])
+
+
+def gc_map_bias(i1, i2, i3, i4, o1, i5, i6):
+    checkexists(i1)
+    checkexists(i4)
+    touch(o1)
+
+
+def merge_tables(o1, i1):
+    touch(o1)
+
+
+def biased_length(o1, i1):
+    checkexists(i1)
+    touch(o1)
 
