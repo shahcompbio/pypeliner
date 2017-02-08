@@ -63,6 +63,12 @@ class Resource(Dependency):
         raise NotImplementedError
 
 
+def _check_template(template, node):
+    for axis, _ in node:
+        if axis not in template:
+            raise ValueError('filename template {} does not contain {{{}}}'.format(template, axis))
+
+
 def resolve_user_filename(name, node, fnames=None, template=None):
     """ Resolve a filename based on user provided information """
     fname_key = tuple([a[1] for a in node])
@@ -72,8 +78,10 @@ def resolve_user_filename(name, node, fnames=None, template=None):
         else:
             filename = fnames.get(fname_key, name)
     elif template is not None:
+        _check_template(template, node)
         filename = template.format(**dict(node))
     else:
+        _check_template(name, node)
         filename = name.format(**dict(node))
     return filename
 
