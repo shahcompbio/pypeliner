@@ -58,10 +58,10 @@ class TemplateArg(Arg):
         return self.filename
 
 
-class TempFileArg(Arg):
-    """ Temporary file argument
+class TempSpaceArg(Arg):
+    """ Temporary space argument
 
-    Resolves to a filename contained within the temporary files directory.
+    Resolves to a filename/directory contained within the temporary files directory.
 
     """
     def __init__(self, db, name, node, cleanup='both'):
@@ -69,6 +69,8 @@ class TempFileArg(Arg):
         self.node = node
         self.cleanup = cleanup
         self.filename = pypeliner.resources.get_temp_filename(db.temps_dir, name, node)
+    def get_outputs(self, db):
+        yield pypeliner.resources.Dependency(self.name, self.node)
     def _remove(self):
         pypeliner.helpers.removefiledir(self.filename)
     def resolve(self, db, direct_write):

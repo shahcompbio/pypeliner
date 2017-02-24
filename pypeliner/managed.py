@@ -102,7 +102,7 @@ class TempSpace(Managed):
                  axes of the referencing job.
 
     """
-    normal = pypeliner.arguments.TempFileArg
+    normal = pypeliner.arguments.TempSpaceArg
     splitmerge = None
 
 class InputFile(Managed):
