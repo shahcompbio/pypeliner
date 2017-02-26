@@ -54,6 +54,8 @@ class InputMissingException(Exception):
         return 'input {0}, filename {1}, missing for job {2}'.format(self.input, self.filename, self.job)
 
 def _pretty_date(ts):
+    if ts is None:
+        return 'none'
     return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
 
 class JobInstance(object):
