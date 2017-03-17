@@ -71,13 +71,14 @@ class DependencyGraph:
 
         """
 
-        self.inputs = set((input.id for job in jobs for input in job.pipeline_inputs))
-        self.outputs = set((output.id for job in jobs for output in job.outputs))
+        self.jobs = jobs
+        self.inputs = set((input.id for job in self.jobs.itervalues() for input in job.pipeline_inputs))
+        self.outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
         self.inputs = self.inputs.difference(self.outputs)
 
         # Create the graph
         self.G = networkx.DiGraph()
-        for job in jobs:
+        for job in self.jobs.itervalues():
             job_node = ('job', job.id)
             self.G.add_node(job_node, job=job)
             for input in job.inputs:
@@ -114,7 +115,7 @@ class DependencyGraph:
         self._notify_created(self.inputs)
 
         # Add all generative jobs as ready
-        for job in jobs:
+        for job in self.jobs.itervalues():
             if len(list(job.inputs)) == 0:
                 if job.id not in self.running and job.id not in self.completed:
                     self.ready.add(job.id)
@@ -138,16 +139,49 @@ class DependencyGraph:
 
         return self.G.node[job_node]['job']
 
+    def get_resource(self, resource_id):
+        """ Get resource object given resource id
+        """
+        return self.G.node[('resource', resource_id)]['resource']
+
+    def get_dependant_jobs(self, resource_id):
+        """ Generator for dependent jobs of a resource.
+        """
+        for _, job_id in self.G[('resource', resource_id)]:
+            yield self.jobs[job_id]
+
+    def has_dependant_jobs(self, resource_id):
+        """ Check whether jobs depend on given resource.
+        """
+        return ('resource', resource_id) in self.G
+
+    def get_creating_job(self, resource_id):
+        """ Job creating a given resource.
+        """
+        job_ids = list([job_id for _, job_id in self.G.predecessors_iter(('resource', resource_id))])
+        if len(job_ids) == 0:
+            return None
+        elif len(job_ids) == 1:
+            return self.jobs[job_ids[0]]
+        else:
+            raise Exception('More than one creating job for ' + resource_id)
+
+    def has_creating_job(self, resource_id):
+        """ Check whether given resource has a creating job.
+        """
+        job_ids = list([job_id for _, job_id in self.G.predecessors_iter(('resource', resource_id))])
+        return len(job_ids) > 0
+
     def notify_completed(self, job):
         """ A job was completed, advance current state.
         """
         self.running.remove(job.id)
         self.completed.add(job.id)
         for input in job.inputs:
-            if all([otherjob_id in self.completed for _, otherjob_id in self.G[('resource', input.id)]]):
+            if all([otherjob.id in self.completed for otherjob in self.get_dependant_jobs(input.id)]):
                 self.obsolete.add(input)
         for output in job.outputs:
-            if ('resource', output.id) not in self.G:
+            if not self.has_dependant_jobs(output.id):
                 self.obsolete.add(output)
         self._notify_created([output.id for output in job.outputs])
 
@@ -156,8 +190,7 @@ class DependencyGraph:
         """
         self.created.update(outputs)
         for output in outputs:
-            for job_node in self.G[('resource', output)]:
-                job = self.G.node[job_node]['job']
+            for job in self.get_dependant_jobs(output):
                 if job.id in self.running:
                     continue
                 if job.id in self.completed:
@@ -193,17 +226,17 @@ class DependencyGraph:
         visit_resources = set(required)
         while len(visit_resources) > 0:
             resource_id = visit_resources.pop()
-            resource_node = ('resource', resource_id)
-            resource = self.G.node[resource_node]['resource']
+            resource = self.get_resource(resource_id)
             if resource.exists:
                 continue
-            for job_node in self.G.predecessors_iter(resource_node):
-                job = self.G.node[job_node]['job']
-                job.is_required_downstream = True
-                for input in job.inputs:
-                    if input.id not in required_resources:
-                        required_resources.add(input.id)
-                        visit_resources.add(input.id)
+            job = self.get_creating_job(resource_id)
+            if job is None:
+                continue
+            job.is_required_downstream = True
+            for input in job.inputs:
+                if input.id not in required_resources:
+                    required_resources.add(input.id)
+                    visit_resources.add(input.id)
 
     @property
     def finished(self):
@@ -238,7 +271,7 @@ class WorkflowInstance(object):
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
 
-        self.graph.regenerate(jobs.values())
+        self.graph.regenerate(jobs)
 
     def finalize_workflows(self):
         """ Finalize any workflows that are finished.
