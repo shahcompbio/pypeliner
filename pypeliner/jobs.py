@@ -108,18 +108,6 @@ class JobInstance(object):
     @property
     def output_resources(self):
         return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
-    @property
-    def input_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self.inputs)
-    @property
-    def output_dependencies(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Dependency), self.outputs)
-    @property
-    def pipeline_inputs(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.inputs)
-    @property
-    def pipeline_outputs(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.UserResource), self.outputs)
     def check_inputs(self):
         for input in self.input_resources:
             if not input.exists:

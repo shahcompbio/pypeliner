@@ -72,9 +72,10 @@ class DependencyGraph:
         """
 
         self.jobs = jobs
-        self.inputs = set((input.id for job in self.jobs.itervalues() for input in job.pipeline_inputs))
-        self.outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
-        self.inputs = self.inputs.difference(self.outputs)
+        all_inputs = set((input.id for job in self.jobs.itervalues() for input in job.inputs))
+        all_outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
+        self.inputs = all_inputs.difference(all_outputs)
+        self.outputs = all_outputs.difference(all_inputs)
 
         # Create the graph
         self.G = networkx.DiGraph()
@@ -120,9 +121,87 @@ class DependencyGraph:
                 if job.id not in self.running and job.id not in self.completed:
                     self.ready.add(job.id)
 
+    def traverse_jobs_forward(self):
+        """ Traverse jobs in order of execution.
+        """
+        created_resources = set(self.inputs)
+
+        adjacent_jobs = set()
+
+        for job in self.jobs.itervalues():
+            if len(list(job.inputs)) == 0:
+                adjacent_jobs.add(job.id)
+
+        for resource_id in created_resources:
+            for job in self.get_dependant_jobs(resource_id):
+                adjacent_jobs.add(job.id)
+    
+        while len(adjacent_jobs) > 0:
+            for job_id in list(adjacent_jobs):
+                job = self.jobs[job_id]
+                if all([i.id in created_resources for i in job.inputs]):
+                    yield job
+                    adjacent_jobs.remove(job_id)
+                    for o in job.outputs:
+                        created_resources.add(o.id)
+                        for dependent_job in self.get_dependant_jobs(o.id):
+                            adjacent_jobs.add(dependent_job.id)
+                    break
+
+    def traverse_jobs_reverse(self):
+        """ Traverse jobs in order of execution.
+        """
+        visited_resources = set(self.outputs)
+        visited_jobs = set()
+
+        adjacent_resources = set()
+        adjacent_jobs = set()
+
+        for job in self.jobs.itervalues():
+            if len(list(job.outputs)) == 0:
+                adjacent_jobs.add(job.id)
+
+        for resource_id in visited_resources:
+            creating_job = self.get_creating_job(resource_id)
+            if creating_job is not None:
+                adjacent_jobs.add(creating_job.id)
+
+        while len(adjacent_jobs) > 0 or len(adjacent_resources) > 0:
+            for job_id in list(adjacent_jobs):
+                job = self.jobs[job_id]
+                if all([o.id in visited_resources for o in job.outputs]):
+                    yield job
+                    adjacent_jobs.remove(job_id)
+                    visited_jobs.add(job_id)
+                    for i in job.inputs:
+                        adjacent_resources.add(i.id)
+                    break
+
+            for resource_id in list(adjacent_resources):
+                if all([j.id in visited_jobs for j in self.get_dependant_jobs(resource_id)]):
+                    adjacent_resources.remove(resource_id)
+                    visited_resources.add(resource_id)
+                    creating_job = self.get_creating_job(resource_id)
+                    if creating_job is not None:
+                        adjacent_jobs.add(creating_job.id)
+
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
+        print 'forward'
+        a = 0
+        for job in self.traverse_jobs_forward():
+            print job.id
+            a += 1
+
+        print 'reverse'
+        b = 0
+        for job in self.traverse_jobs_reverse():
+            print job.id
+            b += 1
+        
+        assert a == b
+
         if len(self.ready) > 0:
             job_id = self.ready.pop()
         elif len(self.standby_jobs) > 0:
@@ -147,6 +226,8 @@ class DependencyGraph:
     def get_dependant_jobs(self, resource_id):
         """ Generator for dependent jobs of a resource.
         """
+        if not self.has_dependant_jobs(resource_id):
+            return
         for _, job_id in self.G[('resource', resource_id)]:
             yield self.jobs[job_id]
 
