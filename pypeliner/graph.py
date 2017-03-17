@@ -65,13 +65,15 @@ class DependencyGraph:
         self.running = set()
         self.obsolete = set()
 
-    def regenerate(self, inputs, outputs, jobs):
+    def regenerate(self, jobs):
         """ Create the dependency graph from a set of jobs, and pipeline inputs
         and outputs, maintaining current state.
 
         """
 
-        self.outputs = outputs
+        self.inputs = set((input.id for job in jobs for input in job.pipeline_inputs))
+        self.outputs = set((output.id for job in jobs for output in job.outputs))
+        self.inputs = self.inputs.difference(self.outputs)
 
         # Create the graph
         self.G = networkx.DiGraph()
@@ -104,12 +106,12 @@ class DependencyGraph:
                 created_by = [edge[0][1] for edge in self.G.in_edges(node)]
                 if len(created_by) > 1:
                     raise AmbiguousOutputException(node[1], created_by)
-                if node[1] not in inputs and len(created_by) == 0:
+                if node[1] not in self.inputs and len(created_by) == 0:
                     raise AmbiguousInputException(node[1])
 
         # Assume pipeline inputs exist
-        self.created.update(inputs)
-        self._notify_created(inputs)
+        self.created.update(self.inputs)
+        self._notify_created(self.inputs)
 
         # Add all generative jobs as ready
         for job in jobs:
@@ -236,11 +238,7 @@ class WorkflowInstance(object):
                 raise ValueError('Duplicate job ' + job_inst.displayname)
             jobs[job_inst.id] = job_inst
 
-        inputs = set((input.id for job in jobs.itervalues() for input in job.pipeline_inputs))
-        outputs = set((output.id for job in jobs.itervalues() for output in job.outputs))
-        inputs = inputs.difference(outputs)
-
-        self.graph.regenerate(inputs, outputs, jobs.values())
+        self.graph.regenerate(jobs.values())
 
     def finalize_workflows(self):
         """ Finalize any workflows that are finished.
