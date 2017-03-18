@@ -486,7 +486,10 @@ class InputChunksArg(Arg):
         for dependency in db.nodemgr.get_merge_inputs(self.axis, self.node):
             yield dependency
     def resolve(self, db, direct_write):
-        return list(db.nodemgr.retrieve_chunks(self.axis, self.node))
+        chunks = list(db.nodemgr.retrieve_chunks(self.axis, self.node))
+        if len(self.axis) == 1:
+            chunks = [chunk[0] for chunk in chunks]
+        return chunks
 
 
 class OutputChunksArg(Arg,SplitMergeArg):

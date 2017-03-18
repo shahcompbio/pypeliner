@@ -86,7 +86,7 @@ def copy_file(in_filename, out_filename):
 def write_list(in_list, out_filename):
     with open(out_filename, 'w') as out_file:
         for a in sorted(in_list):
-            out_file.write(str(a[0]))
+            out_file.write(str(a))
 
 def do_nothing(*arg):
     pass
