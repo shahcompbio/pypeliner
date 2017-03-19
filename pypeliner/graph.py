@@ -74,6 +74,8 @@ class DependencyGraph:
         self.jobs = jobs
         all_inputs = set((input.id for job in self.jobs.itervalues() for input in job.inputs))
         all_outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
+        self.resource_ids = set(all_inputs)
+        self.resource_ids.update(all_outputs)
         self.inputs = all_inputs.difference(all_outputs)
         self.outputs = all_outputs.difference(all_inputs)
 
@@ -188,35 +190,38 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        print 'forward'
         a = 0
-        for job in self.traverse_jobs_forward():
-            print job.id
-            a += 1
-
-        print 'reverse'
-        b = 0
-        for job in self.traverse_jobs_reverse():
-            print job.id
-            b += 1
         
-        assert a == b
+        out_of_date = set()
+        resource_required = set()
+        job_required = set()
 
-        if len(self.ready) > 0:
-            job_id = self.ready.pop()
-        elif len(self.standby_jobs) > 0:
-            job_id = self.standby_jobs.pop_front()
-        else:
-            raise NoJobs()
+        for job in self.traverse_jobs_forward():
+            inputs_out_of_date = any([i.id in out_of_date for i in job.inputs])
+            if job.out_of_date or inputs_out_of_date:
+                for o in job.outputs:
+                    out_of_date.add(o.id)
 
-        job_node = ('job', job_id)
+        for job in self.traverse_jobs_reverse():
+            for o in job.outputs:
+                if o.id in out_of_date and not o.exists:
+                    job_required.add(job.id)
+                if o.id in resource_required and not o.exists:
+                    job_required.add(job.id)
+            if job.id in job_required:
+                for i in job.inputs:
+                    resource_required.add(i.id)
 
-        assert job_id not in self.running
-        assert job_id not in self.completed
+        for job in self.traverse_jobs_forward():
+            inputs_created = all([i.id in self.created for i in job.inputs])
+            if inputs_created and job.id not in self.running and job.id not in self.completed:
+                if job.id in job_required:
+                    job.is_required_downstream = True
+                job_node = ('job', job.id)
+                self.running.add(job.id)
+                return self.G.node[job_node]['job']
 
-        self.running.add(job_id)
-
-        return self.G.node[job_node]['job']
+        raise NoJobs()
 
     def get_resource(self, resource_id):
         """ Get resource object given resource id
