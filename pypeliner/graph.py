@@ -190,7 +190,7 @@ class DependencyGraph:
 
         for job in self.traverse_jobs_forward():
             inputs_out_of_date = any([i.id in out_of_date for i in job.inputs])
-            if job.out_of_date or inputs_out_of_date:
+            if job.out_of_date() or inputs_out_of_date:
                 for o in job.outputs:
                     out_of_date.add(o.id)
 
