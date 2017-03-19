@@ -61,7 +61,6 @@ class DependencyGraph:
         self.created = set()
         self.standby_jobs = unique_list()
         self.standby_resources = set()
-        self.ready = set()
         self.running = set()
         self.obsolete = set()
 
@@ -115,13 +114,6 @@ class DependencyGraph:
 
         # Assume pipeline inputs exist
         self.created.update(self.inputs)
-        self._notify_created(self.inputs)
-
-        # Add all generative jobs as ready
-        for job in self.jobs.itervalues():
-            if len(list(job.inputs)) == 0:
-                if job.id not in self.running and job.id not in self.completed:
-                    self.ready.add(job.id)
 
     def traverse_jobs_forward(self):
         """ Traverse jobs in order of execution.
@@ -269,60 +261,7 @@ class DependencyGraph:
         for output in job.outputs:
             if not self.has_dependant_jobs(output.id):
                 self.obsolete.add(output)
-        self._notify_created([output.id for output in job.outputs])
-
-    def _notify_created(self, outputs):
-        """ A resource was created, update current state.
-        """
-        self.created.update(outputs)
-        for output in outputs:
-            for job in self.get_dependant_jobs(output):
-                if job.id in self.running:
-                    continue
-                if job.id in self.completed:
-                    continue
-                job_inputs = set([input.id for input in job.inputs])
-                not_created_inputs = job_inputs.difference(self.created)
-                not_created_standby_inputs = not_created_inputs.intersection(self.standby_resources)
-                if len(not_created_inputs) == 0:
-                    if not job.out_of_date() and job.output_missing():
-                        self.standby_jobs.append(job.id)
-                        logging.getLogger('jobgraph').debug('job {} in standby'.format(job.id))
-                        for output in job.outputs:
-                            if not output.exists:
-                                self.standby_resources.add(output.id)
-                    else:
-                        self.ready.add(job.id)
-                elif len(not_created_standby_inputs) > 0:
-                    logging.getLogger('jobgraph').debug('job {} notify required'.format(job.id) + str(not_created_standby_inputs))
-                    self._notify_required(not_created_standby_inputs)
-
-    def _notify_required(self, required):
-        """
-
-        Visit all jobs upstream of the out of date resources,
-        mark the jobs outputting those resources as required
-        by downstream jobs.
-
-        For any inputs of the job that do not exist, mark
-        those inputs as required and visit.
-        """
-
-        required_resources = set()
-        visit_resources = set(required)
-        while len(visit_resources) > 0:
-            resource_id = visit_resources.pop()
-            resource = self.get_resource(resource_id)
-            if resource.exists:
-                continue
-            job = self.get_creating_job(resource_id)
-            if job is None:
-                continue
-            job.is_required_downstream = True
-            for input in job.inputs:
-                if input.id not in required_resources:
-                    required_resources.add(input.id)
-                    visit_resources.add(input.id)
+        self.created.update([output.id for output in job.outputs])
 
     @property
     def finished(self):
