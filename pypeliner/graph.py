@@ -36,22 +36,6 @@ class NoJobs(Exception):
     pass
 
 
-class unique_list(object):
-    def __init__(self):
-        self.l = list()
-        self.s = set()
-    def __len__(self):
-        return len(self.l)
-    def append(self, v):
-        if v not in self.s:
-            self.l.append(v)
-            self.s.add(v)
-    def pop_front(self):
-        v = self.l.pop(0)
-        self.s.remove(v)
-        return v
-
-
 class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
@@ -59,8 +43,6 @@ class DependencyGraph:
     def __init__(self):
         self.completed = set()
         self.created = set()
-        self.standby_jobs = unique_list()
-        self.standby_resources = set()
         self.running = set()
         self.obsolete = set()
 
