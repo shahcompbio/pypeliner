@@ -36,6 +36,20 @@ class NoJobs(Exception):
     pass
 
 
+class DGJob(object):
+    def __init__(self, job):
+        self.job = job
+        self.inputs = []
+        self.outputs = []
+
+
+class DGResource(object):
+    def __init__(self, resource):
+        self.resource = resource
+        self.creating_job = None
+        self.dependant_jobs = []
+
+
 class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
@@ -51,6 +65,22 @@ class DependencyGraph:
         and outputs, maintaining current state.
 
         """
+        self.jobs1 = dict()
+        self.resources1 = dict()
+        for job in jobs.itervalues():
+            for resource in itertools.chain(job.inputs, job.outputs):
+                if resource.id not in self.resources1:
+                    self.resources1[resource.id] = DGResource(resource)
+        for job in jobs.itervalues():
+            self.jobs1[job.id] = DGJob(job)
+            for resource in job.inputs:
+                self.jobs1[job.id].inputs.append(self.resources1[resource.id])
+                self.resources1[resource.id].dependant_jobs.append(self.jobs1[job.id])
+            for resource in job.outputs:
+                self.jobs1[job.id].outputs.append(self.resources1[resource.id])
+                if self.resources1[resource.id].creating_job is not None:
+                    raise AmbiguousOutputException(resource.id, [job.id, self.resources1[resource.id].creating_job.id])
+                self.resources1[resource.id].creating_job = self.jobs1[job.id]
 
         self.jobs = jobs
         all_inputs = set((input.id for job in self.jobs.itervalues() for input in job.inputs))
@@ -164,8 +194,6 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        a = 0
-        
         out_of_date = set()
         resource_required = set()
         job_required = set()
@@ -199,37 +227,24 @@ class DependencyGraph:
     def get_resource(self, resource_id):
         """ Get resource object given resource id
         """
-        return self.G.node[('resource', resource_id)]['resource']
+        return self.resources1[resource_id].resource
 
     def get_dependant_jobs(self, resource_id):
         """ Generator for dependent jobs of a resource.
         """
-        if not self.has_dependant_jobs(resource_id):
-            return
-        for _, job_id in self.G[('resource', resource_id)]:
-            yield self.jobs[job_id]
+        return [j.job for j in self.resources1[resource_id].dependant_jobs]
 
     def has_dependant_jobs(self, resource_id):
         """ Check whether jobs depend on given resource.
         """
-        return ('resource', resource_id) in self.G
+        return len(self.resources1[resource_id].dependant_jobs) > 0
 
     def get_creating_job(self, resource_id):
         """ Job creating a given resource.
         """
-        job_ids = list([job_id for _, job_id in self.G.predecessors_iter(('resource', resource_id))])
-        if len(job_ids) == 0:
+        if self.resources1[resource_id].creating_job is None:
             return None
-        elif len(job_ids) == 1:
-            return self.jobs[job_ids[0]]
-        else:
-            raise Exception('More than one creating job for ' + resource_id)
-
-    def has_creating_job(self, resource_id):
-        """ Check whether given resource has a creating job.
-        """
-        job_ids = list([job_id for _, job_id in self.G.predecessors_iter(('resource', resource_id))])
-        return len(job_ids) > 0
+        return self.resources1[resource_id].creating_job.job
 
     def notify_completed(self, job):
         """ A job was completed, advance current state.
