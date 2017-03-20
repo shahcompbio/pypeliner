@@ -209,9 +209,8 @@ class DependencyGraph:
             if inputs_created and job.id not in self.running and job.id not in self.completed:
                 if job.id in job_required:
                     job.is_required_downstream = True
-                job_node = ('job', job.id)
                 self.running.add(job.id)
-                return self.G.node[job_node]['job']
+                return self.jobs[job.id]
 
         raise NoJobs()
 
