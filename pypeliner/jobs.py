@@ -77,6 +77,20 @@ class JobInstance(object):
         self.ctx = job_def.ctx.copy()
         self.direct_write = False
         self.is_required_downstream = False
+        self.init_inputs_outputs()
+    def init_inputs_outputs(self):
+        self.inputs = list()
+        for arg in self.args:
+            if isinstance(arg, pypeliner.arguments.Arg):
+                for input in arg.get_inputs(self.db):
+                    self.inputs.append(input)
+        for node_input in self.db.nodemgr.get_node_inputs(self.node):
+            self.inputs.append(node_input)
+        self.outputs = list()
+        for arg in self.args:
+            if isinstance(arg, pypeliner.arguments.Arg):
+                for output in arg.get_outputs(self.db):
+                    self.outputs.append(output)
     @property
     def id(self):
         return (self.node, self.job_def.name)
@@ -88,20 +102,6 @@ class JobInstance(object):
         if self.workflow.node.displayname != '':
             name = '/' + self.workflow.node.displayname + name
         return name
-    @property
-    def inputs(self):
-        for arg in self.args:
-            if isinstance(arg, pypeliner.arguments.Arg):
-                for input in arg.get_inputs(self.db):
-                    yield input
-        for node_input in self.db.nodemgr.get_node_inputs(self.node):
-            yield node_input
-    @property
-    def outputs(self):
-        for arg in self.args:
-            if isinstance(arg, pypeliner.arguments.Arg):
-                for output in arg.get_outputs(self.db):
-                    yield output
     @property
     def input_resources(self):
         return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
@@ -188,6 +188,7 @@ class JobInstance(object):
         return exc_dir
     def finalize(self, callable):
         callable.finalize(self.db)
+        self.init_inputs_outputs()
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
