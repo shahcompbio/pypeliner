@@ -196,6 +196,15 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
+        for job in self.jobs.itervalues():
+            if len(job.inputs) == 0 and job.id not in self.running and job.id not in self.completed:
+                self.running.add(job.id)
+                return job
+
+        for job_id in self.running:
+            if len(self.jobs[job_id].inputs) == 0:
+                raise NoJobs()
+
         resource_out_of_date = set()
 
         resource_required = set()
