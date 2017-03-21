@@ -196,23 +196,26 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        out_of_date = set()
+        resource_out_of_date = set()
+
         resource_required = set()
         job_required = set()
 
         for job in self.traverse_jobs_forward():
             if job.id in self.completed:
                 continue
-            inputs_out_of_date = any([i.id in out_of_date for i in job.inputs])
+            inputs_out_of_date = any([i.id in resource_out_of_date for i in job.inputs])
             if job.out_of_date() or inputs_out_of_date:
                 for o in job.outputs:
-                    out_of_date.add(o.id)
+                    resource_out_of_date.add(o.id)
+                for i in job.inputs:
+                    resource_required.add(i.id)
 
         for job in self.traverse_jobs_reverse():
             if job.id in self.completed:
                 continue
             for o in job.outputs:
-                if o.id in out_of_date and not o.exists:
+                if o.id in resource_out_of_date and not o.exists:
                     job_required.add(job.id)
                 if o.id in resource_required and not o.exists:
                     job_required.add(job.id)
