@@ -67,6 +67,12 @@ class RunSkipCmd(cmd.Cmd):
     def help_skip(self):
         print 'skip the job'
 
+    def do_verify(self, line):
+        return self.do_command('verify', line)
+
+    def help_verify(self):
+        print 'skip the job it doesnt need to be run'
+
     def do_touch(self, line):
         return self.do_command('touch', line)
 
@@ -94,6 +100,10 @@ class InteractiveRunSkip(object):
 
             if runskip_cmd.command == 'skip' or self.patterns.get(job.displayname) == 'skip':
                 return False
+
+            if runskip_cmd.command == 'verify' or self.patterns.get(job.displayname) == 'verify':
+                if not self.default(job):
+                    return False
 
             if runskip_cmd.command == 'touch' or self.patterns.get(job.displayname) == 'touch':
                 job.touch_outputs()
