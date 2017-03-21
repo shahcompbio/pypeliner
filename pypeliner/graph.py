@@ -201,19 +201,21 @@ class DependencyGraph:
         job_required = set()
 
         for job in self.traverse_jobs_forward():
+            if job.id in self.completed:
+                continue
             inputs_out_of_date = any([i.id in out_of_date for i in job.inputs])
             if job.out_of_date() or inputs_out_of_date:
                 for o in job.outputs:
                     out_of_date.add(o.id)
 
         for job in self.traverse_jobs_reverse():
+            if job.id in self.completed:
+                continue
             for o in job.outputs:
                 if o.id in out_of_date and not o.exists:
                     job_required.add(job.id)
-                    self._logger.debug('output {} for job {} is out of date but doesnt exist'.format(o.build_displayname(self.base_node), job.displayname))
                 if o.id in resource_required and not o.exists:
                     job_required.add(job.id)
-                    self._logger.debug('output {} for job {} is required but doesnt exist'.format(o.build_displayname(self.base_node), job.displayname))
             if job.id in job_required:
                 for i in job.inputs:
                     resource_required.add(i.id)
