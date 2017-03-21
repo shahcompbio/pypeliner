@@ -54,7 +54,9 @@ class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
 
-    def __init__(self):
+    def __init__(self, base_node):
+        self._logger = logging.getLogger('dependencygraph')
+        self.base_node = base_node
         self.completed = set()
         self.created = set()
         self.running = set()
@@ -208,8 +210,10 @@ class DependencyGraph:
             for o in job.outputs:
                 if o.id in out_of_date and not o.exists:
                     job_required.add(job.id)
+                    self._logger.debug('output {} for job {} is out of date but doesnt exist'.format(o.build_displayname(self.base_node), job.displayname))
                 if o.id in resource_required and not o.exists:
                     job_required.add(job.id)
+                    self._logger.debug('output {} for job {} is required but doesnt exist'.format(o.build_displayname(self.base_node), job.displayname))
             if job.id in job_required:
                 for i in job.inputs:
                     resource_required.add(i.id)
@@ -277,7 +281,7 @@ class WorkflowInstance(object):
         self.runskip = runskip
         self.db = db_factory.create(node.subdir)
         self.node = node
-        self.graph = DependencyGraph()
+        self.graph = DependencyGraph(node)
         self.subworkflows = list()
         self.cleanup = cleanup
         self.regenerate()
