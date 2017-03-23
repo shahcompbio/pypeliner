@@ -2,6 +2,7 @@ import os
 import networkx
 import itertools
 import logging
+import collections
 
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -36,27 +37,11 @@ class NoJobs(Exception):
     pass
 
 
-class DGJob(object):
-    def __init__(self, job):
-        self.job = job
-        self.inputs = []
-        self.outputs = []
-
-
-class DGResource(object):
-    def __init__(self, resource):
-        self.resource = resource
-        self.creating_job = None
-        self.dependant_jobs = []
-
-
 class DependencyGraph:
     """ Graph of dependencies between jobs.
     """
 
-    def __init__(self, base_node):
-        self._logger = logging.getLogger('dependencygraph')
-        self.base_node = base_node
+    def __init__(self):
         self.completed = set()
         self.created = set()
         self.running = set()
@@ -67,64 +52,53 @@ class DependencyGraph:
         and outputs, maintaining current state.
 
         """
-        self.jobs1 = dict()
-        self.resources1 = dict()
-        for job in jobs.itervalues():
-            for resource in itertools.chain(job.inputs, job.outputs):
-                if resource.id not in self.resources1:
-                    self.resources1[resource.id] = DGResource(resource)
-        for job in jobs.itervalues():
-            self.jobs1[job.id] = DGJob(job)
-            for resource in job.inputs:
-                self.jobs1[job.id].inputs.append(self.resources1[resource.id])
-                self.resources1[resource.id].dependant_jobs.append(self.jobs1[job.id])
-            for resource in job.outputs:
-                self.jobs1[job.id].outputs.append(self.resources1[resource.id])
-                if self.resources1[resource.id].creating_job is not None:
-                    raise AmbiguousOutputException(resource.id, [job.id, self.resources1[resource.id].creating_job.id])
-                self.resources1[resource.id].creating_job = self.jobs1[job.id]
-
         self.jobs = jobs
         all_inputs = set((input.id for job in self.jobs.itervalues() for input in job.inputs))
         all_outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
-        self.resource_ids = set(all_inputs)
-        self.resource_ids.update(all_outputs)
         self.inputs = all_inputs.difference(all_outputs)
         self.outputs = all_outputs.difference(all_inputs)
 
+        self.dependant_jobs = collections.defaultdict(set)
+        self.creating_job = dict()
+        for job in jobs.itervalues():
+            for resource in job.inputs:
+                self.dependant_jobs[resource.id].add(job.id)
+            for resource in job.outputs:
+                if resource.id in self.creating_job:
+                    raise AmbiguousOutputException(resource.id, [job.id, self.creating_job[resource.id]])
+                self.creating_job[resource.id] = job.id
+        for job in jobs.itervalues():
+            for resource in job.outputs:
+                if self.creating_job[resource.id] is None and resource.is_temp:
+                    raise AmbiguousInputException(resource.id)
+
         # Create the graph
-        self.G = networkx.DiGraph()
+        G = networkx.DiGraph()
         for job in self.jobs.itervalues():
             job_node = ('job', job.id)
-            self.G.add_node(job_node, job=job)
+            G.add_node(job_node, job=job)
             for input in job.inputs:
                 resource_node = ('resource', input.id)
-                if resource_node not in self.G:
-                    self.G.add_node(resource_node, resource=input)
-                self.G.add_edge(resource_node, job_node)
+                if resource_node not in G:
+                    G.add_node(resource_node, resource=input)
+                G.add_edge(resource_node, job_node)
             for output in job.outputs:
                 resource_node = ('resource', output.id)
-                if resource_node not in self.G:
-                    self.G.add_node(resource_node, resource=output)
-                self.G.add_edge(job_node, resource_node)
+                if resource_node not in G:
+                    G.add_node(resource_node, resource=output)
+                G.add_edge(job_node, resource_node)
 
         # Check for cycles
         try:
-            cycles = networkx.find_cycle(self.G)
+            cycles = networkx.find_cycle(G)
         except networkx.NetworkXNoCycle:
             cycles = []
         if len(cycles) > 0:
             raise DependencyCycleException(cycles[0])
 
-        # Check for ambiguous output
-        # and temps with no creating job
-        for node in self.G.nodes():
-            if node[0] == 'resource':
-                created_by = [edge[0][1] for edge in self.G.in_edges(node)]
-                if len(created_by) > 1:
-                    raise AmbiguousOutputException(node[1], created_by)
-                if node[1] not in self.inputs and len(created_by) == 0:
-                    raise AmbiguousInputException(node[1])
+        # Pre-compute traversals of the DAG
+        self.jobs_forward = list(self.traverse_jobs_forward())
+        self.jobs_reverse = list(self.traverse_jobs_reverse())
 
         # Assume pipeline inputs exist
         self.created.update(self.inputs)
@@ -210,7 +184,7 @@ class DependencyGraph:
         resource_required = set()
         job_required = set()
 
-        for job in self.traverse_jobs_forward():
+        for job in self.jobs_forward:
             if job.id in self.completed:
                 continue
             inputs_out_of_date = any([i.id in resource_out_of_date for i in job.inputs])
@@ -220,7 +194,7 @@ class DependencyGraph:
                 for i in job.inputs:
                     resource_required.add(i.id)
 
-        for job in self.traverse_jobs_reverse():
+        for job in self.jobs_reverse:
             if job.id in self.completed:
                 continue
             for o in job.outputs:
@@ -232,7 +206,7 @@ class DependencyGraph:
                 for i in job.inputs:
                     resource_required.add(i.id)
 
-        for job in self.traverse_jobs_forward():
+        for job in self.jobs_forward:
             inputs_created = all([i.id in self.created for i in job.inputs])
             if inputs_created and job.id not in self.running and job.id not in self.completed:
                 if job.id in job_required:
@@ -242,27 +216,22 @@ class DependencyGraph:
 
         raise NoJobs()
 
-    def get_resource(self, resource_id):
-        """ Get resource object given resource id
-        """
-        return self.resources1[resource_id].resource
-
     def get_dependant_jobs(self, resource_id):
         """ Generator for dependent jobs of a resource.
         """
-        return [j.job for j in self.resources1[resource_id].dependant_jobs]
+        return [self.jobs[job_id] for job_id in self.dependant_jobs[resource_id]]
 
     def has_dependant_jobs(self, resource_id):
         """ Check whether jobs depend on given resource.
         """
-        return len(self.resources1[resource_id].dependant_jobs) > 0
+        return len(self.dependant_jobs[resource_id]) > 0
 
     def get_creating_job(self, resource_id):
         """ Job creating a given resource.
         """
-        if self.resources1[resource_id].creating_job is None:
+        if resource_id not in self.creating_job:
             return None
-        return self.resources1[resource_id].creating_job.job
+        return self.jobs[self.creating_job[resource_id]]
 
     def notify_completed(self, job):
         """ A job was completed, advance current state.
@@ -295,7 +264,7 @@ class WorkflowInstance(object):
         self.runskip = runskip
         self.db = db_factory.create(node.subdir)
         self.node = node
-        self.graph = DependencyGraph(node)
+        self.graph = DependencyGraph()
         self.subworkflows = list()
         self.cleanup = cleanup
         self.regenerate()
