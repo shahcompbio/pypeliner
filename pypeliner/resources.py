@@ -82,7 +82,10 @@ def resolve_user_filename(name, node, fnames=None, template=None):
         filename = template.format(**dict(node))
     else:
         _check_template(name, node)
-        filename = name.format(**dict(node))
+        try:
+            filename = name.format(**dict(node))
+        except KeyError as e:
+            raise ValueError('template {} contains {}'.format(name, e.args[0]))
     return filename
 
 
