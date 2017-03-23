@@ -115,8 +115,8 @@ class DependencyGraph:
                 adjacent_jobs.add(job.id)
 
         for resource_id in created_resources:
-            for job in self.get_dependant_jobs(resource_id):
-                adjacent_jobs.add(job.id)
+            for job_id in self.dependant_jobs[resource_id]:
+                adjacent_jobs.add(job_id)
     
         while len(adjacent_jobs) > 0:
             for job_id in list(adjacent_jobs):
@@ -126,8 +126,8 @@ class DependencyGraph:
                     adjacent_jobs.remove(job_id)
                     for o in job.outputs:
                         created_resources.add(o.id)
-                        for dependent_job in self.get_dependant_jobs(o.id):
-                            adjacent_jobs.add(dependent_job.id)
+                        for dependent_job_id in self.dependant_jobs[o.id]:
+                            adjacent_jobs.add(dependent_job_id)
                     break
 
     def traverse_jobs_reverse(self):
@@ -144,9 +144,8 @@ class DependencyGraph:
                 adjacent_jobs.add(job.id)
 
         for resource_id in visited_resources:
-            creating_job = self.get_creating_job(resource_id)
-            if creating_job is not None:
-                adjacent_jobs.add(creating_job.id)
+            if resource_id in self.creating_job:
+                adjacent_jobs.add(self.creating_job[resource_id])
 
         while len(adjacent_jobs) > 0 or len(adjacent_resources) > 0:
             for job_id in list(adjacent_jobs):
@@ -160,12 +159,11 @@ class DependencyGraph:
                     break
 
             for resource_id in list(adjacent_resources):
-                if all([j.id in visited_jobs for j in self.get_dependant_jobs(resource_id)]):
+                if all([job_id in visited_jobs for job_id in self.dependant_jobs[resource_id]]):
                     adjacent_resources.remove(resource_id)
                     visited_resources.add(resource_id)
-                    creating_job = self.get_creating_job(resource_id)
-                    if creating_job is not None:
-                        adjacent_jobs.add(creating_job.id)
+                    if resource_id in self.creating_job:
+                        adjacent_jobs.add(self.creating_job[resource_id])
 
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
@@ -216,33 +214,16 @@ class DependencyGraph:
 
         raise NoJobs()
 
-    def get_dependant_jobs(self, resource_id):
-        """ Generator for dependent jobs of a resource.
-        """
-        return [self.jobs[job_id] for job_id in self.dependant_jobs[resource_id]]
-
-    def has_dependant_jobs(self, resource_id):
-        """ Check whether jobs depend on given resource.
-        """
-        return len(self.dependant_jobs[resource_id]) > 0
-
-    def get_creating_job(self, resource_id):
-        """ Job creating a given resource.
-        """
-        if resource_id not in self.creating_job:
-            return None
-        return self.jobs[self.creating_job[resource_id]]
-
     def notify_completed(self, job):
         """ A job was completed, advance current state.
         """
         self.running.remove(job.id)
         self.completed.add(job.id)
         for input in job.inputs:
-            if all([otherjob.id in self.completed for otherjob in self.get_dependant_jobs(input.id)]):
+            if all([otherjob_id in self.completed for otherjob_id in self.dependant_jobs[input.id]]):
                 self.obsolete.add(input)
         for output in job.outputs:
-            if not self.has_dependant_jobs(output.id):
+            if len(self.dependant_jobs[output.id]) == 0:
                 self.obsolete.add(output)
         self.created.update([output.id for output in job.outputs])
 
