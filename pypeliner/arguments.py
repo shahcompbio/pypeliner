@@ -116,9 +116,10 @@ class UserFilenameCreator(object):
     def __call__(self, name, node):
         return pypeliner.resources.resolve_user_filename(name, node, fnames=self.fnames, template=self.template) + self.suffix
     def __repr__(self):
-        return '{0}.{1}({2},{3},{4})'.format(UserFilenameCreator.__module__,
+        return '{0}.{1}({2},{3},{4})'.format(
+            UserFilenameCreator.__module__,
             UserFilenameCreator.__name__,
-            self.suffix, self.fnames, self.template)
+            repr(self.suffix), repr(self.fnames), repr(self.template))
 
 
 class InputFileArg(Arg):
@@ -213,13 +214,14 @@ class SplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self, UserFilenameCreator(suffix, self.fnames, self.template))
+        self.resolved = FilenameCallback(self.name, self.node, self.axes, UserFilenameCreator(suffix, self.fnames, self.template))
         return self.resolved
     def updatedb(self, db):
         if self.is_split:
-            self.resolved.updatedb(db)
+            db.nodemgr.store_chunks(self.axes, self.node, self.resolved.filenames.keys(), subset=self.axes_origin)
     def finalize(self, db):
-        self.resolved.finalize(db)
+        for resource in self.get_resources(db):
+            resource.finalize(self.resolved.filenames[self.get_node_chunks(resource.node)])
 
 
 class TempInputObjArg(Arg):
@@ -387,19 +389,21 @@ class TempOutputFileArg(Arg):
 class FilenameCallback(object):
     """ Argument to split jobs providing callback for filenames
     with a particular instance """
-    def __init__(self, arg, filename_creator):
-        self.arg = arg
+    def __init__(self, name, node, axes, filename_creator):
+        self.name = name
+        self.node = node
+        self.axes = axes
         self.filename_creator = filename_creator
         self.filenames = dict()
     def __call__(self, *chunks):
         return self.__getitem__(*chunks)
     def __getitem__(self, *chunks):
-        if len(self.arg.axes) != len(chunks):
-            raise ValueError('expected ' + str(len(self.arg.axes)) + ' values for axes ' + str(self.arg.axes))
-        node = self.arg.node
-        for axis, chunk in zip(self.arg.axes, chunks):
+        if len(self.axes) != len(chunks):
+            raise ValueError('expected ' + str(len(self.axes)) + ' values for axes ' + str(self.axes))
+        node = self.node
+        for axis, chunk in zip(self.axes, chunks):
             node += pypeliner.identifiers.AxisInstance(axis, chunk)
-        filename = self.filename_creator(self.arg.name, node)
+        filename = self.filename_creator(self.name, node)
         if len(chunks) == 1:
             self.filenames[chunks[0]] = filename
         else:
@@ -407,12 +411,7 @@ class FilenameCallback(object):
         pypeliner.helpers.makedirs(os.path.dirname(filename))
         return filename
     def __repr__(self):
-        return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ', '.join(repr(a) for a in (self.arg.name, self.arg.node, self.arg.axes, self.filename_creator)))
-    def updatedb(self, db):
-        db.nodemgr.store_chunks(self.arg.axes, self.arg.node, self.filenames.keys(), subset=self.arg.axes_origin)
-    def finalize(self, db):
-        for resource in self.arg.get_resources(db):
-            resource.finalize(self.filenames[self.arg.get_node_chunks(resource.node)])
+        return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ','.join(repr(a) for a in (self.name, self.node, self.axes, self.filename_creator)))
 
 
 class FilenameCreator(object):
@@ -452,13 +451,14 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self, FilenameCreator(db.temps_dir, suffix))
+        self.resolved = FilenameCallback(self.name, self.node, self.axes, FilenameCreator(db.temps_dir, suffix))
         return self.resolved
     def updatedb(self, db):
         if self.is_split:
-            self.resolved.updatedb(db)
+            db.nodemgr.store_chunks(self.axes, self.node, self.resolved.filenames.keys(), subset=self.axes_origin)
     def finalize(self, db):
-        self.resolved.finalize(db)
+        for resource in self.get_resources(db):
+            resource.finalize(self.resolved.filenames[self.get_node_chunks(resource.node)])
 
 
 class InputInstanceArg(Arg):
