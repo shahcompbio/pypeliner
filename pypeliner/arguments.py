@@ -76,6 +76,8 @@ class TempSpaceArg(Arg):
     def resolve(self, db, direct_write):
         if self.cleanup in ('before', 'both'):
             self._remove()
+        if self.node.undefined:
+            raise Exception('Undefined node {} for {}'.format(self.node.displayname, self.name))
         return self.filename
     def finalize(self, db):
         if self.cleanup in ('after', 'both'):
