@@ -155,13 +155,13 @@ class AsyncQsubJob(object):
         if not self.qstat_job_status.finished(self.qsub_job_id, self.qsub_time) and not self.qstat_job_status.errors(self.qsub_job_id):
             return False
 
-        if self.qacct.results is None:
+        if self.qstat_job_status.errors(self.qsub_job_id):
             try:
                 self.qacct.check()
             except pypeliner.execqueue.qcmd.QacctError:
-                return True
-        
-        return self.qacct.results is not None
+                pass
+
+        return True
 
     def finalize(self):
         """ Finalize a job after remote run.
@@ -172,10 +172,7 @@ class AsyncQsubJob(object):
             self.delete()
             raise pypeliner.execqueue.base.ReceiveError(self.create_error_text('job error'))
 
-        if self.qacct.results is None:
-            raise pypeliner.execqueue.base.ReceiveError(self.create_error_text('qacct error'))
-
-        if self.qacct.results['exit_status'] != '0':
+        if self.qacct.results is not None and self.qacct.results['exit_status'] != '0':
             raise pypeliner.execqueue.base.ReceiveError(self.create_error_text('qsub error'))
 
         self.received = self.delegated.finalize()

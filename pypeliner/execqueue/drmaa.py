@@ -94,14 +94,14 @@ class DrmaaJob(object):
 
             self.job_info = self.session.wait(self.job_id)
 
-        if self.qacct.results is None:
+        if int(self.job_info.exitStatus) != 0:
             try:
                 self.qacct.check()
             except pypeliner.execqueue.qcmd.QacctError:
-                return True
+                pass
         
-        return self.qacct.results is not None
-    
+        return True
+
     def finalize(self):
         assert self.finished
 
