@@ -1,10 +1,10 @@
 package:
   name: pypeliner
-  version: "0.4.13"
+  version: "0.4.14"
 
 source:
   git_url: https://dranew@bitbucket.org/dranew/pypeliner.git
-  git_rev: v0.4.13
+  git_rev: v0.4.14
 
 requirements:
   build:
