@@ -68,7 +68,7 @@ class TempSpaceArg(Arg):
         self.name = name
         self.node = node
         self.cleanup = cleanup
-        self.filename = pypeliner.resources.get_temp_filename(db.temps_dir, name, node)
+        self.filename = db.get_temp_filename(name, node)
     def get_outputs(self, db):
         yield pypeliner.resources.Dependency(self.name, self.node)
     def _remove(self):
@@ -109,21 +109,6 @@ class MergeTemplateArg(Arg):
         return resolved
 
 
-class UserFilenameCreator(object):
-    """ Function object for creating user filenames from name node pairs """
-    def __init__(self, suffix='', fnames=None, template=None):
-        self.suffix = suffix
-        self.fnames = fnames
-        self.template = template
-    def __call__(self, name, node):
-        return pypeliner.resources.resolve_user_filename(name, node, fnames=self.fnames, template=self.template) + self.suffix
-    def __repr__(self):
-        return '{0}.{1}({2},{3},{4})'.format(
-            UserFilenameCreator.__module__,
-            UserFilenameCreator.__name__,
-            repr(self.suffix), repr(self.fnames), repr(self.template))
-
-
 class InputFileArg(Arg):
     """ Input file argument
 
@@ -132,7 +117,8 @@ class InputFileArg(Arg):
 
     """
     def __init__(self, db, name, node, fnames=None, template=None):
-        self.resource = pypeliner.resources.UserResource(name, node, fnames=fnames, template=template)
+        filename = db.get_user_filename(name, node, fnames=fnames, template=template)
+        self.resource = pypeliner.resources.UserResource(name, node, filename)
     def get_inputs(self, db):
         yield self.resource
     def resolve(self, db, direct_write):
@@ -154,7 +140,8 @@ class MergeFileArg(Arg,SplitMergeArg):
         self.template = template
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            yield pypeliner.resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
+            filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
+            yield pypeliner.resources.UserResource(self.name, node, filename)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource
@@ -175,7 +162,8 @@ class OutputFileArg(Arg):
 
     """
     def __init__(self, db, name, node, fnames=None, template=None):
-        self.resource = pypeliner.resources.UserResource(name, node, fnames=fnames, template=template)
+        filename = db.get_user_filename(name, node, fnames=fnames, template=template)
+        self.resource = pypeliner.resources.UserResource(name, node, filename)
     def get_outputs(self, db):
         yield self.resource
     def resolve(self, db, direct_write):
@@ -205,7 +193,8 @@ class SplitFileArg(Arg,SplitMergeArg):
         self.template = template
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            yield pypeliner.resources.UserResource(self.name, node, fnames=self.fnames, template=self.template)
+            filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
+            yield pypeliner.resources.UserResource(self.name, node, filename)
     def get_inputs(self, db):
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
             yield dependency
@@ -216,7 +205,8 @@ class SplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self.name, self.node, self.axes, UserFilenameCreator(suffix, self.fnames, self.template))
+        filename_creator = db.get_user_filename_creator(suffix=suffix, fnames=self.fnames, template=self.template)
+        self.resolved = FilenameCallback(self.name, self.node, self.axes, filename_creator)
         return self.resolved
     def updatedb(self, db):
         if self.is_split:
@@ -234,7 +224,8 @@ class TempInputObjArg(Arg):
 
     """
     def __init__(self, db, name, node, func=None):
-        self.resource = pypeliner.resources.TempObjManager(name, node, db.temps_dir)
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.TempObjManager(name, node, filename)
         self.func = func
     def get_inputs(self, db):
         yield self.resource.input
@@ -260,7 +251,8 @@ class TempMergeObjArg(Arg,SplitMergeArg):
         self.func = func
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-             yield pypeliner.resources.TempObjManager(self.name, node, db.temps_dir)
+            filename = db.get_temp_filename(self.name, node)
+            yield pypeliner.resources.TempObjManager(self.name, node, filename)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource.input
@@ -285,7 +277,8 @@ class TempOutputObjArg(Arg):
 
     """
     def __init__(self, db, name, node):
-        self.resource = pypeliner.resources.TempObjManager(name, node, db.temps_dir)
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.TempObjManager(name, node, filename)
     def get_outputs(self, db):
         yield self.resource.output
     def resolve(self, db, direct_write):
@@ -309,7 +302,8 @@ class TempSplitObjArg(Arg,SplitMergeArg):
         self.is_split = len(self.axes_origin) != 0
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-             yield pypeliner.resources.TempObjManager(self.name, node, db.temps_dir)
+            filename = db.get_temp_filename(self.name, node)
+            yield pypeliner.resources.TempObjManager(self.name, node, filename)
     def get_inputs(self, db):
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
             yield dependency
@@ -338,7 +332,8 @@ class TempInputFileArg(Arg):
 
     """
     def __init__(self, db, name, node):
-        self.resource = pypeliner.resources.TempFileResource(name, node, db.temps_dir)
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.TempFileResource(name, node, filename)
     def get_inputs(self, db):
         yield self.resource
     def resolve(self, db, direct_write):
@@ -357,7 +352,8 @@ class TempMergeFileArg(Arg,SplitMergeArg):
         self.axes = axes
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            yield pypeliner.resources.TempFileResource(self.name, node, db.temps_dir)
+            filename = db.get_temp_filename(self.name, node)
+            yield pypeliner.resources.TempFileResource(self.name, node, filename)
     def get_inputs(self, db):
         for resource in self.get_resources(db):
             yield resource
@@ -377,7 +373,8 @@ class TempOutputFileArg(Arg):
 
     """
     def __init__(self, db, name, node):
-        self.resource = pypeliner.resources.TempFileResource(name, node, db.temps_dir)
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.TempFileResource(name, node, filename)
     def get_outputs(self, db):
         yield self.resource
     def resolve(self, db, direct_write):
@@ -416,17 +413,6 @@ class FilenameCallback(object):
         return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ','.join(repr(a) for a in (self.name, self.node, self.axes, self.filename_creator)))
 
 
-class FilenameCreator(object):
-    """ Function object for creating filenames from name node pairs """
-    def __init__(self, file_dir='', file_suffix=''):
-        self.file_dir = file_dir
-        self.file_suffix = file_suffix
-    def __call__(self, name, node):
-        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
-    def __repr__(self):
-        return '{0}.{1}({2})'.format(FilenameCreator.__module__, FilenameCreator.__name__, ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
-
-
 class TempSplitFileArg(Arg,SplitMergeArg):
     """ Temp output file arguments from a split
 
@@ -442,7 +428,8 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         self.is_split = len(self.axes_origin) != 0
     def get_resources(self, db):
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            yield pypeliner.resources.TempFileResource(self.name, node, db.temps_dir)
+            filename = db.get_temp_filename(self.name, node)
+            yield pypeliner.resources.TempFileResource(self.name, node, filename)
     def get_inputs(self, db):
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
             yield dependency
@@ -453,7 +440,8 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        self.resolved = FilenameCallback(self.name, self.node, self.axes, FilenameCreator(db.temps_dir, suffix))
+        filename_creator = db.get_temp_filename_creator(suffix=suffix)
+        self.resolved = FilenameCallback(self.name, self.node, self.axes, filename_creator)
         return self.resolved
     def updatedb(self, db):
         if self.is_split:

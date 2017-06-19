@@ -24,7 +24,7 @@ class Dependency(object):
     parallelized on that axis.
     """
     is_temp = False
-    def __init__(self, name, node, **kwargs):
+    def __init__(self, name, node):
         self.name = name
         self.node = node
     @property
@@ -91,10 +91,10 @@ def resolve_user_filename(name, node, fnames=None, template=None):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, fnames=None, template=None, **kwargs):
+    def __init__(self, name, node, filename):
         self.name = name
         self.node = node
-        self.filename = resolve_user_filename(name, node, fnames=fnames, template=template)
+        self.filename = filename
         pypeliner.fstatcache.invalidate_cached_state(self.filename)
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
@@ -117,19 +117,13 @@ class UserResource(Resource):
             raise OutputMissingException(write_filename)
 
 
-def get_temp_filename(temps_dir, name, node):
-    if os.path.isabs(name):
-        raise Exception('name {} is an absolute path'.format(name))
-    return os.path.join(temps_dir, node.subdir, name)
-
-
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, temps_dir, **kwargs):
+    def __init__(self, name, node, filename):
         self.name = name
         self.node = node
+        self.filename = filename
         self.is_temp = True
-        self.filename = get_temp_filename(temps_dir, name, node)
         self.placeholder_filename = self.filename + '._placeholder'
         pypeliner.fstatcache.invalidate_cached_state(self.filename)
         pypeliner.fstatcache.invalidate_cached_state(self.placeholder_filename)
@@ -171,11 +165,11 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, temps_dir, is_input=True, **kwargs):
+    def __init__(self, name, node, filename, is_input=True):
         self.name = name
         self.node = node
+        self.filename = filename + ('._i', '._o')[is_input]
         self.is_input = is_input
-        self.filename = get_temp_filename(temps_dir, name, node) + ('._i', '._o')[is_input]
         self.is_temp = True
         pypeliner.fstatcache.invalidate_cached_state(self.filename)
     @property
@@ -209,12 +203,11 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, temps_dir, **kwargs):
+    def __init__(self, name, node, filename):
         self.name = name
         self.node = node
-        self.temps_dir = temps_dir
-        self.input = TempObjResource(self.name, self.node, temps_dir=self.temps_dir, is_input=True)
-        self.output = TempObjResource(self.name, self.node, temps_dir=self.temps_dir, is_input=False)
+        self.input = TempObjResource(name, node, filename, is_input=True)
+        self.output = TempObjResource(name, node, filename, is_input=False)
     def get_obj(self):
         try:
             with open(self.input.filename, 'rb') as f:

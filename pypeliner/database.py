@@ -12,7 +12,8 @@ import pypeliner.identifiers
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
-    def __init__(self, nodes_dir, temps_dir):
+    def __init__(self, db, nodes_dir, temps_dir):
+        self.db = db
         self.nodes_dir = nodes_dir
         self.temps_dir = temps_dir
         self.cached_chunks = dict()
@@ -38,7 +39,8 @@ class NodeManager(object):
                     yield (chunk,) + chunks_rest
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
-            resource = pypeliner.resources.TempObjManager(axis, node, temps_dir=self.temps_dir)
+            filename = self.db.get_temp_filename(axis, node)
+            resource = pypeliner.resources.TempObjManager(axis, node, filename)
             chunks = resource.get_obj()
             if chunks is None:
                 chunks = (None,)
@@ -72,7 +74,8 @@ class NodeManager(object):
             pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
-        resource = pypeliner.resources.TempObjManager(axis, node, temps_dir=self.temps_dir)
+        filename = self.db.get_temp_filename(axis, node)
+        resource = pypeliner.resources.TempObjManager(axis, node, filename)
         resource.finalize(chunks)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
@@ -89,15 +92,47 @@ class NodeManager(object):
         return outputs
     def get_chunks_resource(self, axes, node, subset):
         if 0 in subset:
-            yield pypeliner.resources.TempObjManager(axes[0], node, temps_dir=self.temps_dir)
+            filename = self.db.get_temp_filename(axes[0], node)
+            yield pypeliner.resources.TempObjManager(axes[0], node, filename)
         for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
-                yield pypeliner.resources.TempObjManager(axes[level], level_node, temps_dir=self.temps_dir)
+                filename = self.db.get_temp_filename(axes[level], level_node)
+                yield pypeliner.resources.TempObjManager(axes[level], level_node, filename)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
+
+
+class UserFilenameCreator(object):
+    """ Function object for creating user filenames from name node pairs """
+    def __init__(self, suffix='', fnames=None, template=None):
+        self.suffix = suffix
+        self.fnames = fnames
+        self.template = template
+    def __call__(self, name, node):
+        return pypeliner.resources.resolve_user_filename(name, node, fnames=self.fnames, template=self.template) + self.suffix
+    def __repr__(self):
+        return '{0}.{1}({2},{3},{4})'.format(
+            UserFilenameCreator.__module__,
+            UserFilenameCreator.__name__,
+            repr(self.suffix), repr(self.fnames), repr(self.template))
+
+
+class TempFilenameCreator(object):
+    """ Function object for creating filenames from name node pairs """
+    def __init__(self, file_dir='', file_suffix=''):
+        self.file_dir = file_dir
+        self.file_suffix = file_suffix
+    def __call__(self, name, node):
+        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
+    def __repr__(self):
+        return '{0}.{1}({2})'.format(
+            TempFilenameCreator.__module__,
+            TempFilenameCreator.__name__,
+            ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
+
 
 class WorkflowDatabase(object):
     def __init__(self, workflow_dir, logs_dir, instance_subdir):
@@ -106,11 +141,23 @@ class WorkflowDatabase(object):
         self.temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
         pypeliner.helpers.makedirs(self.nodes_dir)
         pypeliner.helpers.makedirs(self.temps_dir)
-        self.nodemgr = NodeManager(self.nodes_dir, self.temps_dir)
+        self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
+    def get_user_filename_creator(self, suffix='', fnames=None, template=None):
+        return UserFilenameCreator(suffix=suffix, fnames=fnames, template=template)
+    def get_user_filename(self, name, node, fnames=None, template=None):
+        return self.get_user_filename_creator(fnames=fnames, template=template)(name, node)
+    def get_temp_filename_creator(self, suffix=''):
+        return TempFilenameCreator(file_dir=self.temps_dir, file_suffix=suffix)
+    def get_temp_filename(self, name, node):
+        if os.path.isabs(name):
+            raise Exception('name {} is an absolute path'.format(name))
+        return self.get_temp_filename_creator()(name, node)
+
 
 class PipelineLockedError(Exception):
     pass
+
 
 class WorkflowDatabaseFactory(object):
     def __init__(self, workflow_dir, logs_dir):
