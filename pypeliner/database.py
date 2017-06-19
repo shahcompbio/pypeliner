@@ -106,13 +106,39 @@ class NodeManager(object):
             yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
 
 
+def _check_template(template, node):
+    for axis, _ in node:
+        if axis not in template:
+            raise ValueError('filename template {} does not contain {{{}}}'.format(template, axis))
+
+
+def resolve_user_filename(name, node, path_info):
+    """ Resolve a filename based on user provided information """
+    fname_key = tuple([a[1] for a in node])
+    if path_info.fnames is not None:
+        if len(fname_key) == 1:
+            filename = path_info.fnames.get(fname_key[0], name)
+        else:
+            filename = path_info.fnames.get(fname_key, name)
+    elif path_info.template is not None:
+        _check_template(path_info.template, node)
+        filename = path_info.template.format(**dict(node))
+    else:
+        _check_template(name, node)
+        try:
+            filename = name.format(**dict(node))
+        except KeyError as e:
+            raise ValueError('template {} contains {}'.format(name, e.args[0]))
+    return filename
+
+
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
     def __init__(self, path_info, suffix=''):
         self.path_info = path_info
         self.suffix = suffix
     def __call__(self, name, node):
-        return pypeliner.resources.resolve_user_filename(name, node, self.path_info) + self.suffix
+        return resolve_user_filename(name, node, self.path_info) + self.suffix
     def __repr__(self):
         return '{0}.{1}({2},{3})'.format(
             UserFilenameCreator.__module__,
