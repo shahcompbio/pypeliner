@@ -2,6 +2,22 @@ import pypeliner.commandline
 import pypeliner.jobs
 
 
+class UserPathInfo(object):
+    def __init__(self, template=None, fnames=None):
+        self.template = template
+        self.fnames = fnames
+    def __eq__(self, other):
+        return self.template == other.template and self.fnames == other.fnames
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    def __repr__(self):
+        return '{0}.{1}({2}, {3})'.format(
+            UserPathInfo.__module__,
+            UserPathInfo.__name__,
+            repr(self.template),
+            repr(self.fnames))
+
+
 class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
@@ -15,10 +31,27 @@ class Workflow(object):
         if default_ctx is not None:
             self.default_ctx.update(default_ctx)
         self.job_definitions = dict()
+        self.path_info = dict()
 
     @property
     def empty(self):
         return len(self.job_definitions) == 0
+
+    def set_filenames(self, name, *axes, **kwargs):
+        """ Set the filename for a 
+        """
+        user_file_id = (name, axes)
+        if user_file_id in self.path_info:
+            raise ValueError('Filename for {} with axes {} already set to {}'.format(name, axes, self.path_info[user_file_id]))
+        self.path_info[user_file_id] = UserPathInfo()
+        if 'fnames' in kwargs:
+            self.path_info[user_file_id].fnames = kwargs['fnames']
+        elif 'template' in kwargs:
+            self.path_info[user_file_id].template = kwargs['template']
+        elif 'filename' in kwargs:
+            self.path_info[user_file_id].template = kwargs['filename']
+        else:
+            raise ValueError('One of fnames, template, or filename must be set')
 
     def setobj(self, obj=None, value=None, axes=()):
         """ Set a managed temp object with a specified value.

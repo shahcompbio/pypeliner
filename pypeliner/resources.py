@@ -69,17 +69,17 @@ def _check_template(template, node):
             raise ValueError('filename template {} does not contain {{{}}}'.format(template, axis))
 
 
-def resolve_user_filename(name, node, fnames=None, template=None):
+def resolve_user_filename(name, node, path_info):
     """ Resolve a filename based on user provided information """
     fname_key = tuple([a[1] for a in node])
-    if fnames is not None:
+    if path_info.fnames is not None:
         if len(fname_key) == 1:
-            filename = fnames.get(fname_key[0], name)
+            filename = path_info.fnames.get(fname_key[0], name)
         else:
-            filename = fnames.get(fname_key, name)
-    elif template is not None:
-        _check_template(template, node)
-        filename = template.format(**dict(node))
+            filename = path_info.fnames.get(fname_key, name)
+    elif path_info.template is not None:
+        _check_template(path_info.template, node)
+        filename = path_info.template.format(**dict(node))
     else:
         _check_template(name, node)
         try:
@@ -223,5 +223,3 @@ class TempObjManager(object):
                 pickle.dump(obj, f)
         pypeliner.fstatcache.invalidate_cached_state(self.input.filename)
         pypeliner.fstatcache.invalidate_cached_state(self.output.filename)
-
-

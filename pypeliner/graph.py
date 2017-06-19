@@ -243,7 +243,7 @@ class WorkflowInstance(object):
         self.workflow_def = workflow_def
         self.db_factory = db_factory
         self.runskip = runskip
-        self.db = db_factory.create(node.subdir)
+        self.db = db_factory.create(workflow_def.path_info, node.subdir)
         self.node = node
         self.graph = DependencyGraph()
         self.subworkflows = list()

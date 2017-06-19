@@ -43,6 +43,9 @@ class Node(tuple):
     def __getslice__(self, i, j):
         return self.__getitem__(slice(i, j))
     @property
+    def axes(self):
+        return tuple([a[0] for a in self])
+    @property
     def subdir(self):
         if len(self) == 0:
             return ''

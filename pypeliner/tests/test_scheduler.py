@@ -176,7 +176,9 @@ class scheduler_test(unittest.TestCase):
             func=write_stuff,
             args=(
                 mgd.TempInputObj('output_data'),
-                mgd.OutputFile(self.output_filename)))
+                mgd.OutputFile('output')))
+                
+        workflow.set_filenames('output', filename=self.output_filename)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -267,8 +269,10 @@ class scheduler_test(unittest.TestCase):
             name='merge_files',
             func=merge_file_byline,
             args=(
-                mgd.InputFile('input_files', 'byfile', fnames=input_filenames),
+                mgd.InputFile('input_files', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
+
+        workflow.set_filenames('input_files', 'byfile', fnames=input_filenames)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -288,8 +292,10 @@ class scheduler_test(unittest.TestCase):
             name='merge_files',
             func=merge_file_byline,
             args=(
-                mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                mgd.InputFile('input_files', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
+
+        workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -313,7 +319,9 @@ class scheduler_test(unittest.TestCase):
         workflow.transform(
             name='write_files',
             func=write_files,
-            args=(mgd.OutputFile('output_files', 'byfile', fnames=output_filenames),))
+            args=(mgd.OutputFile('output_files', 'byfile'),))
+
+        workflow.set_filenames('output_files', 'byfile', fnames=output_filenames)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -331,7 +339,9 @@ class scheduler_test(unittest.TestCase):
         workflow.transform(
             name='write_files',
             func=write_files,
-            args=(mgd.OutputFile('output_files', 'byfile', template=self.output_n_filename),))
+            args=(mgd.OutputFile('output_files', 'byfile'),))
+
+        workflow.set_filenames('output_files', 'byfile', template=self.output_n_filename)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -351,8 +361,10 @@ class scheduler_test(unittest.TestCase):
             name='merge_files',
             func=merge_file_byline,
             args=(
-                mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                mgd.InputFile('input_files', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
+
+        workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -394,7 +406,7 @@ class scheduler_test(unittest.TestCase):
             axes=('byfile',),
             func=do_file_stuff,
             args=(
-                mgd.InputFile('input_files', 'byfile', template=self.input_n_filename),
+                mgd.InputFile('input_files', 'byfile'),
                 mgd.TempOutputFile('temp_files', 'byfile'),
                 'extras'))
 
@@ -404,6 +416,8 @@ class scheduler_test(unittest.TestCase):
             args=(
                 mgd.TempInputFile('temp_files', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
+
+        workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
@@ -1417,4 +1431,3 @@ class scheduler_test(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

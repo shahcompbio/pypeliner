@@ -205,7 +205,8 @@ class SplitFileArg(Arg,SplitMergeArg):
             yield dependency
     def resolve(self, db, direct_write):
         suffix = ('.tmp', '')[direct_write]
-        filename_creator = db.get_user_filename_creator(suffix=suffix, fnames=self.fnames, template=self.template)
+        filename_creator = db.get_user_filename_creator(
+            self.name, self.node.axes + self.axes, suffix=suffix, fnames=self.fnames, template=self.template)
         self.resolved = FilenameCallback(self.name, self.node, self.axes, filename_creator)
         return self.resolved
     def updatedb(self, db):
@@ -410,7 +411,13 @@ class FilenameCallback(object):
         pypeliner.helpers.makedirs(os.path.dirname(filename))
         return filename
     def __repr__(self):
-        return '{0}.{1}({2})'.format(FilenameCallback.__module__, FilenameCallback.__name__, ','.join(repr(a) for a in (self.name, self.node, self.axes, self.filename_creator)))
+        return '{0}.{1}({2},{3},{4},{5})'.format(
+            FilenameCallback.__module__,
+            FilenameCallback.__name__,
+            self.name,
+            self.node,
+            self.axes,
+            self.filename_creator)
 
 
 class TempSplitFileArg(Arg,SplitMergeArg):

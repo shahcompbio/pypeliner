@@ -9,6 +9,7 @@ import shutil
 import pypeliner.helpers
 import pypeliner.resources
 import pypeliner.identifiers
+import pypeliner.workflow
 
 class NodeManager(object):
     """ Manages nodes in the underlying pipeline graph """
@@ -107,17 +108,17 @@ class NodeManager(object):
 
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
-    def __init__(self, suffix='', fnames=None, template=None):
+    def __init__(self, path_info, suffix=''):
+        self.path_info = path_info
         self.suffix = suffix
-        self.fnames = fnames
-        self.template = template
     def __call__(self, name, node):
-        return pypeliner.resources.resolve_user_filename(name, node, fnames=self.fnames, template=self.template) + self.suffix
+        return pypeliner.resources.resolve_user_filename(name, node, self.path_info) + self.suffix
     def __repr__(self):
-        return '{0}.{1}({2},{3},{4})'.format(
+        return '{0}.{1}({2},{3})'.format(
             UserFilenameCreator.__module__,
             UserFilenameCreator.__name__,
-            repr(self.suffix), repr(self.fnames), repr(self.template))
+            repr(self.path_info),
+            repr(self.suffix))
 
 
 class TempFilenameCreator(object):
@@ -135,7 +136,8 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, logs_dir, instance_subdir):
+    def __init__(self, workflow_dir, logs_dir, path_info, instance_subdir):
+        self.path_info = path_info
         self.instance_subdir = instance_subdir
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         self.temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
@@ -143,10 +145,17 @@ class WorkflowDatabase(object):
         pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
-    def get_user_filename_creator(self, suffix='', fnames=None, template=None):
-        return UserFilenameCreator(suffix=suffix, fnames=fnames, template=template)
+    def get_user_filename_creator(self, name, axes, suffix='', fnames=None, template=None):
+        arg_path_info = pypeliner.workflow.UserPathInfo(fnames=fnames, template=template)
+        if (name, axes) in self.path_info:
+            user_path_info = self.path_info[(name, axes)]
+            if arg_path_info.fnames is not None and arg_path_info.template is not None and arg_path_info != user_path_info:
+                raise Exception('{} doesnt equal {}'.format(arg_path_info, user_path_info))
+        else:
+            user_path_info = arg_path_info
+        return UserFilenameCreator(user_path_info, suffix=suffix)
     def get_user_filename(self, name, node, fnames=None, template=None):
-        return self.get_user_filename_creator(fnames=fnames, template=template)(name, node)
+        return self.get_user_filename_creator(name, node.axes, fnames=fnames, template=template)(name, node)
     def get_temp_filename_creator(self, suffix=''):
         return TempFilenameCreator(file_dir=self.temps_dir, file_suffix=suffix)
     def get_temp_filename(self, name, node):
@@ -164,9 +173,9 @@ class WorkflowDatabaseFactory(object):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
         self.lock_directories = list()
-    def create(self, instance_subdir):
+    def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
-        db = WorkflowDatabase(self.workflow_dir, self.logs_dir, instance_subdir)
+        db = WorkflowDatabase(self.workflow_dir, self.logs_dir, path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):
         lock_directory = os.path.join(self.workflow_dir, 'locks', instance_subdir, '_lock')
