@@ -108,16 +108,6 @@ class WorkflowDatabase(object):
         pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
-        self.resources = {}
-        self.resource_types = {}
-    def create_resource(self, typ, name, node, **kwargs):
-        if (name, node) not in self.resources:
-            self.resources[(name, node)] = typ(name, node, temps_dir=self.temps_dir, **kwargs)
-            self.resource_types[(name, node)] = typ
-        if typ != self.resource_types[(name, node)]:
-            raise Exception('resource {}, {} with type {} and {} in workflow {}'.format(
-                name, node, typ.__name__, resource_types[(name, node)], instance_subdir))
-        return self.resources[(name, node)]
 
 class PipelineLockedError(Exception):
     pass

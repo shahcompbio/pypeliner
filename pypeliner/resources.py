@@ -125,7 +125,7 @@ def get_temp_filename(temps_dir, name, node):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, temps_dir=None, **kwargs):
+    def __init__(self, name, node, temps_dir, **kwargs):
         self.name = name
         self.node = node
         self.is_temp = True
@@ -171,7 +171,7 @@ class TempFileResource(Resource):
 
 class TempObjResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, is_input=True, temps_dir=None, **kwargs):
+    def __init__(self, name, node, temps_dir, is_input=True, **kwargs):
         self.name = name
         self.node = node
         self.is_input = is_input
@@ -209,12 +209,12 @@ def obj_equal(obj1, obj2):
 
 class TempObjManager(object):
     """ A file resource with filename and creation time if created """
-    def __init__(self, name, node, temps_dir=None, **kwargs):
+    def __init__(self, name, node, temps_dir, **kwargs):
         self.name = name
         self.node = node
         self.temps_dir = temps_dir
-        self.input = TempObjResource(self.name, self.node, is_input=True, temps_dir=self.temps_dir)
-        self.output = TempObjResource(self.name, self.node, is_input=False, temps_dir=self.temps_dir)
+        self.input = TempObjResource(self.name, self.node, temps_dir=self.temps_dir, is_input=True)
+        self.output = TempObjResource(self.name, self.node, temps_dir=self.temps_dir, is_input=False)
     def get_obj(self):
         try:
             with open(self.input.filename, 'rb') as f:
