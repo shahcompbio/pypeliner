@@ -68,8 +68,8 @@ class DependencyGraph:
                     raise AmbiguousOutputException(resource.id, [job.id, self.creating_job[resource.id]])
                 self.creating_job[resource.id] = job.id
         for job in jobs.itervalues():
-            for resource in job.outputs:
-                if self.creating_job[resource.id] is None and resource.is_temp:
+            for resource in job.inputs:
+                if resource.id not in self.creating_job and resource.is_temp:
                     raise AmbiguousInputException(resource.id)
 
         # Create the graph
