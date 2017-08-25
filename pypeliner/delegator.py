@@ -12,7 +12,7 @@ import traceback
 import pypeliner.helpers
 
 
-class delegator(object):
+class Delegator(object):
     def __init__(self, job, prefix, modules):
         self.job = job
         self.before_filename = prefix + ".before"
@@ -34,7 +34,7 @@ class delegator(object):
         self.cleanup()
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
-        command = [sys.executable, inspect.getabsfile(type(self)), self.before_filename, self.after_filename] + self.syspaths
+        command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
         return command
     def finalize(self):
         self._waitfile(self.after_filename)
@@ -49,7 +49,7 @@ class delegator(object):
 def call_external(obj):
     try:
         tmp_dir = tempfile.mkdtemp()
-        dgt = delegator(obj, tmp_dir, [sys.modules[obj.__module__]])
+        dgt = Delegator(obj, tmp_dir, [sys.modules[obj.__module__]])
         subprocess.check_call(dgt.initialize())
         return dgt.finalize()
     finally:
@@ -59,7 +59,7 @@ def call_external(obj):
             if exc.errno != 2:
                 raise
 
-if __name__ == "__main__":
+def main():
     try:
         before_filename = sys.argv[1]
         after_filename = sys.argv[2]
@@ -81,3 +81,6 @@ if __name__ == "__main__":
         with open(after_filename, 'wb') as after:
             pickle.dump(job, after)
 
+
+if __name__ == "__main__":
+    main()

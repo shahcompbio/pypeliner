@@ -36,7 +36,7 @@ class DrmaaJob(object):
         self.session = session
         self.temps_dir = temps_dir
         self.logger = logging.getLogger('execqueue')
-        self.delegated = pypeliner.delegator.delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
+        self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         
         self.debug_filenames = dict()
