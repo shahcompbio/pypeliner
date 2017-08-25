@@ -12,3 +12,21 @@ Ability to control which jobs are run and which are skipped is currently very ru
 
 To be considered is allowing any managed object to be temporary or user provided.  User provided status would depend on globally setting the filename template or dictionary for the file or object.  This would reduce duplication of code where currently we have to provide the template or filename whenever the managed object is created.
 
+## Azure Batch
+
+### Filesystem access
+
+Inputs and outputs: per job known inputs and outputs can be automatically deployed to the instance.
+
+Delegator before and after and logs: these can be put in blobs, known paths
+
+
+
+### Delegator replacement
+
+
+### Security
+
+We will need to create a shared access signature for 
+
+
