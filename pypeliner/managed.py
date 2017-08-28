@@ -64,8 +64,6 @@ class Managed(object):
             raise JobArgMismatchException(self.name, self.axes, job.node)
         job.args.append(arg)
         return arg
-    def __deepcopy__(self, memo):
-        return self.create_arg(memo['_job'])
 
 class Template(Managed):
     """ Represents a name templated by axes 

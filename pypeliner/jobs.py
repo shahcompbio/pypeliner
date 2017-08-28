@@ -13,6 +13,8 @@ import pypeliner.commandline
 import pypeliner.managed
 import pypeliner.resources
 import pypeliner.identifiers
+import pypeliner.deep
+
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -58,6 +60,11 @@ def _pretty_date(ts):
         return 'none'
     return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
 
+def transform_managed(mg, job):
+    if not isinstance(mg, pypeliner.managed.Managed):
+        return None, False
+    return mg.create_arg(job), True
+
 class JobInstance(object):
     """ Represents a job including function and arguments """
     def __init__(self, job_def, workflow, db, node):
@@ -67,7 +74,9 @@ class JobInstance(object):
         self.node = node
         self.args = list()
         try:
-            self.argset = copy.deepcopy(self.job_def.argset, {'_job':self})
+            self.argset = pypeliner.deep.deeptransform(
+                self.job_def.argset,
+                lambda a: transform_managed(a, self))
         except pypeliner.managed.JobArgMismatchException as e:
             e.job_name = self.displayname
             raise
@@ -222,13 +231,26 @@ class JobTimer(object):
             return None
         return int(self._finish - self._start)
 
+
+def transform_arg(arg, db, direct_write, callargs):
+    if not isinstance(arg, pypeliner.arguments.Arg):
+        return None, False
+    arg = copy.copy(arg)
+    resolved = arg.resolve(db, direct_write)
+    arg.sanitize()
+    callargs.append(arg)
+    return resolved, True
+
+
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
     def __init__(self, db, id, func, argset, logs_dir, direct_write=False):
         self.id = id
         self.func = func
         self.callargs = list()
-        self.callset = copy.deepcopy(argset, {'_db':db, '_direct_write':direct_write, '_args':self.callargs})
+        self.callset = pypeliner.deep.deeptransform(
+            argset,
+            lambda a: transform_arg(a, db, direct_write, self.callargs))
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')

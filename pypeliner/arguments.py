@@ -1,5 +1,4 @@
 import os
-import copy
 
 import pypeliner.helpers
 import pypeliner.resources
@@ -20,12 +19,6 @@ class Arg(object):
         pass
     def sanitize(self):
         pass
-    def __deepcopy__(self, memo):
-        arg = copy.copy(self)
-        resolved = arg.resolve(memo['_db'], memo['_direct_write'])
-        arg.sanitize()
-        memo['_args'].append(arg)
-        return resolved
 
 
 class SplitMergeArg(object):
