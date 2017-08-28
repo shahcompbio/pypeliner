@@ -151,7 +151,7 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
             self.assertEqual(output, merged_expected)
 
-    def test_simple(self):
+    def test_simple_objects(self):
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -187,6 +187,28 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
 
         self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
+
+    def test_simple_files(self):
+
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.transform(
+            name='read',
+            func=do_file_stuff,
+            args=(
+                mgd.InputFile(self.input_filename),
+                mgd.OutputFile(self.output_filename),
+                'a',
+            )
+        )
+
+        scheduler = self.create_scheduler()
+        scheduler.run(workflow, exec_queue, runskip)
+
+        with open(self.output_filename, 'r') as output_file:
+            output = output_file.readlines()
+
+        self.assertEqual(output, ['0aline1\n', '1aline2\n', '2aline3\n', '3aline4\n', '4aline5\n', '5aline6\n', '6aline7\n', '7aline8\n'])
 
     def test_dict_args(self):
 
