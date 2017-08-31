@@ -67,6 +67,7 @@ def transform_managed(mg, job):
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
+    direct_write = False
     def __init__(self, job_def, workflow, db, node):
         self.job_def = job_def
         self.workflow = workflow
@@ -84,7 +85,6 @@ class JobInstance(object):
         pypeliner.helpers.makedirs(self.logs_dir)
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
-        self.direct_write = False
         self.is_required_downstream = False
         self.init_inputs_outputs()
     def init_inputs_outputs(self):
@@ -327,6 +327,6 @@ class SubWorkflowDefinition(JobDefinition):
 
 class SubWorkflowInstance(JobInstance):
     """ Represents a sub workflow. """
+    direct_write = True
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
-        self.direct_write = True
