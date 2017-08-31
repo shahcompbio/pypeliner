@@ -57,9 +57,9 @@ class Managed(object):
             common += 1
         axes_specific = self.axes[common:]
         if len(axes_specific) == 0 and self.normal is not None:
-            arg = self.normal(job.db, self.name, job.node[:common], **self.kwargs)
+            arg = self.normal(job.db, self.name, job.node[:common], direct_write=job.direct_write, **self.kwargs)
         elif len(axes_specific) > 0 and self.splitmerge is not None:
-            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific, **self.kwargs)
+            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific, direct_write=job.direct_write, **self.kwargs)
         else:
             raise JobArgMismatchException(self.name, self.axes, job.node)
         job.args.append(arg)

@@ -190,7 +190,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir, self.direct_write)
+        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -232,11 +232,11 @@ class JobTimer(object):
         return int(self._finish - self._start)
 
 
-def transform_arg(arg, db, direct_write, callargs):
+def transform_arg(arg, db, callargs):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
     arg = copy.copy(arg)
-    resolved = arg.resolve(db, direct_write)
+    resolved = arg.resolve(db)
     arg.sanitize()
     callargs.append(arg)
     return resolved, True
@@ -244,13 +244,13 @@ def transform_arg(arg, db, direct_write, callargs):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, db, id, func, argset, logs_dir, direct_write=False):
+    def __init__(self, db, id, func, argset, logs_dir):
         self.id = id
         self.func = func
         self.callargs = list()
         self.callset = pypeliner.deep.deeptransform(
             argset,
-            lambda a: transform_arg(a, db, direct_write, self.callargs))
+            lambda a: transform_arg(a, db, self.callargs))
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
