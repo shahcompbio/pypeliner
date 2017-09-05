@@ -162,6 +162,12 @@ class File(Managed):
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
 
+class _PropGet(object):
+    def __init__(self, prop_name):
+        self.prop_name = prop_name
+    def __call__(self, a):
+        return getattr(a, self.prop_name)
+
 class TempInputObj(Managed):
     """ Interface class used to represent a managed object input
 
@@ -184,7 +190,7 @@ class TempInputObj(Managed):
 
         :param name: The name of the property.
         """
-        return TempInputObjExtract(self.name, self.axes, lambda a: getattr(a, prop_name))
+        return TempInputObjExtract(self.name, self.axes, _PropGet(prop_name))
     def extract(self, func):
         """
         Resolve to the return value of the given function called on the object
