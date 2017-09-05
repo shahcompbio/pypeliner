@@ -91,14 +91,14 @@ class JobInstance(object):
         self.inputs = list()
         for arg in self.args:
             if isinstance(arg, pypeliner.arguments.Arg):
-                for input in arg.get_inputs(self.db):
+                for input in arg.get_inputs():
                     self.inputs.append(input)
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             self.inputs.append(node_input)
         self.outputs = list()
         for arg in self.args:
             if isinstance(arg, pypeliner.arguments.Arg):
-                for output in arg.get_outputs(self.db):
+                for output in arg.get_outputs():
                     self.outputs.append(output)
     @property
     def id(self):
@@ -190,7 +190,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.db, self.id, self.job_def.func, self.argset, self.logs_dir)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.logs_dir)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -201,7 +201,7 @@ class JobInstance(object):
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
-        self.workflow.notify_completed(self)
+        self.workflow.notify_completed(self.id)
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):
             return False
@@ -232,11 +232,11 @@ class JobTimer(object):
         return int(self._finish - self._start)
 
 
-def transform_arg(arg, db, callargs):
+def resolve_arg(arg, callargs):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
     arg = copy.copy(arg)
-    resolved = arg.resolve(db)
+    resolved = arg.resolve()
     arg.sanitize()
     callargs.append(arg)
     return resolved, True
@@ -244,13 +244,10 @@ def transform_arg(arg, db, callargs):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, db, id, func, argset, logs_dir):
+    def __init__(self, id, func, argset, logs_dir):
         self.id = id
         self.func = func
-        self.callargs = list()
-        self.callset = pypeliner.deep.deeptransform(
-            argset,
-            lambda a: transform_arg(a, db, self.callargs))
+        self.argset = argset
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -270,9 +267,9 @@ class JobCallable(object):
     @property
     def displaycommand(self):
         if self.func == pypeliner.commandline.execute:
-            return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
+            return '"' + ' '.join(str(arg) for arg in self.argset.args) + '"'
         else:
-            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
+            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
     def __call__(self):
         with open(self.stdout_filename, 'w', 0) as stdout_file, open(self.stderr_filename, 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
@@ -280,9 +277,15 @@ class JobCallable(object):
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
+                    self.callargs = list()
+                    self.callset = pypeliner.deep.deeptransform(
+                        self.argset,
+                        lambda a: resolve_arg(a, self.callargs))
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
                     if self.callset.ret is not None:
                         self.callset.ret.value = self.ret_value
+                    for arg in self.callargs:
+                        arg.finalize()
                 self.finished = True
             except:
                 sys.stderr.write(traceback.format_exc())
@@ -291,8 +294,6 @@ class JobCallable(object):
     def finalize(self, db):
         for arg in self.callargs:
             arg.updatedb(db)
-        for arg in self.callargs:
-            arg.finalize(db)
 
 def _setobj_helper(value):
     return value

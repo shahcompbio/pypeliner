@@ -214,9 +214,10 @@ class DependencyGraph:
 
         raise NoJobs()
 
-    def notify_completed(self, job):
+    def notify_completed(self, job_id):
         """ A job was completed, advance current state.
         """
+        job = self.jobs[job_id]
         self.running.remove(job.id)
         self.completed.add(job.id)
         for input in job.inputs:
@@ -334,8 +335,8 @@ class WorkflowInstance(object):
             else:
                 return job
 
-    def notify_completed(self, job):
-        self.graph.notify_completed(job)
+    def notify_completed(self, job_id):
+        self.graph.notify_completed(job_id)
         if self.cleanup:
             self.graph.cleanup_obsolete()
 

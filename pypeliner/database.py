@@ -134,31 +134,28 @@ def resolve_user_filename(name, node, path_info):
 
 class UserFilenameCreator(object):
     """ Function object for creating user filenames from name node pairs """
-    def __init__(self, path_info, suffix=''):
+    def __init__(self, path_info):
         self.path_info = path_info
-        self.suffix = suffix
     def __call__(self, name, node):
-        return resolve_user_filename(name, node, self.path_info) + self.suffix
+        return resolve_user_filename(name, node, self.path_info)
     def __repr__(self):
-        return '{0}.{1}({2},{3})'.format(
+        return '{0}.{1}({2})'.format(
             UserFilenameCreator.__module__,
             UserFilenameCreator.__name__,
-            repr(self.path_info),
-            repr(self.suffix))
+            repr(self.path_info))
 
 
 class TempFilenameCreator(object):
     """ Function object for creating filenames from name node pairs """
-    def __init__(self, file_dir='', file_suffix=''):
+    def __init__(self, file_dir=''):
         self.file_dir = file_dir
-        self.file_suffix = file_suffix
     def __call__(self, name, node):
-        return os.path.join(self.file_dir, node.subdir, name + self.file_suffix)
+        return os.path.join(self.file_dir, node.subdir, name)
     def __repr__(self):
         return '{0}.{1}({2})'.format(
             TempFilenameCreator.__module__,
             TempFilenameCreator.__name__,
-            ', '.join(repr(a) for a in (self.file_dir, self.file_suffix)))
+            self.file_dir)
 
 
 class WorkflowDatabase(object):
@@ -171,7 +168,7 @@ class WorkflowDatabase(object):
         pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
-    def get_user_filename_creator(self, name, axes, suffix='', fnames=None, template=None):
+    def get_user_filename_creator(self, name, axes, fnames=None, template=None):
         arg_path_info = pypeliner.workflow.UserPathInfo(fnames=fnames, template=template)
         if (name, axes) in self.path_info:
             user_path_info = self.path_info[(name, axes)]
@@ -179,11 +176,11 @@ class WorkflowDatabase(object):
                 raise Exception('{} doesnt equal {}'.format(arg_path_info, user_path_info))
         else:
             user_path_info = arg_path_info
-        return UserFilenameCreator(user_path_info, suffix=suffix)
+        return UserFilenameCreator(user_path_info)
     def get_user_filename(self, name, node, fnames=None, template=None):
         return self.get_user_filename_creator(name, node.axes, fnames=fnames, template=template)(name, node)
-    def get_temp_filename_creator(self, suffix=''):
-        return TempFilenameCreator(file_dir=self.temps_dir, file_suffix=suffix)
+    def get_temp_filename_creator(self):
+        return TempFilenameCreator(file_dir=self.temps_dir)
     def get_temp_filename(self, name, node):
         if os.path.isabs(name):
             raise Exception('name {} is an absolute path'.format(name))
