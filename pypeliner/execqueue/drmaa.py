@@ -219,7 +219,7 @@ class DrmaaJobQueue(object):
     """ Maintain a list of running jobs executed synchronously using
     drmaa, with the ability to wait for jobs and return completed jobs
     """
-    def __init__(self, modules, native_spec):
+    def __init__(self, modules=None, native_spec=None):
         self.modules = modules
         
         self.native_spec = native_spec
@@ -230,7 +230,7 @@ class DrmaaJobQueue(object):
         
         self.name_islocal = dict()
         
-        self.local_queue = pypeliner.execqueue.local.LocalJobQueue(modules)
+        self.local_queue = pypeliner.execqueue.local.LocalJobQueue(modules=modules)
     
     def __enter__(self):
         self.local_queue.__enter__()

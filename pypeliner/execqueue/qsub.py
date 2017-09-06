@@ -78,7 +78,7 @@ class QsubJob(object):
 
 class QsubJobQueue(pypeliner.execqueue.subproc.SubProcessJobQueue):
     """ Queue of qsub jobs """
-    def __init__(self, modules, native_spec):
+    def __init__(self, modules=None, native_spec=None):
         super(QsubJobQueue, self).__init__(modules)
         self.qsub_bin = pypeliner.helpers.which('qsub')
         self.native_spec = native_spec
@@ -229,7 +229,7 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-    def __init__(self, modules, **kwargs):
+    def __init__(self, modules=None, **kwargs):
         self.modules = modules
         self.qenv = pypeliner.execqueue.qcmd.QEnv()
         self.native_spec = kwargs['native_spec']
@@ -295,6 +295,6 @@ class PbsQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
 
 class PbsJobQueue(AsyncQsubJobQueue):
     """ Queue of jobs running on a pbs cluster """
-    def __init__(self, modules, **kwargs):
+    def __init__(self, modules=None, **kwargs):
         super(PbsJobQueue, self).__init__(modules, **kwargs)
         self.qstat = PbsQstatJobStatus(self.qenv)

@@ -9,7 +9,7 @@ class SubProcessJobQueue(pypeliner.execqueue.base.JobQueue):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-    def __init__(self, modules, **kwargs):
+    def __init__(self, modules=None, **kwargs):
         self.modules = modules
         self.jobs = dict()
         self.pid_names = dict()
