@@ -240,7 +240,7 @@ class DependencyGraph:
 
 class WorkflowInstance(object):
     def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), cleanup=False):
-        self._logger = logging.getLogger('workflowgraph')
+        self._logger = logging.getLogger('pypeliner.workflowgraph')
         self.workflow_def = workflow_def
         self.db_factory = db_factory
         self.runskip = runskip

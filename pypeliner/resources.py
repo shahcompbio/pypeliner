@@ -139,7 +139,7 @@ class TempFileResource(Resource):
             raise OutputMissingException(write_filename)
     def cleanup(self):
         if self.exists:
-            logging.getLogger('resources').debug('removing ' + self.filename)
+            logging.getLogger('pypeliner.resources').debug('removing ' + self.filename)
             pypeliner.fstatcache.invalidate_cached_state(self.filename)
             os.remove(self.filename)
     def update_fstats(self):

@@ -27,7 +27,7 @@ class Delegator(object):
             if os.path.exists(filename):
                 return
             if waittime >= 4:
-                logging.getLogger('delegator').warn('waiting {0}s for {1} to appear'.format(waittime, filename))
+                logging.getLogger('pypeliner.delegator').warn('waiting {0}s for {1} to appear'.format(waittime, filename))
             time.sleep(waittime)
             waittime *= 2
     def initialize(self):

@@ -28,7 +28,7 @@ class QstatJobStatus(object):
         self.cached_job_status = None
         self.qstat_failures = 0
         self.qstat_time = None
-        self.logger = logging.getLogger('execqueue')
+        self.logger = logging.getLogger('pypeliner.execqueue')
 
     def update(self):
         """ Update cached job status after sleeping for remainder of polling time.

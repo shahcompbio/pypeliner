@@ -23,7 +23,7 @@ class Scheduler(object):
 
     """
     def __init__(self):
-        self._logger = logging.getLogger('scheduler')
+        self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
         self.cleanup = True
         self.workflow_dir = './'

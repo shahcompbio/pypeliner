@@ -12,7 +12,7 @@ class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
     def __init__(self, ctx, name, sent, temps_dir, modules):
         self.name = name
-        self.logger = logging.getLogger('execqueue')
+        self.logger = logging.getLogger('pypeliner.execqueue')
         self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()

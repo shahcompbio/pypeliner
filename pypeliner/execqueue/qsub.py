@@ -16,7 +16,7 @@ class QsubJob(object):
     """
     def __init__(self, ctx, name, sent, temps_dir, modules, qsub_bin, native_spec):
         self.name = name
-        self.logger = logging.getLogger('execqueue')
+        self.logger = logging.getLogger('pypeliner.execqueue')
         self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
         self.debug_filenames = dict()
@@ -100,7 +100,7 @@ class AsyncQsubJob(object):
         self.qenv = qenv
         self.qstat_job_status = qstat_job_status
         self.qsub_job_id = None
-        self.logger = logging.getLogger('execqueue')
+        self.logger = logging.getLogger('pypeliner.execqueue')
 
         self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
         self.command = self.delegated.initialize()
