@@ -60,11 +60,6 @@ def _pretty_date(ts):
         return 'none'
     return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
 
-def transform_managed(mg, job):
-    if not isinstance(mg, pypeliner.managed.Managed):
-        return None, False
-    return mg.create_arg(job), True
-
 class JobInstance(object):
     """ Represents a job including function and arguments """
     direct_write = False
@@ -77,7 +72,7 @@ class JobInstance(object):
         try:
             self.argset = pypeliner.deep.deeptransform(
                 self.job_def.argset,
-                lambda a: transform_managed(a, self))
+                self._create_arg)
         except pypeliner.managed.JobArgMismatchException as e:
             e.job_name = self.displayname
             raise
@@ -87,6 +82,12 @@ class JobInstance(object):
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
         self.init_inputs_outputs()
+    def _create_arg(self, mg):
+        if not isinstance(mg, pypeliner.managed.Managed):
+            return None, False
+        arg = mg.create_arg(self)
+        self.args.append(arg)
+        return arg, True
     def init_inputs_outputs(self):
         self.inputs = list()
         for arg in self.args:

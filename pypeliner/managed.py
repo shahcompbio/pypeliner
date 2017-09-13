@@ -62,7 +62,6 @@ class Managed(object):
             arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific, direct_write=job.direct_write, **self.kwargs)
         else:
             raise JobArgMismatchException(self.name, self.axes, job.node)
-        job.args.append(arg)
         return arg
 
 class Template(Managed):
