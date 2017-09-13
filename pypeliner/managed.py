@@ -307,9 +307,7 @@ class Instance(Managed):
     def __init__(self, axis):
         self.axis = axis
     def create_arg(self, job):
-        arg = pypeliner.arguments.InputInstanceArg(job.db, job.node, self.axis)
-        job.args.append(arg)
-        return arg
+        return pypeliner.arguments.InputInstanceArg(job.db, job.node, self.axis)
 
 class InputInstance(Instance):
     pass

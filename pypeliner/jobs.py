@@ -68,7 +68,7 @@ class JobInstance(object):
         self.workflow = workflow
         self.db = db
         self.node = node
-        self.args = list()
+        self.arglist = list()
         try:
             self.argset = pypeliner.deep.deeptransform(
                 self.job_def.argset,
@@ -86,18 +86,18 @@ class JobInstance(object):
         if not isinstance(mg, pypeliner.managed.Managed):
             return None, False
         arg = mg.create_arg(self)
-        self.args.append(arg)
+        self.arglist.append(arg)
         return arg, True
     def init_inputs_outputs(self):
         self.inputs = list()
-        for arg in self.args:
+        for arg in self.arglist:
             if isinstance(arg, pypeliner.arguments.Arg):
                 for input in arg.get_inputs():
                     self.inputs.append(input)
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             self.inputs.append(node_input)
         self.outputs = list()
-        for arg in self.args:
+        for arg in self.arglist:
             if isinstance(arg, pypeliner.arguments.Arg):
                 for output in arg.get_outputs():
                     self.outputs.append(output)
@@ -185,13 +185,13 @@ class JobInstance(object):
         for output in self.output_resources:
             output.touch()
     def check_require_regenerate(self):
-        for arg in self.args:
+        for arg in self.arglist:
             if isinstance(arg, pypeliner.arguments.Arg):
                 if arg.is_split:
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.logs_dir)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.logs_dir)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -233,22 +233,21 @@ class JobTimer(object):
         return int(self._finish - self._start)
 
 
-def resolve_arg(arg, callargs):
+def resolve_arg(arg):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
-    arg = copy.copy(arg)
     resolved = arg.resolve()
     arg.sanitize()
-    callargs.append(arg)
     return resolved, True
 
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, logs_dir):
+    def __init__(self, id, func, argset, arglist, logs_dir):
         self.id = id
         self.func = func
         self.argset = argset
+        self.arglist = arglist
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -278,14 +277,11 @@ class JobCallable(object):
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
-                    self.callargs = list()
-                    self.callset = pypeliner.deep.deeptransform(
-                        self.argset,
-                        lambda a: resolve_arg(a, self.callargs))
+                    self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
                     if self.callset.ret is not None:
                         self.callset.ret.value = self.ret_value
-                    for arg in self.callargs:
+                    for arg in self.arglist:
                         arg.finalize()
                 self.finished = True
             except:
@@ -293,7 +289,7 @@ class JobCallable(object):
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
     def finalize(self, db):
-        for arg in self.callargs:
+        for arg in self.arglist:
             arg.updatedb(db)
 
 def _setobj_helper(value):
