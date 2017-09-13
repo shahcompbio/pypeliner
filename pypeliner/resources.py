@@ -136,7 +136,7 @@ class TempFileResource(Resource):
             if self.write_filename != self.filename:
                 os.rename(self.write_filename, self.filename)
         except OSError:
-            raise OutputMissingException(write_filename)
+            raise OutputMissingException(self.write_filename)
     def cleanup(self):
         if self.exists:
             logging.getLogger('pypeliner.resources').debug('removing ' + self.filename)
