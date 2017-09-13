@@ -198,7 +198,6 @@ class JobInstance(object):
         return exc_dir
     def finalize(self, callable):
         callable.finalize(self.db)
-        self.init_inputs_outputs()
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
