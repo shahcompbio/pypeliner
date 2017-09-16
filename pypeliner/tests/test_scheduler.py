@@ -15,7 +15,6 @@ from pypeliner.tests.tasks import *
 script_directory = os.path.dirname(os.path.abspath(__file__))
 pipeline_dir = os.path.join(script_directory, 'pipeline')
 
-exec_queue = pypeliner.execqueue.factory.create('local', [pypeliner.tests.tasks])
 runskip = pypeliner.runskip.BasicRunSkip()
 
 
@@ -1452,4 +1451,8 @@ class scheduler_test(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    exec_queue = pypeliner.execqueue.factory.create('local', [pypeliner.tests.tasks])
+
+    with exec_queue:
+        unittest.main()
+

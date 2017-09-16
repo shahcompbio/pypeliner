@@ -10,7 +10,6 @@ import pypeliner.helpers
 import pypeliner.graph
 import pypeliner.execqueue.base
 import pypeliner.database
-import pypeliner.fstatcache
 
 
 class PipelineException(Exception):
@@ -65,11 +64,12 @@ class Scheduler(object):
         and the second interrupt will attempt to cleanly cancel all jobs.
 
         """
-        pypeliner.fstatcache.invalidate_all()
-        
+
+        storage = pypeliner.storage.FileStorage()
+
         self._active_jobs = dict()
         self._job_exc_dirs = set()
-        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
+        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir, storage) as db_factory:
             workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, cleanup=self.cleanup)
             failing = False
             try:
@@ -148,9 +148,14 @@ class Scheduler(object):
             self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc())
             received = None
 
-        assert received is None or job.id == received.id
+        if received is not None and job.id != received.id:
+            raise Exception('job id {} doenst match received id {}'.format(job.id, received.id))
 
         if received is not None:
+            try:
+                received.collect_logs()
+            except Exception as e:
+                self._logger.error('job ' + job.displayname + ' collect logs error\n' + traceback.format_exc())
             if received.finished:
                 self._logger.info('job ' + job.displayname + ' completed successfully')
             else:

@@ -14,6 +14,7 @@ import pypeliner.managed
 import pypeliner.resources
 import pypeliner.identifiers
 import pypeliner.deep
+import pypeliner.storage
 
 
 class CallSet(object):
@@ -191,13 +192,13 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.logs_dir)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.storage, self.logs_dir)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
     def finalize(self, callable):
-        callable.finalize(self.db)
+        callable.updatedb(self.db)
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
@@ -235,14 +236,13 @@ class JobTimer(object):
 def resolve_arg(arg):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
-    resolved = arg.resolve()
-    arg.sanitize()
-    return resolved, True
+    return arg.resolve(), True
 
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, arglist, logs_dir):
+    def __init__(self, id, func, argset, arglist, storage, logs_dir):
+        self.storage = storage
         self.id = id
         self.func = func
         self.argset = argset
@@ -250,8 +250,12 @@ class JobCallable(object):
         self.finished = False
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
+        self.stdout_storage = self.storage.create_store(self.stdout_filename)
+        self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
         self.hostname = None
+        for arg in self.arglist:
+            arg.prepare()
     @property
     def duration(self):
         return self.job_timer.duration
@@ -269,25 +273,38 @@ class JobCallable(object):
             return '"' + ' '.join(str(arg) for arg in self.argset.args) + '"'
         else:
             return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
+    def pull(self):
+        for arg in self.arglist:
+            arg.pull()
+    def push(self):
+        for arg in self.arglist:
+            arg.push()
     def __call__(self):
-        with open(self.stdout_filename, 'w', 0) as stdout_file, open(self.stderr_filename, 'w', 0) as stderr_file:
+        with open(self.stdout_storage.allocate_output(), 'w', 0) as stdout_file, open(self.stderr_storage.allocate_output(), 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
                     self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
+                    self.pull()
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
                     if self.callset.ret is not None:
                         self.callset.ret.value = self.ret_value
-                    for arg in self.arglist:
-                        arg.finalize()
+                    self.push()
                 self.finished = True
             except:
                 sys.stderr.write(traceback.format_exc())
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
-    def finalize(self, db):
+                self.stdout_storage.push()
+                self.stderr_storage.push()
+    def collect_logs(self):
+        self.stdout_storage.allocate_input()
+        self.stderr_storage.allocate_input()
+        self.stdout_storage.pull()
+        self.stderr_storage.pull()
+    def updatedb(self, db):
         for arg in self.arglist:
             arg.updatedb(db)
 
@@ -327,3 +344,11 @@ class SubWorkflowInstance(JobInstance):
     direct_write = True
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
+    def create_callable(self):
+        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.storage, self.logs_dir)
+
+class WorkflowCallable(JobCallable):
+    def push(self):
+        pass
+    def pull(self):
+        pass
