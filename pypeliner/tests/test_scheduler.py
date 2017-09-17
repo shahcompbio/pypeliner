@@ -583,45 +583,6 @@ class scheduler_test(unittest.TestCase):
         scheduler = self.create_scheduler()
         scheduler.run(workflow, exec_queue, runskip)
 
-    def test_simple_create_all(self):
-
-        workflow = pypeliner.workflow.Workflow()
-
-        # Read data into a managed object
-        workflow.transform(
-            name='read',
-            func=read_stuff,
-            ret=mgd.TempOutputObj('input_data'),
-            args=(mgd.InputFile(self.input_filename),))
-
-        # Extract a property of the managed object, modify it
-        # and store the result in another managed object
-        workflow.transform(
-            name='do',
-            func=do_stuff,
-            ret=mgd.TempOutputObj('output_data'),
-            args=(mgd.TempInputObj('input_data').prop('some_string'),))
-
-        # Write the object to an output file
-        workflow.transform(
-            name='write',
-            func=write_stuff,
-            args=(
-                mgd.TempInputObj('output_data'),
-                mgd.TempOutputFile('output_file')))
-
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
-        scheduler.run(workflow, exec_queue, runskip)
-
-        with open(os.path.join(pipeline_dir, 'tmp/output_file'), 'r') as output_file:
-            output = output_file.readlines()
-
-        self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
-
-        self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/input_data._o')))
-        self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/output_data._o')))
-
     def test_cycle(self):
 
         workflow = pypeliner.workflow.Workflow()
@@ -770,7 +731,7 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, ['line10\n', 'line21\n', 'line32\n', 'line43\n', 'line54\n', 'line65\n', 'line76\n', 'line87\n'])
 
-    def test_split_getinstances(self):
+    def test_split_getinstances_nocleanup(self):
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -794,12 +755,16 @@ class scheduler_test(unittest.TestCase):
                 mgd.OutputFile(self.output_filename),))
 
         scheduler = self.create_scheduler()
+        scheduler.cleanup = False
         scheduler.run(workflow, exec_queue, runskip)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
 
         self.assertEqual(output, ['01234567'])
+        for a in range(8):
+            filename = os.path.join(pipeline_dir, 'tmp/byline/{}/input_filename'.format(a))
+            self.assertTrue(os.path.exists(filename))
 
     def test_multiple_object_split(self):
 

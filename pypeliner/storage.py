@@ -2,6 +2,7 @@ import os
 import datetime
 import time
 import shutil
+import shelve
 
 import pypeliner.helpers
 
@@ -75,5 +76,62 @@ class FileStorage(object):
             return RegularTempFile(filename, **kwargs)
         else:
             return RegularFile(filename, **kwargs)
+
+
+def _get_obj_key(filename):
+    return 'obj:' + filename
+
+
+def _get_createtime_key(filename):
+    return 'createtime:' + filename
+
+
+class ShelveObjectStorage(object):
+    catalog = {}
+    def __init__(self, shelf_filename):
+        self.shelf_filename = shelf_filename
+    def __enter__(self):
+        self.shelf = shelve.open(self.shelf_filename)
+        self.catalog[self.shelf_filename] = self
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        del self.catalog[self.shelf_filename]
+        self.shelf.close()
+    def create_store(self, filename):
+        return ShelveObject(self, self.shelf_filename, filename)
+    def put(self, filename, obj):
+        self.shelf[_get_obj_key(filename)] = obj
+        self.touch(filename)
+    def get(self, filename):
+        return self.shelf[_get_obj_key(filename)]
+    def get_exists(self, filename):
+        return _get_obj_key(filename) in self.shelf
+    def get_createtime(self, filename):
+        return self.shelf.get(_get_createtime_key(filename), None)
+    def touch(self, filename):
+        createtime = time.mktime(datetime.datetime.now().timetuple())
+        self.shelf[_get_createtime_key(filename)] = createtime
+
+
+class ShelveObject(object):
+    def __init__(self, storage, storage_id, filename):
+        self.storage = storage
+        self.storage_id = storage_id
+        self.filename = filename
+    def __getstate__(self):
+        return (self.storage_id, self.filename)
+    def __setstate__(self, state):
+        self.storage_id, self.filename = state
+        self.storage = ShelveObjectStorage.catalog.get(self.storage_id)
+    def put(self, obj):
+        self.storage.put(self.filename, obj)
+    def get(self):
+        return self.storage.get(self.filename)
+    def get_exists(self):
+        return self.storage.get_exists(self.filename)
+    def get_createtime(self):
+        return self.storage.get_createtime(self.filename)
+    def touch(self):
+        return self.storage.touch(self.filename)
 
 

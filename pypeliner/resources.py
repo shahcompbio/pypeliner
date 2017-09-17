@@ -122,7 +122,7 @@ class TempObjResource(Resource):
         self.filename = filename + ('._i', '._o')[is_input]
         self.is_input = is_input
         self.is_temp = True
-        self.store = storage.create_store(self.filename, is_temp=True)
+        self.store = storage.create_store(self.filename)
     @property
     def exists(self):
         return self.store.get_exists()
@@ -134,14 +134,9 @@ class TempObjResource(Resource):
             raise Exception('cannot touch missing object')
         self.store.touch()
     def get_obj(self):
-        filename = self.store.allocate_input()
-        self.store.pull()
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
+        return self.store.get()
     def put_obj(self, obj):
-        with open(self.store.allocate_output(), 'wb') as f:
-            pickle.dump(obj, f)
-        self.store.push()
+        self.store.put(obj)
 
 
 def obj_equal(obj1, obj2):
