@@ -61,7 +61,7 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = filename
-        self.store = storage.create_store(self.filename, is_temp=False, direct_write=direct_write)
+        self.store = storage.create_store(self.filename, direct_write=direct_write)
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
@@ -91,7 +91,7 @@ class TempFileResource(Resource):
         self.node = node
         self.filename = filename
         self.is_temp = True
-        self.store = storage.create_store(self.filename, is_temp=True, direct_write=direct_write)
+        self.store = storage.create_store(self.filename, direct_write=direct_write)
     @property
     def exists(self):
         return self.store.get_exists()

@@ -349,7 +349,7 @@ class TempInputFileArg(Arg):
     """
     def __init__(self, db, name, node, **kwargs):
         filename = db.get_temp_filename(name, node)
-        self.resource = pypeliner.resources.TempFileResource(db.storage, name, node, filename)
+        self.resource = pypeliner.resources.TempFileResource(db.temp_file_storage, name, node, filename)
     def get_inputs(self):
         yield self.resource
     def resolve(self):
@@ -372,7 +372,7 @@ class TempMergeFileArg(Arg,SplitMergeArg):
         self.inputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_temp_filename(self.name, node)
-            resource = pypeliner.resources.TempFileResource(db.storage, self.name, node, filename)
+            resource = pypeliner.resources.TempFileResource(db.temp_file_storage, self.name, node, filename)
             self.resources.append(resource)
             self.inputs.append(resource)
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
@@ -397,7 +397,7 @@ class TempOutputFileArg(Arg):
     """
     def __init__(self, db, name, node, **kwargs):
         filename = db.get_temp_filename(name, node)
-        self.resource = pypeliner.resources.TempFileResource(db.storage, name, node, filename, direct_write=kwargs['direct_write'])
+        self.resource = pypeliner.resources.TempFileResource(db.temp_file_storage, name, node, filename, direct_write=kwargs['direct_write'])
     def get_outputs(self):
         yield self.resource
     def resolve(self):
@@ -471,7 +471,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         self.outputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_temp_filename(self.name, node)
-            resource = pypeliner.resources.TempFileResource(db.storage, self.name, node, filename, direct_write=kwargs['direct_write'])
+            resource = pypeliner.resources.TempFileResource(db.temp_file_storage, self.name, node, filename, direct_write=kwargs['direct_write'])
             self.resources.append(resource)
             self.outputs.append(resource)
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
@@ -479,7 +479,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
             self.outputs.append(dependency)
         self.filename_callback = TempFilenameCallback(
-            db.storage, self.name, self.node, self.axes, self.direct_write,
+            db.temp_file_storage, self.name, self.node, self.axes, self.direct_write,
             db.get_temp_filename_creator())
     def get_inputs(self):
         return self.inputs

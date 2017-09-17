@@ -5,6 +5,7 @@ import shutil
 import shelve
 
 import pypeliner.helpers
+import pypeliner.flyweight
 
 
 class OutputMissingException(Exception):
@@ -45,22 +46,26 @@ class RegularFile(object):
         raise Exception('cannot delete non-temporary files')
 
 
+class FileStorage(object):
+    def __init__(self):
+        pass
+    def create_store(self, filename, **kwargs):
+        return RegularFile(filename, **kwargs)
+
+
 class RegularTempFile(RegularFile):
-    def __init__(self, filename, direct_write=False):
+    def __init__(self, filename, createtime, direct_write=False):
         super(RegularTempFile, self).__init__(filename, direct_write=direct_write)
-        self.placeholder_filename = self.filename + '._placeholder'
+        self.createtime = createtime
     def _save_createtime(self):
-        pypeliner.helpers.saferemove(self.placeholder_filename)
-        pypeliner.helpers.touch(self.placeholder_filename)
-        shutil.copystat(self.filename, self.placeholder_filename)
+        self.createtime.set(os.path.getmtime(self.filename))
     def push(self):
         super(RegularTempFile, self).push()
         self._save_createtime()
     def get_createtime(self):
         if os.path.exists(self.filename):
             return os.path.getmtime(self.filename)
-        if os.path.exists(self.placeholder_filename):
-            return os.path.getmtime(self.placeholder_filename)
+        return self.createtime.get()
     def touch(self):
         super(RegularTempFile, self).touch(self.filename)
         self._save_createtime()
@@ -68,14 +73,32 @@ class RegularTempFile(RegularFile):
         pypeliner.helpers.saferemove(self.filename)
 
 
-class FileStorage(object):
-    def __init__(self):
-        pass
-    def create_store(self, filename, is_temp=False, **kwargs):
-        if is_temp:
-            return RegularTempFile(filename, **kwargs)
-        else:
-            return RegularFile(filename, **kwargs)
+class ShelvedState(object):
+    def __init__(self, shelf_filename):
+        self.shelf = shelve.open(shelf_filename)
+    def __del__(self):
+        self.shelf.close()
+    def get(self, key):
+        return self.shelf.get(key)
+    def set(self, key, value):
+        self.shelf[key] = value
+
+
+class TempFileStorage(object):
+    def __init__(self, shelf_filename):
+        def create_shelved_state():
+            return ShelvedState(shelf_filename)
+        self.createtime_state = pypeliner.flyweight.FlyweightState(
+            'TempFileStorage.createtime',
+            create_shelved_state)
+    def __enter__(self):
+        self.createtime_state.__enter__()
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.createtime_state.__exit__(exc_type, exc_value, traceback)
+    def create_store(self, filename, **kwargs):
+        createtime = self.createtime_state.create_flyweight(filename)
+        return RegularTempFile(filename, createtime, **kwargs)
 
 
 def _get_obj_key(filename):
