@@ -9,14 +9,28 @@ class BasicRunSkip(object):
 
     def __call__(self, job):
         if self.rerun:
-            return True
+            return True, 'rerun requested\n' + job.explain_out_of_date()
         if job.out_of_date():
-            return True
+            return True, job.explain_out_of_date()
         if job.is_required_downstream:
-            return True
+            return True, 'required downstream\n' + job.explain_out_of_date()
         if self.repopulate and job.output_missing():
-            return True
-        return False
+            return True, 'repopulate requested, missing output\n' + job.explain_out_of_date()
+        return False, job.explain_out_of_date()
+
+    def close(self):
+        pass
+
+
+class SentinalRunSkip(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, job):
+        if job.already_run():
+            return False, 'already run'
+        else:
+            return True, 'not yet run'
 
     def close(self):
         pass
@@ -96,18 +110,19 @@ class InteractiveRunSkip(object):
 
         while True:
             if runskip_cmd.command == 'run' or self.patterns.get(job.displayname) == 'run':
-                return True
+                return True, 'run requested'
 
             if runskip_cmd.command == 'skip' or self.patterns.get(job.displayname) == 'skip':
-                return False
+                return False, 'skip requested'
 
             if runskip_cmd.command == 'verify' or self.patterns.get(job.displayname) == 'verify':
-                if not self.default(job):
-                    return False
+                is_run_required, explaination = self.default(job)
+                if not is_run_required:
+                    return False, 'verified and skipped'
 
             if runskip_cmd.command == 'touch' or self.patterns.get(job.displayname) == 'touch':
                 job.touch_outputs()
-                return False
+                return False, 'touch requested'
 
             if runskip_cmd.command == 'default' or self.patterns.get(job.displayname) == 'default':
                 return self.default(job)

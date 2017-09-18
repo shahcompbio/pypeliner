@@ -298,9 +298,9 @@ class WorkflowInstance(object):
             job = self.graph.pop_next_job()
 
             if isinstance(job, pypeliner.jobs.SubWorkflowInstance):
-                self._logger.info('subworkflow ' + job.displayname + ' explanation: ' + job.explain())
-                if self.runskip(job):
-                    job.check_inputs()
+                is_run_required, explaination = self.runskip(job)
+                self._logger.info('subworkflow ' + job.displayname + ' explanation: ' + explaination)
+                if is_run_required:
                     send = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname)
                     self._logger.info('subworkflow ' + job.displayname + ' -> ' + send.displaycommand)

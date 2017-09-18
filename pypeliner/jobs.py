@@ -48,14 +48,6 @@ class JobDefinition(object):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield JobInstance(self, workflow, db, node)
 
-class InputMissingException(Exception):
-    def __init__(self, input, filename, job):
-        self.input = input
-        self.filename = filename
-        self.job = job
-    def __str__(self):
-        return 'input {0}, filename {1}, missing for job {2}'.format(self.input, self.filename, self.job)
-
 def _pretty_date(ts):
     if ts is None:
         return 'none'
@@ -119,10 +111,8 @@ class JobInstance(object):
     @property
     def output_resources(self):
         return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
-    def check_inputs(self):
-        for input in self.input_resources:
-            if not input.exists:
-                raise InputMissingException(input.id, input.filename, self.id)
+    def already_run(self):
+        return self.db.job_shelf.get(self.displayname, False)
     def out_of_date(self):
         input_dates = [input.createtime for input in self.input_resources]
         output_dates = [output.createtime for output in self.output_resources]
@@ -131,7 +121,7 @@ class JobInstance(object):
         if None in output_dates:
             return True
         return max(input_dates) > min(output_dates)
-    def explain(self):
+    def explain_out_of_date(self):
         input_dates = [input.createtime for input in self.input_resources]
         output_dates = [output.createtime for output in self.output_resources]
         try:
@@ -202,6 +192,7 @@ class JobInstance(object):
         if self.check_require_regenerate():
             self.workflow.regenerate()
     def complete(self):
+        self.db.job_shelf[self.displayname] = True
         self.workflow.notify_completed(self.id)
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):

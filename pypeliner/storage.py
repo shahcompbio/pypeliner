@@ -8,6 +8,13 @@ import pypeliner.helpers
 import pypeliner.flyweight
 
 
+class InputMissingException(Exception):
+    def __init__(self, filename):
+        self.filename
+    def __str__(self):
+        return 'expected input {} missing'.format(self.filename)
+
+
 class OutputMissingException(Exception):
     def __init__(self, filename):
         self.filename = filename
@@ -41,7 +48,8 @@ class RegularFile(object):
         self.createtime_cache.set(createtime)
         self.createtime_save.set(createtime)
     def pull(self):
-        pass
+        if not self.get_exists():
+            raise InputMissingException(self.allocated_filename)
     def get_exists(self):
         exists = self.exists_cache.get()
         if exists is None:

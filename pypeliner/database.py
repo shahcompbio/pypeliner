@@ -5,6 +5,7 @@ import os
 import pickle
 import logging
 import shutil
+import shelve
 
 import pypeliner.helpers
 import pypeliner.resources
@@ -159,9 +160,10 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, logs_dir, storage, obj_storage, path_info, instance_subdir):
+    def __init__(self, workflow_dir, logs_dir, storage, obj_storage, job_shelf, path_info, instance_subdir):
         self.storage = storage
         self.obj_storage = obj_storage
+        self.job_shelf = job_shelf
         self.path_info = path_info
         self.instance_subdir = instance_subdir
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
@@ -198,16 +200,17 @@ class WorkflowDatabaseFactory(object):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
-        createtime_shelf_filename = os.path.join(self.workflow_dir, 'temp_file_createtime.shelf')
+        createtime_shelf_filename = os.path.join(self.workflow_dir, 'createtimes.shelf')
         self.storage = pypeliner.storage.FileStorage(createtime_shelf_filename)
         obj_shelf_filename = os.path.join(self.workflow_dir, 'objects.shelf')
         self.obj_storage = pypeliner.storage.ShelveObjectStorage(obj_shelf_filename)
+        self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(
             self.workflow_dir, self.logs_dir, self.storage, self.obj_storage,
-            path_info, instance_subdir)
+            self.job_shelf, path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):
         lock_directory = os.path.join(self.workflow_dir, 'locks', instance_subdir, '_lock')
@@ -223,10 +226,12 @@ class WorkflowDatabaseFactory(object):
     def __enter__(self):
         self.storage.__enter__()
         self.obj_storage.__enter__()
+        self.job_shelf = shelve.open(self.job_shelf_filename)
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         self.storage.__exit__(exc_type, exc_value, traceback)
         self.obj_storage.__exit__(exc_type, exc_value, traceback)
+        self.job_shelf.close()
         for lock_directory in self.lock_directories:
             try:
                 os.rmdir(lock_directory)

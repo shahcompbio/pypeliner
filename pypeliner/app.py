@@ -75,6 +75,11 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Run the pipeline in interactive mode, prompting at each step as to whether the job
         should be rerun.
 
+    sentinal_only
+        Run the pipeline in sentinal only mode, no time stamp checking on files for out
+        of date status of jobs, rerun jobs based on whether they have already been
+        run.
+
 """
 
 import logging
@@ -107,6 +112,7 @@ config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporar
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
+config_infos.append(ConfigInfo('sentinal_only', bool, False, 'no timestamp checks, sentinal only'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -187,17 +193,15 @@ class Pypeline(object):
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
 
-        if self.config['interactive']:
-            default = pypeliner.runskip.BasicRunSkip(
-                repopulate=self.config['repopulate'],
-                rerun=self.config['rerun'],
-            )
-            self.runskip = pypeliner.runskip.InteractiveRunSkip(default)
+        if self.config['sentinal_only']:
+            self.runskip = pypeliner.runskip.SentinalRunSkip()
         else:
             self.runskip = pypeliner.runskip.BasicRunSkip(
                 repopulate=self.config['repopulate'],
-                rerun=self.config['rerun'],
-            )
+                rerun=self.config['rerun'])
+
+        if self.config['interactive']:
+            self.runskip = pypeliner.runskip.InteractiveRunSkip(self.runskip)
 
     def run(self, workflow):
         with self.exec_queue:

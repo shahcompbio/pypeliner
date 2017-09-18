@@ -97,7 +97,6 @@ class Scheduler(object):
                 raise PipelineException('pipeline failed')
 
     def _add_job(self, exec_queue, job):
-        job.check_inputs()
         sent = job.create_callable()
         exc_dir = job.create_exc_dir()
 
@@ -125,8 +124,9 @@ class Scheduler(object):
                 job = workflow.pop_next_job()
             except pypeliner.graph.NoJobs:
                 return
-            self._logger.info('job ' + job.displayname + ' explanation: ' + job.explain())
-            if runskip(job):
+            is_run_required, explaination = runskip(job)
+            self._logger.info('job ' + job.displayname + ' explanation: ' + explaination)
+            if is_run_required:
                 self._add_job(exec_queue, job)
             else:
                 job.complete()
