@@ -100,6 +100,7 @@ class AsyncQsubJob(object):
         self.qenv = qenv
         self.qstat_job_status = qstat_job_status
         self.qsub_job_id = None
+        self.qacct = None
         self.logger = logging.getLogger('pypeliner.execqueue')
 
         self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
@@ -208,7 +209,7 @@ class AsyncQsubJob(object):
         error_text += ['delegator command: ' + ' '.join(self.command)]
         error_text += ['submit command: ' + ' '.join(self.submit_command)]
 
-        if self.qacct.results is not None:
+        if self.qacct is not None and self.qacct.results is not None:
             error_text += ['memory consumed: ' + self.qacct.results['maxvmem']]
             error_text += ['job exit status: ' + self.qacct.results['exit_status']]
 
