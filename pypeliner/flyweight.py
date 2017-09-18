@@ -10,6 +10,8 @@ class FlyweightState(object):
         self.state_id = state_id
         self.state_factory = state_factory
     def __enter__(self):
+        if self.state_id in self.instances:
+            raise Exception('Multiple FlyweightState instances with id {}'.format(self.state_id))
         self.instances[self.state_id] = self.state_factory()
         return self
     def __exit__(self, exc_type, exc_value, traceback):
@@ -23,7 +25,7 @@ class FlyweightState(object):
     def set(self, key, value):
         if self.state_id not in self.instances:
             raise UnavailableError()
-        self.instances[self.state_id].set(key, value)
+        self.instances[self.state_id][key] = value
     def get(self, key):
         if self.state_id not in self.instances:
             raise UnavailableError()
@@ -54,4 +56,6 @@ class ReattachableFlyweight(object):
         try:
             return self.state.get(self.key)
         except UnavailableError:
+            pass
+        if hasattr(self, 'saved'):
             return self.saved

@@ -159,9 +159,8 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, logs_dir, storage, temp_file_storage, obj_storage, path_info, instance_subdir):
+    def __init__(self, workflow_dir, logs_dir, storage, obj_storage, path_info, instance_subdir):
         self.storage = storage
-        self.temp_file_storage = temp_file_storage
         self.obj_storage = obj_storage
         self.path_info = path_info
         self.instance_subdir = instance_subdir
@@ -198,18 +197,16 @@ class WorkflowDatabaseFactory(object):
     def __init__(self, workflow_dir, logs_dir):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
-        self.storage = pypeliner.storage.FileStorage()
         pypeliner.helpers.makedirs(self.workflow_dir)
-        temp_file_shelf_filename = os.path.join(self.workflow_dir, 'temp_file_createtime.shelf')
-        self.temp_file_storage = pypeliner.storage.TempFileStorage(temp_file_shelf_filename)
+        createtime_shelf_filename = os.path.join(self.workflow_dir, 'temp_file_createtime.shelf')
+        self.storage = pypeliner.storage.FileStorage(createtime_shelf_filename)
         obj_shelf_filename = os.path.join(self.workflow_dir, 'objects.shelf')
         self.obj_storage = pypeliner.storage.ShelveObjectStorage(obj_shelf_filename)
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(
-            self.workflow_dir, self.logs_dir, self.storage,
-            self.temp_file_storage, self.obj_storage,
+            self.workflow_dir, self.logs_dir, self.storage, self.obj_storage,
             path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):
@@ -224,11 +221,11 @@ class WorkflowDatabaseFactory(object):
                 raise
         self.lock_directories.append(lock_directory)
     def __enter__(self):
-        self.temp_file_storage.__enter__()
+        self.storage.__enter__()
         self.obj_storage.__enter__()
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        self.temp_file_storage.__exit__(exc_type, exc_value, traceback)
+        self.storage.__exit__(exc_type, exc_value, traceback)
         self.obj_storage.__exit__(exc_type, exc_value, traceback)
         for lock_directory in self.lock_directories:
             try:

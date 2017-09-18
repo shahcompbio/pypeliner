@@ -16,8 +16,11 @@ class OutputMissingException(Exception):
 
 
 class RegularFile(object):
-    def __init__(self, filename, direct_write=False):
+    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, direct_write=False):
         self.filename = filename
+        self.exists_cache = exists_cache
+        self.createtime_cache = createtime_cache
+        self.createtime_save = createtime_save
         self.direct_write = direct_write
     def allocate_input(self):
         self.allocated_filename = self.filename
@@ -33,72 +36,73 @@ class RegularFile(object):
             os.rename(self.allocated_filename, self.filename)
         except OSError:
             raise OutputMissingException(self.allocated_filename)
+        self.exists_cache.set(True)
+        createtime = os.path.getmtime(self.filename)
+        self.createtime_cache.set(createtime)
+        self.createtime_save.set(createtime)
     def pull(self):
         pass
     def get_exists(self):
-        return os.path.exists(self.filename)
+        exists = self.exists_cache.get()
+        if exists is None:
+            exists = os.path.exists(self.filename)
+            self.exists_cache.set(exists)
+        return exists
     def get_createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
+        if not self.get_exists():
+            return None
+        createtime = self.createtime_cache.get()
+        if createtime is None:
+            createtime = os.path.getmtime(self.filename)
+            self.createtime_cache.set(createtime)
+            self.createtime_save.set(createtime)
+        return createtime
     def touch(self):
         pypeliner.helpers.touch(self.filename)
+        self.exists_cache.set(True)
+        createtime = os.path.getmtime(self.filename)
+        self.createtime_cache.set(createtime)
+        self.createtime_save.set(createtime)
     def delete(self):
         raise Exception('cannot delete non-temporary files')
 
 
-class FileStorage(object):
-    def __init__(self):
-        pass
-    def create_store(self, filename, **kwargs):
-        return RegularFile(filename, **kwargs)
-
-
 class RegularTempFile(RegularFile):
-    def __init__(self, filename, createtime, direct_write=False):
-        super(RegularTempFile, self).__init__(filename, direct_write=direct_write)
-        self.createtime = createtime
-    def _save_createtime(self):
-        self.createtime.set(os.path.getmtime(self.filename))
-    def push(self):
-        super(RegularTempFile, self).push()
-        self._save_createtime()
     def get_createtime(self):
-        if os.path.exists(self.filename):
-            return os.path.getmtime(self.filename)
-        return self.createtime.get()
-    def touch(self):
-        super(RegularTempFile, self).touch(self.filename)
-        self._save_createtime()
+        if super(RegularTempFile, self).get_exists():
+            return super(RegularTempFile, self).get_createtime()
+        return self.createtime_save.get()
     def delete(self):
         pypeliner.helpers.saferemove(self.filename)
 
 
-class ShelvedState(object):
-    def __init__(self, shelf_filename):
-        self.shelf = shelve.open(shelf_filename)
-    def __del__(self):
-        self.shelf.close()
-    def get(self, key):
-        return self.shelf.get(key)
-    def set(self, key, value):
-        self.shelf[key] = value
-
-
-class TempFileStorage(object):
-    def __init__(self, shelf_filename):
-        def create_shelved_state():
-            return ShelvedState(shelf_filename)
-        self.createtime_state = pypeliner.flyweight.FlyweightState(
-            'TempFileStorage.createtime',
-            create_shelved_state)
+class FileStorage(object):
+    def __init__(self, createtime_shelf_filename):
+        self.cached_exists = pypeliner.flyweight.FlyweightState(
+            'FileStorage.cached_exists', dict)
+        self.cached_createtimes = pypeliner.flyweight.FlyweightState(
+            'FileStorage.cached_createtimes', dict)
+        self.saved_createtimes = pypeliner.flyweight.FlyweightState(
+            'FileStorage.saved_createtimes', lambda: shelve.open(createtime_shelf_filename))
     def __enter__(self):
-        self.createtime_state.__enter__()
+        self.cached_exists.__enter__()
+        self.cached_createtimes.__enter__()
+        self.saved_createtimes.__enter__()
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        self.createtime_state.__exit__(exc_type, exc_value, traceback)
-    def create_store(self, filename, **kwargs):
-        createtime = self.createtime_state.create_flyweight(filename)
-        return RegularTempFile(filename, createtime, **kwargs)
+        self.cached_exists.__exit__(exc_type, exc_value, traceback)
+        self.cached_createtimes.__exit__(exc_type, exc_value, traceback)
+        self.saved_createtimes.__exit__(exc_type, exc_value, traceback)
+    def _create_store(self, filename, factory, **kwargs):
+        exists_cache = self.cached_exists.create_flyweight(filename)
+        createtime_cache = self.cached_createtimes.create_flyweight(filename)
+        createtime_save = self.saved_createtimes.create_flyweight(filename)
+        return factory(filename, exists_cache, createtime_cache, createtime_save, **kwargs)
+    def create_store(self, filename, is_temp=False, **kwargs):
+        if is_temp:
+            return self._create_store(filename, RegularTempFile, **kwargs)
+        else:
+            return self._create_store(filename, RegularFile, **kwargs)
 
 
 def _get_obj_key(filename):
