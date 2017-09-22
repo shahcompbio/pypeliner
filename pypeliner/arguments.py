@@ -17,8 +17,6 @@ class Arg(object):
         pass
     def finalize(self):
         pass
-    def prepare(self):
-        pass
     def pull(self):
         pass
     def push(self):
@@ -234,12 +232,11 @@ class TempInputObjArg(Arg):
         self.func = func
     def get_inputs(self):
         yield self.resource.input
-    def prepare(self):
+    def resolve(self):
         self.obj = self.resource.get_obj()
         if self.func is not None:
             self.obj = self.func(self.obj)
         del self.func
-    def resolve(self):
         return self.obj
 
 
@@ -267,7 +264,7 @@ class TempMergeObjArg(Arg,SplitMergeArg):
             yield resource.input
         for dependency in self.merge_inputs:
             yield dependency
-    def prepare(self):
+    def resolve(self):
         self.resolved = dict()
         for resource in self.resources:
             obj = resource.get_obj()
@@ -275,7 +272,6 @@ class TempMergeObjArg(Arg,SplitMergeArg):
                 obj = self.func(obj)
             self.resolved[self.get_node_chunks(resource.node)] = obj
         del self.func
-    def resolve(self):
         return self.resolved
 
 

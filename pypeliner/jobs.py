@@ -245,8 +245,7 @@ class JobCallable(object):
         self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
         self.hostname = None
-        for arg in self.arglist:
-            arg.prepare()
+        self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
     @property
     def duration(self):
         return self.job_timer.duration
@@ -261,9 +260,9 @@ class JobCallable(object):
     @property
     def displaycommand(self):
         if self.func == pypeliner.commandline.execute:
-            return '"' + ' '.join(str(arg) for arg in self.argset.args) + '"'
+            return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
         else:
-            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.argset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.argset.kwargs.iteritems()) + ')'
+            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
     def pull(self):
         for arg in self.arglist:
             arg.pull()
@@ -277,7 +276,6 @@ class JobCallable(object):
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
-                    self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
                     self.pull()
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
                     if self.callset.ret is not None:
