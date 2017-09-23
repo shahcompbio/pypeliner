@@ -263,6 +263,9 @@ class JobCallable(object):
             return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
         else:
             return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
+    def allocate(self):
+        for arg in self.arglist:
+            arg.allocate()
     def pull(self):
         for arg in self.arglist:
             arg.pull()
@@ -270,12 +273,15 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
-        with open(self.stdout_storage.allocate_output(), 'w', 0) as stdout_file, open(self.stderr_storage.allocate_output(), 'w', 0) as stderr_file:
+        self.stdout_storage.allocate()
+        self.stderr_storage.allocate()
+        with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
                 self.hostname = socket.gethostname()
                 with self.job_timer:
+                    self.allocate()
                     self.pull()
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
                     if self.callset.ret is not None:
@@ -286,11 +292,11 @@ class JobCallable(object):
                 sys.stderr.write(traceback.format_exc())
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
-                self.stdout_storage.push()
-                self.stderr_storage.push()
+        self.stdout_storage.push()
+        self.stderr_storage.push()
     def collect_logs(self):
-        self.stdout_storage.allocate_input()
-        self.stderr_storage.allocate_input()
+        self.stdout_storage.allocate()
+        self.stderr_storage.allocate()
         self.stdout_storage.pull()
         self.stderr_storage.pull()
     def updatedb(self, db):
@@ -337,6 +343,8 @@ class SubWorkflowInstance(JobInstance):
         return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.storage, self.logs_dir)
 
 class WorkflowCallable(JobCallable):
+    def allocate(self):
+        pass
     def push(self):
         pass
     def pull(self):

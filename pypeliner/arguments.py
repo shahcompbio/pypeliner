@@ -17,6 +17,8 @@ class Arg(object):
         pass
     def finalize(self):
         pass
+    def allocate(self):
+        pass
     def pull(self):
         pass
     def push(self):
@@ -117,7 +119,9 @@ class InputFileArg(Arg):
     def get_inputs(self):
         yield self.resource
     def resolve(self):
-        return self.resource.allocate_input()
+        return self.resource.filename
+    def allocate(self):
+        self.resource.allocate()
     def pull(self):
         self.resource.pull()
 
@@ -149,8 +153,11 @@ class MergeFileArg(Arg,SplitMergeArg):
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
-            resolved[self.get_node_chunks(resource.node)] = resource.allocate_input()
+            resolved[self.get_node_chunks(resource.node)] = resource.filename
         return resolved
+    def allocate(self):
+        for resource in self.resources:
+            resource.allocate()
     def pull(self):
         for resource in self.resources:
             resource.pull()
@@ -169,7 +176,9 @@ class OutputFileArg(Arg):
     def get_outputs(self):
         yield self.resource
     def resolve(self):
-        return self.resource.allocate_output()
+        return self.resource.write_filename
+    def allocate(self):
+        self.resource.allocate()
     def push(self):
         self.resource.push()
 
@@ -349,7 +358,9 @@ class TempInputFileArg(Arg):
     def get_inputs(self):
         yield self.resource
     def resolve(self):
-        return self.resource.allocate_input()
+        return self.resource.filename
+    def allocate(self):
+        self.resource.allocate()
     def pull(self):
         self.resource.pull()
 
@@ -378,8 +389,11 @@ class TempMergeFileArg(Arg,SplitMergeArg):
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
-            resolved[self.get_node_chunks(resource.node)] = resource.allocate_input()
+            resolved[self.get_node_chunks(resource.node)] = resource.filename
         return resolved
+    def allocate(self):
+        for resource in self.resources:
+            resource.allocate()
     def pull(self):
         for resource in self.resources:
             resource.pull()
@@ -397,7 +411,9 @@ class TempOutputFileArg(Arg):
     def get_outputs(self):
         yield self.resource
     def resolve(self):
-        return self.resource.allocate_output()
+        return self.resource.write_filename
+    def allocate(self):
+        self.resource.allocate()
     def push(self):
         self.resource.push()
 
@@ -427,9 +443,8 @@ class FilenameCallback(object):
             self.resources[chunks[0]] = resource
         else:
             self.resources[chunks] = resource
-        return resource.allocate_output()
-        # pypeliner.helpers.makedirs(os.path.dirname(filename))
-        # return resource.write_filename
+        resource.allocate()
+        return resource.write_filename
     def __repr__(self):
         return '{0}.{1}({2},{3},{4},{5})'.format(
             FilenameCallback.__module__,

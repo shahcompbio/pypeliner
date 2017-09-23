@@ -70,14 +70,15 @@ class UserResource(Resource):
     @property
     def createtime(self):
         return self.store.get_createtime()
+    @property
+    def write_filename(self):
+        return self.store.write_filename
     def touch(self):
         if not self.exists:
             raise Exception('cannot touch missing user output')
         self.store.touch()
-    def allocate_input(self):
-        return self.store.allocate_input()
-    def allocate_output(self):
-        return self.store.allocate_output()
+    def allocate(self):
+        self.store.allocate()
     def push(self):
         self.store.push()
     def pull(self):
@@ -98,16 +99,17 @@ class TempFileResource(Resource):
     @property
     def createtime(self):
         return self.store.get_createtime()
+    @property
+    def write_filename(self):
+        return self.store.write_filename
     def touch(self):
         self.store.touch()
     def cleanup(self):
         if self.exists:
             logging.getLogger('pypeliner.resources').debug('removing ' + self.filename)
             self.store.delete()
-    def allocate_input(self):
-        return self.store.allocate_input()
-    def allocate_output(self):
-        return self.store.allocate_output()
+    def allocate(self):
+        self.store.allocate()
     def push(self):
         self.store.push()
     def pull(self):

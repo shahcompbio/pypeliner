@@ -23,33 +23,26 @@ class OutputMissingException(Exception):
 
 
 class RegularFile(object):
-    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, direct_write=False):
+    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, direct_write=True):
         self.filename = filename
         self.exists_cache = exists_cache
         self.createtime_cache = createtime_cache
         self.createtime_save = createtime_save
-        self.direct_write = direct_write
-    def allocate_input(self):
-        self.allocated_filename = self.filename
-        pypeliner.helpers.makedirs(os.path.dirname(self.allocated_filename))
-        return self.allocated_filename
-    def allocate_output(self):
-        suffix = ('.tmp', '')[self.direct_write]
-        self.allocated_filename = self.filename + suffix
-        pypeliner.helpers.makedirs(os.path.dirname(self.allocated_filename))
-        return self.allocated_filename
+        self.write_filename = filename + ('.tmp', '')[direct_write]
+    def allocate(self):
+        pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
         try:
-            os.rename(self.allocated_filename, self.filename)
+            os.rename(self.write_filename, self.filename)
         except OSError:
-            raise OutputMissingException(self.allocated_filename)
+            raise OutputMissingException(self.write_filename)
         self.exists_cache.set(True)
         createtime = os.path.getmtime(self.filename)
         self.createtime_cache.set(createtime)
         self.createtime_save.set(createtime)
     def pull(self):
         if not self.get_exists():
-            raise InputMissingException(self.allocated_filename)
+            raise InputMissingException(self.filename)
     def get_exists(self):
         exists = self.exists_cache.get()
         if exists is None:
