@@ -68,17 +68,16 @@ class TempSpaceArg(Arg):
         self.filename = db.get_temp_filename(name, node)
     def get_outputs(self):
         yield pypeliner.resources.Dependency(self.name, self.node)
-    def _remove(self):
-        pypeliner.helpers.removefiledir(self.filename)
     def resolve(self):
-        if self.cleanup in ('before', 'both'):
-            self._remove()
         if self.node.undefined:
             raise Exception('Undefined node {} for {}'.format(self.node.displayname, self.name))
         return self.filename
-    def finalize(self):
+    def pull(self):
+        if self.cleanup in ('before', 'both'):
+            pypeliner.helpers.removefiledir(self.filename)
+    def push(self):
         if self.cleanup in ('after', 'both'):
-            self._remove()
+            pypeliner.helpers.removefiledir(self.filename)
 
 
 class MergeTemplateArg(Arg):
