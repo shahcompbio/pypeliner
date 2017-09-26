@@ -10,7 +10,7 @@ import pypeliner.flyweight
 
 class InputMissingException(Exception):
     def __init__(self, filename):
-        self.filename
+        self.filename = filename
     def __str__(self):
         return 'expected input {} missing'.format(self.filename)
 
