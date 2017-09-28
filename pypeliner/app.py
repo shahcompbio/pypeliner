@@ -97,16 +97,17 @@ import pypeliner.execqueue.factory
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
 log_levels = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
-submit_types = ('local', 'qsub', 'asyncqsub', 'pbs', 'drmaa')
 
 default_submit_queue = os.environ.get('DEFAULT_SUBMITQUEUE', None)
 default_nativespec = os.environ.get('DEFAULT_NATIVESPEC', '')
+default_storage_type = os.environ.get('DEFAULT_STORAGETYPE', 'local')
 
 config_infos = list()
 config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of intermediate pipeline files'))
 config_infos.append(ConfigInfo('loglevel', log_levels, log_levels[2], 'logging level for console messages'))
-config_infos.append(ConfigInfo('submit', submit_types, default_submit_queue, 'job submission system'))
+config_infos.append(ConfigInfo('submit', str, default_submit_queue, 'job submission system'))
 config_infos.append(ConfigInfo('nativespec', str, default_nativespec, 'qsub native specification'))
+config_infos.append(ConfigInfo('storage', str, default_storage_type, 'file storage system'))
 config_infos.append(ConfigInfo('maxjobs', int, 1, 'maximum number of parallel jobs'))
 config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporaries'))
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
@@ -187,6 +188,9 @@ class Pypeline(object):
         self.exec_queue = pypeliner.execqueue.factory.create(
             self.config['submit'], self.modules, native_spec=self.config['nativespec'])
 
+        self.file_storage = pypeliner.storage.create(
+            self.config['storage'], self.config['tmpdir'])
+
         self.sch = pypeliner.scheduler.Scheduler()
 
         self.sch.workflow_dir = self.config['tmpdir']
@@ -205,9 +209,9 @@ class Pypeline(object):
             self.runskip = pypeliner.runskip.InteractiveRunSkip(self.runskip)
 
     def run(self, workflow):
-        with self.exec_queue:
+        with self.exec_queue, self.file_storage:
             try:
-                self.sch.run(workflow, self.exec_queue, self.runskip)
+                self.sch.run(workflow, self.exec_queue, self.file_storage, self.runskip)
             finally:
                 self.runskip.close()
                 print 'log file:', self.pipeline_log_filename

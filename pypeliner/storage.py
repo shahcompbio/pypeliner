@@ -3,6 +3,7 @@ import datetime
 import time
 import shutil
 import shelve
+import importlib
 
 import pypeliner.helpers
 import pypeliner.flyweight
@@ -80,6 +81,7 @@ class RegularTempFile(RegularFile):
 class FileStorage(object):
     def __init__(self, metadata_prefix=None):
         createtime_shelf_filename = metadata_prefix + 'createtimes.shelf'
+        pypeliner.helpers.makedirs(os.path.dirname(createtime_shelf_filename))
         self.cached_exists = pypeliner.flyweight.FlyweightState(
             'FileStorage.cached_exists', dict)
         self.cached_createtimes = pypeliner.flyweight.FlyweightState(
@@ -164,3 +166,21 @@ class ShelveObject(object):
         return self.storage.touch(self.filename)
 
 
+def create(requested_storage, workflow_dir=None):
+    if requested_storage is None:
+        raise Exception('No storage specified')
+    elif requested_storage == 'local':
+        storage_name = 'pypeliner.storage.FileStorage'
+    else:
+        storage_name = requested_storage
+
+    storage_class_name = storage_name.split('.')[-1]
+    storage_module_name = storage_name[:-len(storage_class_name)-1]
+
+    storage_module = importlib.import_module(storage_module_name)
+    storage_class = vars(storage_module)[storage_class_name]
+
+    file_storage_prefix = os.path.join(workflow_dir, 'files_')
+    storage = storage_class(metadata_prefix=file_storage_prefix)
+
+    return storage

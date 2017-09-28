@@ -160,8 +160,8 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, logs_dir, storage, obj_storage, job_shelf, path_info, instance_subdir):
-        self.storage = storage
+    def __init__(self, workflow_dir, logs_dir, file_storage, obj_storage, job_shelf, path_info, instance_subdir):
+        self.file_storage = file_storage
         self.obj_storage = obj_storage
         self.job_shelf = job_shelf
         self.path_info = path_info
@@ -196,12 +196,11 @@ class PipelineLockedError(Exception):
 
 
 class WorkflowDatabaseFactory(object):
-    def __init__(self, workflow_dir, logs_dir):
+    def __init__(self, workflow_dir, logs_dir, file_storage):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
-        file_storage_prefix = os.path.join(self.workflow_dir, 'files_')
-        self.storage = pypeliner.storage.FileStorage(metadata_prefix=file_storage_prefix)
+        self.file_storage = file_storage
         obj_storage_prefix = os.path.join(self.workflow_dir, 'objs_')
         self.obj_storage = pypeliner.storage.ShelveObjectStorage(metadata_prefix=obj_storage_prefix)
         self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
@@ -209,7 +208,7 @@ class WorkflowDatabaseFactory(object):
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(
-            self.workflow_dir, self.logs_dir, self.storage, self.obj_storage,
+            self.workflow_dir, self.logs_dir, self.file_storage, self.obj_storage,
             self.job_shelf, path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):
@@ -224,12 +223,10 @@ class WorkflowDatabaseFactory(object):
                 raise
         self.lock_directories.append(lock_directory)
     def __enter__(self):
-        self.storage.__enter__()
         self.obj_storage.__enter__()
         self.job_shelf = shelve.open(self.job_shelf_filename)
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        self.storage.__exit__(exc_type, exc_value, traceback)
         self.obj_storage.__exit__(exc_type, exc_value, traceback)
         self.job_shelf.close()
         for lock_directory in self.lock_directories:

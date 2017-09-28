@@ -48,7 +48,7 @@ class Scheduler(object):
     def logs_dir(self, value):
         self._logs_dir = pypeliner.helpers.abspath(value)
 
-    def run(self, workflow_def, exec_queue, runskip):
+    def run(self, workflow_def, exec_queue, file_storage, runskip):
         """ Run the pipeline
 
         :param workflow_def: workflow of jobs to be submitted.
@@ -67,7 +67,7 @@ class Scheduler(object):
 
         self._active_jobs = dict()
         self._job_exc_dirs = set()
-        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir) as db_factory:
+        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir, file_storage) as db_factory:
             workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, cleanup=self.cleanup)
             failing = False
             try:

@@ -182,7 +182,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.storage, self.logs_dir)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -340,7 +340,7 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
     def create_callable(self):
-        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.storage, self.logs_dir)
+        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):

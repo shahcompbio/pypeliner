@@ -15,8 +15,6 @@ from pypeliner.tests.tasks import *
 script_directory = os.path.dirname(os.path.abspath(__file__))
 pipeline_dir = os.path.join(script_directory, 'pipeline')
 
-runskip = pypeliner.runskip.BasicRunSkip()
-
 
 class scheduler_test(unittest.TestCase):
 
@@ -72,12 +70,23 @@ class scheduler_test(unittest.TestCase):
             except OSError:
                 pass
 
-    def create_scheduler(self):
+    def run_workflow(self, workflow, cleanup=None, runskip=None):
 
         scheduler = pypeliner.scheduler.Scheduler()
         scheduler.workflow_dir = pipeline_dir
         scheduler.max_jobs = 10
-        return scheduler
+
+        if cleanup is not None:
+            scheduler.cleanup = cleanup
+
+        exec_queue = pypeliner.execqueue.factory.create('local', [pypeliner.tests.tasks])
+        storage = pypeliner.storage.create('local', pipeline_dir)
+
+        if runskip is None:
+            runskip = pypeliner.runskip.BasicRunSkip()
+
+        with exec_queue, storage:
+            scheduler.run(workflow, exec_queue, storage, runskip)
 
     def test_simple_chunks1(self):
 
@@ -89,8 +98,7 @@ class scheduler_test(unittest.TestCase):
             func=write_files,
             args=(mgd.OutputFile(self.output_n_filename, 'byfile'),))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         for chunk in ('1', '2'):
             with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
@@ -133,8 +141,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.InputFile(self.output_n_filename, 'byfile'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         merged_expected = []
         for chunk in ('1', '2'):
@@ -179,8 +186,7 @@ class scheduler_test(unittest.TestCase):
                 
         workflow.set_filenames('output', filename=self.output_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -201,8 +207,7 @@ class scheduler_test(unittest.TestCase):
             )
         )
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -222,8 +227,7 @@ class scheduler_test(unittest.TestCase):
                 {'1':mgd.InputFile(self.input_1_filename),
                  '2':mgd.InputFile(self.input_2_filename)}))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         for file_num in (1, 2):
             with open(self.output_n_filename.format(byfile=file_num), 'r') as output_file:
@@ -261,8 +265,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('intermediate2', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -295,8 +298,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('input_files', 'byfile', fnames=input_filenames)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -318,8 +320,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -344,8 +345,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('output_files', 'byfile', fnames=output_filenames)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         for chunk in ('1', '2'):
             with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
@@ -364,8 +364,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('output_files', 'byfile', template=self.output_n_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         for chunk in ('1', '2'):
             with open(self.output_n_filename.format(**{'byfile':chunk}), 'r') as output_file:
@@ -387,8 +386,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -408,8 +406,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.OutputFile(self.output_filename),
                 mgd.TempSpace('temp_space')))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -440,23 +437,20 @@ class scheduler_test(unittest.TestCase):
 
         workflow.set_filenames('input_files', 'byfile', template=self.input_n_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         time.sleep(1)
         os.utime(self.input_1_filename, None)
         print 'restarting'
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         time.sleep(1)
         os.utime(self.input_1_filename, None)
         os.remove(self.output_filename)
         print 'restarting again'
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -496,14 +490,12 @@ class scheduler_test(unittest.TestCase):
                 mgd.OutputFile(self.output_filename),
                 '3'))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         time.sleep(1)
         os.remove(self.output_filename)
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -567,8 +559,7 @@ class scheduler_test(unittest.TestCase):
             ),
         )
 
-        scheduler = self.create_scheduler()
-        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, self.run_workflow, workflow)
 
         time.sleep(1)
 
@@ -580,8 +571,7 @@ class scheduler_test(unittest.TestCase):
             else:
                 job.func = job5
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
     def test_cycle(self):
 
@@ -616,9 +606,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-
-        self.assertRaises(pypeliner.graph.DependencyCycleException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.graph.DependencyCycleException, self.run_workflow, workflow)
 
     def test_commandline_simple(self):
 
@@ -634,8 +622,7 @@ class scheduler_test(unittest.TestCase):
                 'cat',
                 '>', mgd.OutputFile(self.output_filename),))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -683,8 +670,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -723,8 +709,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('output_filename', 'byline'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -754,9 +739,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.InputChunks('byline'),
                 mgd.OutputFile(self.output_filename),))
 
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow, cleanup=False)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -825,8 +808,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename),))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -877,8 +859,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename),))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
     def test_multiple_file_split(self):
 
@@ -931,9 +912,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('output_data', 'byline_a'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow, cleanup=False)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -979,9 +958,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('appended_copy'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
-        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, self.run_workflow, workflow, cleanup=False)
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -1008,8 +985,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('appended_copy'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler.cleanup = True
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow, cleanup=True)
 
         # The temporary files should have been cleaned up
         self.assertFalse(os.path.exists(os.path.join(pipeline_dir, 'tmp/appended')))
@@ -1052,8 +1028,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('appended_copy'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, self.run_workflow, workflow)
 
         self.assertFalse(os.path.exists(os.path.join(pipeline_dir, 'tmp/appended')))
 
@@ -1081,10 +1056,8 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('appended_copy'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
         repopulate_runskip = pypeliner.runskip.BasicRunSkip(repopulate=True)
-        scheduler.run(workflow, exec_queue, repopulate_runskip)
+        self.run_workflow(workflow, cleanup=False, runskip=repopulate_runskip)
 
         # The temporary files should have been cleaned up
         self.assertTrue(os.path.exists(os.path.join(pipeline_dir, 'tmp/appended')))
@@ -1146,8 +1119,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('output_data', 'byline_a'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, self.run_workflow, workflow)
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -1198,8 +1170,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('output_data', 'byline_a'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        self.assertRaises(pypeliner.scheduler.PipelineException, scheduler.run, workflow, exec_queue, runskip)
+        self.assertRaises(pypeliner.scheduler.PipelineException, self.run_workflow, workflow)
 
         workflow = pypeliner.workflow.Workflow()
 
@@ -1250,8 +1221,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('output_data', 'byline_a'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -1285,9 +1255,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename)))
 
-        scheduler = self.create_scheduler()
-        scheduler.cleanup = False
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow, cleanup=False)
 
         with open(self.output_filename, 'r') as output_file:
             output = output_file.readlines()
@@ -1324,9 +1292,8 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile(self.output_filename),))
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
-        
+        self.run_workflow(workflow)
+
     def test_regenerate_temporaries_remixt_1(self):
         workflow = pypeliner.workflow.Workflow()
 
@@ -1404,20 +1371,16 @@ class scheduler_test(unittest.TestCase):
             ),
         )
 
-        scheduler = self.create_scheduler()
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
         time.sleep(1)
         os.utime(self.input_2_filename, None)
         
         print 'restarting'
 
-        scheduler.run(workflow, exec_queue, runskip)
+        self.run_workflow(workflow)
 
 
 if __name__ == '__main__':
-    exec_queue = pypeliner.execqueue.factory.create('local', [pypeliner.tests.tasks])
-
-    with exec_queue:
-        unittest.main()
+    unittest.main()
 
