@@ -178,6 +178,7 @@ class Pypeline(object):
         logging.basicConfig(level=logging.DEBUG, filename=self.pipeline_log_filename, filemode='a')
         console = logging.StreamHandler()
         console.setLevel(self.config['loglevel'])
+        console.addFilter(logging.Filter('pypeliner'))
         logging.getLogger('').addHandler(console)
         logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
