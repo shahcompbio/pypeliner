@@ -78,7 +78,8 @@ class RegularTempFile(RegularFile):
 
 
 class FileStorage(object):
-    def __init__(self, createtime_shelf_filename):
+    def __init__(self, metadata_prefix=None):
+        createtime_shelf_filename = metadata_prefix + 'createtimes.shelf'
         self.cached_exists = pypeliner.flyweight.FlyweightState(
             'FileStorage.cached_exists', dict)
         self.cached_createtimes = pypeliner.flyweight.FlyweightState(
@@ -116,8 +117,8 @@ def _get_createtime_key(filename):
 
 class ShelveObjectStorage(object):
     catalog = {}
-    def __init__(self, shelf_filename):
-        self.shelf_filename = shelf_filename
+    def __init__(self, metadata_prefix=None):
+        self.shelf_filename = metadata_prefix + 'objects.shelf'
     def __enter__(self):
         self.shelf = shelve.open(self.shelf_filename)
         self.catalog[self.shelf_filename] = self

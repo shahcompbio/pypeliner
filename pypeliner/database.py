@@ -200,10 +200,10 @@ class WorkflowDatabaseFactory(object):
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
-        createtime_shelf_filename = os.path.join(self.workflow_dir, 'createtimes.shelf')
-        self.storage = pypeliner.storage.FileStorage(createtime_shelf_filename)
-        obj_shelf_filename = os.path.join(self.workflow_dir, 'objects.shelf')
-        self.obj_storage = pypeliner.storage.ShelveObjectStorage(obj_shelf_filename)
+        file_storage_prefix = os.path.join(self.workflow_dir, 'files_')
+        self.storage = pypeliner.storage.FileStorage(metadata_prefix=file_storage_prefix)
+        obj_storage_prefix = os.path.join(self.workflow_dir, 'objs_')
+        self.obj_storage = pypeliner.storage.ShelveObjectStorage(metadata_prefix=obj_storage_prefix)
         self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
