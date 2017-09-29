@@ -99,15 +99,19 @@ ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 log_levels = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 
 default_submit_queue = os.environ.get('DEFAULT_SUBMITQUEUE', None)
+default_submit_config = os.environ.get('DEFAULT_SUBMITCONFIG', None)
 default_nativespec = os.environ.get('DEFAULT_NATIVESPEC', '')
 default_storage_type = os.environ.get('DEFAULT_STORAGETYPE', 'local')
+default_storage_config = os.environ.get('DEFAULT_STORAGECONFIG', None)
 
 config_infos = list()
 config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of intermediate pipeline files'))
 config_infos.append(ConfigInfo('loglevel', log_levels, log_levels[2], 'logging level for console messages'))
 config_infos.append(ConfigInfo('submit', str, default_submit_queue, 'job submission system'))
+config_infos.append(ConfigInfo('submit_config', str, default_submit_config, 'job submission system config file'))
 config_infos.append(ConfigInfo('nativespec', str, default_nativespec, 'qsub native specification'))
 config_infos.append(ConfigInfo('storage', str, default_storage_type, 'file storage system'))
+config_infos.append(ConfigInfo('storage_config', str, default_storage_config, 'file storage system config file'))
 config_infos.append(ConfigInfo('maxjobs', int, 1, 'maximum number of parallel jobs'))
 config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporaries'))
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
@@ -186,10 +190,13 @@ class Pypeline(object):
             handler.setFormatter(logfmt)
 
         self.exec_queue = pypeliner.execqueue.factory.create(
-            self.config['submit'], self.modules, native_spec=self.config['nativespec'])
+            self.config['submit'], modules=self.modules,
+            native_spec=self.config['nativespec'],
+            config_filename=self.config['submit_config'])
 
         self.file_storage = pypeliner.storage.create(
-            self.config['storage'], self.config['tmpdir'])
+            self.config['storage'], workflow_dir=self.config['tmpdir'],
+            config_filename=self.config['storage_config'])
 
         self.sch = pypeliner.scheduler.Scheduler()
 

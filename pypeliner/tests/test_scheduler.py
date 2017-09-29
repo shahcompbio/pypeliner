@@ -42,6 +42,7 @@ class scheduler_test(unittest.TestCase):
     console = logging.StreamHandler()
     console.setLevel(logging.DEBUG)
     console.setFormatter(pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - '))
+    console.addFilter(logging.Filter('pypeliner'))
     logging.getLogger('').addHandler(console)
 
     ctx = dict({'mem':1})

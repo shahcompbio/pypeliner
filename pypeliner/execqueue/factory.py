@@ -1,7 +1,7 @@
 import importlib
 
 
-def create(requested_queue, modules, native_spec=None):
+def create(requested_queue, modules=None, native_spec=None, config_filename=None):
     if requested_queue is None:
         raise Exception('No submit queue specified')
     elif requested_queue == 'local':
@@ -23,6 +23,6 @@ def create(requested_queue, modules, native_spec=None):
     exec_queue_module = importlib.import_module(exec_queue_module_name)
     exec_queue_class = vars(exec_queue_module)[exec_queue_class_name]
 
-    exec_queue = exec_queue_class(modules=modules, native_spec=native_spec)
+    exec_queue = exec_queue_class(modules=modules, native_spec=native_spec, config_filename=config_filename)
 
     return exec_queue
