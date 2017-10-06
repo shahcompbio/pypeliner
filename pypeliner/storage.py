@@ -82,12 +82,10 @@ class FileStorage(object):
     def __init__(self, metadata_prefix=None, **kwargs):
         createtime_shelf_filename = metadata_prefix + 'createtimes.shelf'
         pypeliner.helpers.makedirs(os.path.dirname(createtime_shelf_filename))
-        self.cached_exists = pypeliner.flyweight.FlyweightState(
-            'FileStorage.cached_exists', dict)
-        self.cached_createtimes = pypeliner.flyweight.FlyweightState(
-            'FileStorage.cached_createtimes', dict)
+        self.cached_exists = pypeliner.flyweight.FlyweightState()
+        self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.saved_createtimes = pypeliner.flyweight.FlyweightState(
-            'FileStorage.saved_createtimes', lambda: shelve.open(createtime_shelf_filename))
+            state_container=shelve.open(createtime_shelf_filename))
     def __enter__(self):
         self.cached_exists.__enter__()
         self.cached_createtimes.__enter__()

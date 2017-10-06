@@ -1,3 +1,14 @@
+""" Reattachable flyweight objects
+
+The reattachable flyweight objects are used for persisting state
+that transitions through a series of pickling operations.  After unpickling,
+state objects are reattached to an owner automatically.  This allows a state
+object to be pickled, updated in a remote process, repickled, and then
+unpickled in the original process updating the state to the value set
+remotely.
+"""
+
+import uuid
 
 
 class UnavailableError(Exception):
@@ -5,17 +16,22 @@ class UnavailableError(Exception):
 
 
 class FlyweightState(object):
+    """ Collection of state objects that reattach upon unpickling.
+    """
     instances = {}
-    def __init__(self, state_id, state_factory):
-        self.state_id = state_id
-        self.state_factory = state_factory
-    def __enter__(self):
+    def __init__(self, state_container=None):
+        if state_container is None:
+            state_container = dict()
+        self.state_id = str(uuid.uuid4())
+        self.instances[self.state_id] = state_container
+    def __del__(self):
         if self.state_id in self.instances:
-            raise Exception('Multiple FlyweightState instances with id {}'.format(self.state_id))
-        self.instances[self.state_id] = self.state_factory()
+            del self.instances[self.state_id]
+    def __enter__(self):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        del self.instances[self.state_id]
+        if self.state_id in self.instances:
+            del self.instances[self.state_id]
     def __getstate__(self):
         return (self.state_id,)
     def __setstate__(self, state):
@@ -33,6 +49,8 @@ class FlyweightState(object):
 
 
 class ReattachableFlyweight(object):
+    """ Reattachable state object.
+    """
     def __init__(self, state, key):
         self.state = state
         self.key = key
