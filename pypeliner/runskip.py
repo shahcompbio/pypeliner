@@ -1,5 +1,6 @@
 import cmd
 import fnmatch
+import logging
 
 
 class BasicRunSkip(object):
@@ -104,8 +105,13 @@ class InteractiveRunSkip(object):
     def __init__(self, default):
         self.patterns = PatternMatcher()
         self.default = default
+        self._logger = logging.getLogger('pypeliner.scheduler.runskip')
 
     def __call__(self, job):
+        default_is_run_required, default_explaination = self.default(job)
+
+        self._logger.info('job ' + job.displayname + ' default run: ' + str(default_is_run_required) + ' default explanation: ' + default_explaination)
+
         runskip_cmd = RunSkipCmd(self.patterns)
 
         while True:
@@ -116,8 +122,7 @@ class InteractiveRunSkip(object):
                 return False, 'skip requested'
 
             if runskip_cmd.command == 'verify' or self.patterns.get(job.displayname) == 'verify':
-                is_run_required, explaination = self.default(job)
-                if not is_run_required:
+                if not default_is_run_required:
                     return False, 'verified and skipped'
 
             if runskip_cmd.command == 'touch' or self.patterns.get(job.displayname) == 'touch':
@@ -125,7 +130,7 @@ class InteractiveRunSkip(object):
                 return False, 'touch requested'
 
             if runskip_cmd.command == 'default' or self.patterns.get(job.displayname) == 'default':
-                return self.default(job)
+                return default_is_run_required, 'default requested'
 
             runskip_cmd.cmdloop()
             if not runskip_cmd.success:

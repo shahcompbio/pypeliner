@@ -125,7 +125,7 @@ class Scheduler(object):
             except pypeliner.graph.NoJobs:
                 return
             is_run_required, explaination = runskip(job)
-            self._logger.info('job ' + job.displayname + ' explanation: ' + explaination)
+            self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination)
             if is_run_required:
                 self._add_job(exec_queue, job)
             else:
