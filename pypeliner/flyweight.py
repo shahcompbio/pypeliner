@@ -24,9 +24,6 @@ class FlyweightState(object):
             state_container = dict()
         self.state_id = str(uuid.uuid4())
         self.instances[self.state_id] = state_container
-    def __del__(self):
-        if self.state_id in self.instances:
-            del self.instances[self.state_id]
     def __enter__(self):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
@@ -77,3 +74,4 @@ class ReattachableFlyweight(object):
             pass
         if hasattr(self, 'saved'):
             return self.saved
+
