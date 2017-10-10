@@ -61,7 +61,10 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = filename
-        self.store = storage.create_store(self.filename, is_temp=False, direct_write=direct_write)
+        if filename is None:
+            self.store = None
+        else:
+            self.store = storage.create_store(self.filename, is_temp=False, direct_write=direct_write)
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
