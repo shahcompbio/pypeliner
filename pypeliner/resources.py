@@ -61,6 +61,10 @@ class UserResource(Resource):
         self.name = name
         self.node = node
         self.filename = filename
+        # Note:
+        # filenames may be none if they are not yet defined
+        # for example for a job that creates axis chunks that
+        # are used by the same job's outputs
         if filename is None:
             self.store = None
         else:
@@ -69,9 +73,13 @@ class UserResource(Resource):
         return self.filename
     @property
     def exists(self):
+        if self.store is None:
+            return None
         return self.store.get_exists()
     @property
     def createtime(self):
+        if self.store is None:
+            return None
         return self.store.get_createtime()
     @property
     def write_filename(self):
