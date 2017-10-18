@@ -93,6 +93,7 @@ import pypeliner.helpers
 import pypeliner.runskip
 import pypeliner.execqueue.factory
 
+from pythonjsonlogger.jsonlogger import JsonFormatter
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -188,6 +189,15 @@ class Pypeline(object):
         logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
+
+        #add json log file to the log_dir
+        json_log_file = os.path.join(self.logs_dir, 'pipeline.json')
+        jsonlog = logging.FileHandler(json_log_file, mode='a')
+        jsonlog.setLevel(self.config['loglevel'])
+        jsonlog.addFilter(logging.Filter('pypeliner'))
+        logfmt=JsonFormatter()
+        jsonlog.setFormatter(logfmt)
+        logging.getLogger('').addHandler(jsonlog)
 
         self.exec_queue = pypeliner.execqueue.factory.create(
             self.config['submit'], modules=self.modules,

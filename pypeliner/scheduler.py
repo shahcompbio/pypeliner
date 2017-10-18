@@ -106,15 +106,18 @@ class Scheduler(object):
             raise ValueError('duplicate temps directory ' + exc_dir)
         self._job_exc_dirs.add(exc_dir)
         
-        self._logger.info('job ' + job.displayname + ' executing')
-        self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand)
+        self._logger.info('job ' + job.displayname + ' executing',
+                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
+        self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand,
+                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand})
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
     def _retry_job(self, exec_queue, job):
         if not job.retry():
             return False
-        self._logger.info('job ' + job.displayname + ' retry ' + str(job.retry_idx))
+        self._logger.info('job ' + job.displayname + ' retry ' + str(job.retry_idx),
+                          extra={"id": job.displayname, "type":"job", "retry_count": job.retry_idx})
         self._add_job(exec_queue, job)
         return True
 
@@ -125,12 +128,14 @@ class Scheduler(object):
             except pypeliner.graph.NoJobs:
                 return
             is_run_required, explaination = runskip(job)
-            self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination)
+            self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
+                              extra={"id": job.displayname, "type":"job", "explanation":explaination})
             if is_run_required:
                 self._add_job(exec_queue, job)
             else:
                 job.complete()
-                self._logger.info('job ' + job.displayname + ' skipped')
+                self._logger.info('job ' + job.displayname + ' skipped',
+                                  extra={"id": job.displayname, "type":"job", "status": "skipped"})
 
     def _wait_next_job(self, exec_queue, workflow):
         name = exec_queue.wait()
@@ -143,7 +148,8 @@ class Scheduler(object):
         try:
             received = exec_queue.receive(name)
         except pypeliner.execqueue.base.ReceiveError as e:
-            self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc())
+            self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc(),
+                               extra={"id": job.displayname, "type":"job", "submit_error": traceback.format_exc()})
             received = None
 
         if received is not None and job.id != received.id:
@@ -153,13 +159,18 @@ class Scheduler(object):
             try:
                 received.collect_logs()
             except Exception as e:
-                self._logger.error('job ' + job.displayname + ' collect logs error\n' + traceback.format_exc())
+                self._logger.error('job ' + job.displayname + ' collect logs error\n' + traceback.format_exc(),
+                                   extra={"id": job.displayname, "type":"job", "status":"error"})
             if received.finished:
-                self._logger.info('job ' + job.displayname + ' completed successfully')
+                self._logger.info('job ' + job.displayname + ' completed successfully',
+                                  extra={"id": job.displayname, "type":"job", "status": "success"})
             else:
-                self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text())
-            self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's')
-            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's')
+                self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
+                                   extra={"id": job.displayname, "type":"job", "status": "fail"})
+            self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
+                              extra={"id": job.displayname, "type":"job", "time": received.duration})
+            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
+                              extra={"id": job.displayname, "type":"job", "hostname": received.hostname})
 
         if received is None or not received.finished:
             if self._retry_job(exec_queue, job):

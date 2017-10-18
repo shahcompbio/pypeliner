@@ -44,7 +44,8 @@ class QsubJob(object):
             else:
                 error_text += str(e) + '\n'
             error_text += pypeliner.execqueue.utils.log_text(self.debug_filenames)
-            self.logger.error(error_text)
+            self.logger.error(error_text,
+                              extra={"id":self.name, "status": "submit_fail", "type":"job"})
             raise pypeliner.execqueue.base.SubmitError()
 
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
@@ -72,7 +73,8 @@ class QsubJob(object):
             error_text += ' '.join(self.submit_command) + '\n'
             error_text += 'return code {0}\n'.format(returncode)
             error_text += pypeliner.execqueue.utils.log_text(self.debug_filenames)
-            self.logger.error(error_text)
+            self.logger.error(error_text,
+                              extra={"id":self.name, "status": "fail", "type":"job"})
             raise pypeliner.execqueue.base.ReceiveError()
 
 
@@ -187,7 +189,8 @@ class AsyncQsubJob(object):
         try:
             subprocess.check_call([self.qenv.qdel_bin, self.qsub_job_id])
         except:
-            self.logger.exception('Unable to delete {}'.format(self.qsub_job_id))
+            self.logger.exception('Unable to delete {}'.format(self.qsub_job_id),
+                                  extra={"id":self.name, "status": "could_not_delete_job", "type":"job"})
 
     def create_error_text(self, desc):
         """ Create error text string.
