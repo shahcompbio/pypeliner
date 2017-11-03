@@ -17,6 +17,38 @@ import azure.batch.models as batchmodels
 
 import pypeliner.execqueue.base
 
+def get_container_name(filename):
+    if filename.startswith('/'):
+        filename = filename[1:]
+
+    container = filename.split('/')[0]
+
+    return container
+
+def get_containers(sent):
+
+    containers = set()
+
+    args = list(sent.argset.args)  + sent.arglist
+
+    for arg in args:
+        if isinstance(arg, str) and '/' in arg:
+            cntr_name = get_container_name(arg)
+            containers.add(cntr_name)
+        elif getattr(arg, 'resource', None):
+            cntr_name = get_container_name(arg.resource.filename)
+            containers.add(cntr_name)
+        elif getattr(arg, 'filename', None):
+            cntr_name = get_container_name(arg.filename)
+            containers.add(cntr_name)
+
+    cntr_name = get_container_name(sent.stdout_filename)
+    containers.add(cntr_name)
+    cntr_name = get_container_name(sent.stderr_filename)
+    containers.add(cntr_name)
+
+    return containers
+
 
 def print_batch_exception(batch_exception):
     """
@@ -335,6 +367,15 @@ def _random_string(length):
     return ''.join(random.choice(string.lowercase) for i in range(length))
 
 
+def wait_for_pool_init(batch_client, pool_id):
+    while True:
+        nodes = list(batch_client.compute_node.list(pool_id))
+        for node in nodes:
+            state = batch_client.compute_node.get(pool_id, node.id).state
+            if state.value in ['idle','running']:
+                return
+        time.sleep(60)
+
 class AzureJobQueue(object):
     """ Azure batch job queue.
     """
@@ -397,7 +438,9 @@ class AzureJobQueue(object):
     }
 
     def __enter__(self):
-        if not self.no_create_pool:
+        #create a new pool if needed
+        if not self.batch_client.pool.exists(self.pool_id):
+            self.logger.info("creating pool")
             create_pool(
                 self.batch_client,
                 self.pool_id,
@@ -407,6 +450,9 @@ class AzureJobQueue(object):
                 self.batch_client,
                 self.job_id,
                 self.pool_id)
+
+            # wait for nodes startup
+            wait_for_pool_init(self.batch_client, self.pool_id)
 
         # Delete previous tasks
         for task in self.batch_client.task.list(self.job_id):
@@ -480,11 +526,16 @@ class AzureJobQueue(object):
         run_script_filename = os.path.join(temps_dir, run_script_file_path)
         run_script_blobname = os.path.join(self.job_blobname_prefix[name], run_script_file_path)
 
+        containers = get_containers(sent)
+        mounts = ''
+        for container in containers:
+            mounts += ' -B $AZ_BATCH_TASK_WORKING_DIR/:/{container}/'.format(container=container)
+
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')
             f.write('set -o pipefail\n\n')
             f.write(self.compute_start_commands + '\n')
-            f.write(self.compute_run_command.format(input_filename=job_before_file_path, output_filename=job_after_file_path) + '\n')
+            f.write(self.compute_run_command.format(input_filename=job_before_file_path, output_filename=job_after_file_path, container=container,  mounts=mounts) + '\n')
             f.write(self.compute_finish_commands + '\n')
             f.write('wait')
 
