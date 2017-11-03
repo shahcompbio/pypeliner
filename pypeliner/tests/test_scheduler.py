@@ -75,6 +75,7 @@ class scheduler_test(unittest.TestCase):
 
         scheduler = pypeliner.scheduler.Scheduler()
         scheduler.workflow_dir = pipeline_dir
+        scheduler.temps_dir = os.path.join(pipeline_dir, 'tmp')
         scheduler.max_jobs = 10
 
         if cleanup is not None:

@@ -38,7 +38,10 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
 :py:class:`pypeliner.app.Pypeline`.
 
     tmpdir
-        Location of pypeliner database, temporary files and logs.
+        Location of pypeliner temporary files.
+
+    pipelinedir
+        Location of pypeliner database, logs.
 
     loglevel
         Logging level for console messages.  Valid logging levels are:
@@ -106,7 +109,8 @@ default_storage_type = os.environ.get('DEFAULT_STORAGETYPE', 'local')
 default_storage_config = os.environ.get('DEFAULT_STORAGECONFIG', None)
 
 config_infos = list()
-config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of intermediate pipeline files'))
+config_infos.append(ConfigInfo('tmpdir', str, './tmp', 'location of temporary files'))
+config_infos.append(ConfigInfo('pipelinedir', str, None, 'location of pipeline files'))
 config_infos.append(ConfigInfo('loglevel', log_levels, log_levels[2], 'logging level for console messages'))
 config_infos.append(ConfigInfo('submit', str, default_submit_queue, 'job submission system'))
 config_infos.append(ConfigInfo('submit_config', str, default_submit_config, 'job submission system config file'))
@@ -176,11 +180,18 @@ class Pypeline(object):
         if config is not None:
             self.config.update(config)
 
+        # If no pipelinedir is specified, fall back to previous
+        # functionality of having pipeline files in tmpdir, and
+        # temporary files in a tmp subdirectory of tmpdir
+        if self.config['pipelinedir'] is None:
+            self.config['pipelinedir'] = self.config['tmpdir']
+            self.config['tmpdir'] = os.path.join(self.config['tmpdir'], 'tmp')
+
         datetime_log_prefix = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        self.logs_dir = os.path.join(self.config['tmpdir'], 'log', datetime_log_prefix)
+        self.logs_dir = os.path.join(self.config['pipelinedir'], 'log', datetime_log_prefix)
         self.pipeline_log_filename = os.path.join(self.logs_dir, 'pipeline.log')
         pypeliner.helpers.makedirs(self.logs_dir)
-        pypeliner.helpers.symlink(self.logs_dir, os.path.join(self.config['tmpdir'], 'log', 'latest'))
+        pypeliner.helpers.symlink(self.logs_dir, os.path.join(self.config['pipelinedir'], 'log', 'latest'))
         logging.basicConfig(level=logging.DEBUG, filename=self.pipeline_log_filename, filemode='a')
         console = logging.StreamHandler()
         console.setLevel(self.config['loglevel'])
@@ -205,12 +216,13 @@ class Pypeline(object):
             config_filename=self.config['submit_config'])
 
         self.file_storage = pypeliner.storage.create(
-            self.config['storage'], workflow_dir=self.config['tmpdir'],
+            self.config['storage'], workflow_dir=self.config['pipelinedir'],
             config_filename=self.config['storage_config'])
 
         self.sch = pypeliner.scheduler.Scheduler()
 
-        self.sch.workflow_dir = self.config['tmpdir']
+        self.sch.temps_dir = self.config['tmpdir']
+        self.sch.workflow_dir = self.config['pipelinedir']
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']

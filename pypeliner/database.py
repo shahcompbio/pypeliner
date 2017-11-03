@@ -159,14 +159,14 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, workflow_dir, logs_dir, file_storage, obj_storage, job_shelf, path_info, instance_subdir):
+    def __init__(self, temps_dir, workflow_dir, logs_dir, file_storage, obj_storage, job_shelf, path_info, instance_subdir):
         self.file_storage = file_storage
         self.obj_storage = obj_storage
         self.job_shelf = job_shelf
         self.path_info = path_info
         self.instance_subdir = instance_subdir
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
-        self.temps_dir = os.path.join(workflow_dir, 'tmp', instance_subdir)
+        self.temps_dir = os.path.join(temps_dir, instance_subdir)
         pypeliner.helpers.makedirs(self.nodes_dir)
         pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
@@ -195,7 +195,8 @@ class PipelineLockedError(Exception):
 
 
 class WorkflowDatabaseFactory(object):
-    def __init__(self, workflow_dir, logs_dir, file_storage):
+    def __init__(self, temps_dir, workflow_dir, logs_dir, file_storage):
+        self.temps_dir = temps_dir
         self.workflow_dir = workflow_dir
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
@@ -207,7 +208,7 @@ class WorkflowDatabaseFactory(object):
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(
-            self.workflow_dir, self.logs_dir, self.file_storage, self.obj_storage,
+            self.temps_dir, self.workflow_dir, self.logs_dir, self.file_storage, self.obj_storage,
             self.job_shelf, path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):

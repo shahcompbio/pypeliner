@@ -25,6 +25,7 @@ class Scheduler(object):
         self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
         self.cleanup = True
+        self.temps_dir = './tmp'
         self.workflow_dir = './'
         self.logs_dir = './log'
         self.freeze = True
@@ -67,7 +68,7 @@ class Scheduler(object):
 
         self._active_jobs = dict()
         self._job_exc_dirs = set()
-        with pypeliner.database.WorkflowDatabaseFactory(self.workflow_dir, self.logs_dir, file_storage) as db_factory:
+        with pypeliner.database.WorkflowDatabaseFactory(self.temps_dir, self.workflow_dir, self.logs_dir, file_storage) as db_factory:
             workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, cleanup=self.cleanup)
             failing = False
             try:
