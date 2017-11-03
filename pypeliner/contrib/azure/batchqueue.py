@@ -25,6 +25,19 @@ def get_container_name(filename):
 
     return container
 
+def get_container_from_obj(obj):
+    if isinstance(obj, str) and '/' in obj:
+        cntr_name = get_container_name(obj)
+    elif getattr(obj, 'resource', None):
+        cntr_name = get_container_name(obj.resource.filename)
+    elif getattr(obj, 'filename', None):
+        cntr_name = get_container_name(obj.filename)
+    else:
+        return None
+
+    return cntr_name
+    
+
 def get_containers(sent):
 
     containers = set()
@@ -32,20 +45,19 @@ def get_containers(sent):
     args = list(sent.argset.args)  + sent.arglist
 
     for arg in args:
-        if isinstance(arg, str) and '/' in arg:
-            cntr_name = get_container_name(arg)
-            containers.add(cntr_name)
-        elif getattr(arg, 'resource', None):
-            cntr_name = get_container_name(arg.resource.filename)
-            containers.add(cntr_name)
-        elif getattr(arg, 'filename', None):
-            cntr_name = get_container_name(arg.filename)
-            containers.add(cntr_name)
+        if getattr(arg, 'inputs', None):
+            for inp_arg in arg.inputs:
+                cntr_name = get_container_from_obj(inp_arg)
+                containers.add(cntr_name)
+        cntr_name = get_container_from_obj(arg)
+        containers.add(cntr_name)
 
     cntr_name = get_container_name(sent.stdout_filename)
     containers.add(cntr_name)
     cntr_name = get_container_name(sent.stderr_filename)
     containers.add(cntr_name)
+
+    containers.remove(None)
 
     return containers
 
