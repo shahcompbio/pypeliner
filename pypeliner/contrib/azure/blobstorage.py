@@ -47,9 +47,7 @@ class AzureBlob(object):
 
 
 class AzureBlobStorage(object):
-    def __init__(self, config_filename=None, **kwargs):
-        with open(config_filename) as f:
-            self.config = yaml.load(f)
+    def __init__(self, **kwargs):
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
         self.storage_account_key = os.environ['AZURE_STORAGE_KEY']
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
