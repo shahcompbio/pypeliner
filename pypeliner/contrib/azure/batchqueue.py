@@ -17,50 +17,48 @@ import azure.batch.models as batchmodels
 
 import pypeliner.execqueue.base
 
-def get_container_name(filename):
-    if filename.startswith('/'):
-        filename = filename[1:]
 
-    container = filename.split('/')[0]
+def get_containers_from_obj(data, containers):
+    '''
+    recurse into the sent obj and get the container namess
+    '''
+    def get_container(obj):
+        if getattr(obj, 'resource', None):
+            obj = obj.resource.filename
+        elif getattr(obj, 'filename', None):
+            obj = obj.filename
 
-    return container
-
-def get_container_from_obj(obj):
-    if isinstance(obj, str) and '/' in obj:
-        cntr_name = get_container_name(obj)
-    elif getattr(obj, 'resource', None):
-        cntr_name = get_container_name(obj.resource.filename)
-    elif getattr(obj, 'filename', None):
-        cntr_name = get_container_name(obj.filename)
+        if isinstance(obj, str) and  '/' in obj:
+            if obj.startswith('/'):
+                obj = obj[1:]
+            obj = obj.split('/')[0]
+            return obj
+        
+    if not getattr(data, '__iter__', None):
+        containers.add(get_container(data))
     else:
-        return None
-
-    return cntr_name
-    
-
+        for val in data:
+            if isinstance(val, list):
+                get_containers_from_obj(val, containers)
+            elif getattr(val, 'inputs', None):
+                get_containers_from_obj(val, containers)
+            elif getattr(val, 'resources', None):
+                get_containers_from_obj(val, containers)
+            else:
+                containers.add(get_container(val))
+   
 def get_containers(sent):
-
+    args = list(sent.argset.args)  + sent.arglist + [sent.stdout_filename, sent.stderr_filename]
     containers = set()
-
-    args = list(sent.argset.args)  + sent.arglist
-
-    for arg in args:
-        if getattr(arg, 'inputs', None):
-            for inp_arg in arg.inputs:
-                cntr_name = get_container_from_obj(inp_arg)
-                containers.add(cntr_name)
-        cntr_name = get_container_from_obj(arg)
-        containers.add(cntr_name)
-
-    cntr_name = get_container_name(sent.stdout_filename)
-    containers.add(cntr_name)
-    cntr_name = get_container_name(sent.stderr_filename)
-    containers.add(cntr_name)
-
-    containers.remove(None)
+    get_containers_from_obj(args, containers)
+   
+    if None in containers: 
+        containers.remove(None)
+    if '' in containers:
+        containers.remove('')
 
     return containers
-
+    
 
 def print_batch_exception(batch_exception):
     """
