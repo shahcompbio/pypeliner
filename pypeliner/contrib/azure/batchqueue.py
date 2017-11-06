@@ -33,9 +33,11 @@ def get_containers_from_obj(data, containers):
                 obj = obj[1:]
             obj = obj.split('/')[0]
             return obj
-        
-    if not getattr(data, '__iter__', None):
-        containers.add(get_container(data))
+
+    if getattr(data, 'inputs', None):
+        get_containers_from_obj(data.inputs, containers)
+    elif getattr(data, 'resources', None):
+        get_containers_from_obj(data.resources, containers)
     else:
         for val in data:
             if isinstance(val, list):
