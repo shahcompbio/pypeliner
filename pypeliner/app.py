@@ -214,8 +214,7 @@ class Pypeline(object):
             config_filename=self.config['submit_config'])
 
         self.file_storage = pypeliner.storage.create(
-            self.config['storage'], workflow_dir=self.config['pipelinedir'],
-            config_filename=self.config['storage_config'])
+            self.config['storage'], workflow_dir=self.config['pipelinedir'])
 
         self.sch = pypeliner.scheduler.Scheduler()
 

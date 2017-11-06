@@ -167,7 +167,7 @@ class ShelveObject(object):
         return self.storage.touch(self.filename)
 
 
-def create(requested_storage, workflow_dir=None, config_filename=None):
+def create(requested_storage, workflow_dir=None):
     if requested_storage is None:
         raise Exception('No storage specified')
     elif requested_storage == 'local':
@@ -182,6 +182,6 @@ def create(requested_storage, workflow_dir=None, config_filename=None):
     storage_class = vars(storage_module)[storage_class_name]
 
     file_storage_prefix = os.path.join(workflow_dir, 'files_')
-    storage = storage_class(metadata_prefix=file_storage_prefix, config_filename=config_filename)
+    storage = storage_class(metadata_prefix=file_storage_prefix)
 
     return storage
