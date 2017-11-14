@@ -434,8 +434,8 @@ class AzureJobQueue(object):
         self.compute_finish_commands = self.config['compute_finish_commands']
 
         self.no_delete_tasks = self.config.get('no_delete_tasks', False)
-        self.no_create_pool = self.config.get('no_create_pool', False)
         self.no_delete_pool = self.config.get('no_delete_pool', False)
+        self.no_delete_job = self.config.get('no_delete_job', False)
 
         self.job_names = {}
         self.job_task_ids = {}
@@ -450,21 +450,26 @@ class AzureJobQueue(object):
     }
 
     def __enter__(self):
-        #create a new pool if needed
+        # Create a new pool if needed
         if not self.batch_client.pool.exists(self.pool_id):
-            self.logger.info("creating pool")
+            self.logger.info("creating pool {}".format(self.pool_id))
             create_pool(
                 self.batch_client,
                 self.pool_id,
                 self.config)
 
+            # wait for nodes startup
+            self.logger.info("waiting for pool {}".format(self.pool_id))
+            wait_for_pool_init(self.batch_client, self.pool_id)
+
+        # Create a new job if needed
+        job_ids = set([job.id for job in self.batch_client.job.list()])
+        if self.job_id not in job_ids:
+            self.logger.info("creating job {}".format(self.job_id))
             create_job(
                 self.batch_client,
                 self.job_id,
                 self.pool_id)
-
-            # wait for nodes startup
-            wait_for_pool_init(self.batch_client, self.pool_id)
 
         # Delete previous tasks
         for task in self.batch_client.task.list(self.job_id):
@@ -479,6 +484,7 @@ class AzureJobQueue(object):
             except Exception as e:
                 print(e)
 
+        if not self.no_delete_job:
             try:
                 self.batch_client.job.delete(self.job_id)
             except Exception as e:
@@ -692,5 +698,4 @@ if __name__ == "__main__":
 
         job2 = queue.receive(finished_name)
         print(job2.called)
-
 
