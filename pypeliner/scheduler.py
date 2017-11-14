@@ -79,7 +79,7 @@ class Scheduler(object):
                             break
                         self._wait_next_job(exec_queue, workflow)
                 except KeyboardInterrupt as e:
-                    raise e
+                    raise
                 except Exception:
                     failing = True
                     self._logger.error('exception\n' + traceback.format_exc())
@@ -87,12 +87,12 @@ class Scheduler(object):
                     try:
                         self._wait_next_job(exec_queue, workflow)
                     except KeyboardInterrupt as e:
-                        raise e
+                        raise
                     except Exception:
                         self._logger.error('exception\n' + traceback.format_exc())
             except KeyboardInterrupt as e:
                 self._logger.error('interrupted')
-                raise e
+                raise
             if failing:
                 self._logger.error('pipeline failed')
                 raise PipelineException('pipeline failed')
