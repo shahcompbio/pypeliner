@@ -18,22 +18,34 @@ import azure.batch.models as batchmodels
 import pypeliner.execqueue.base
 
 
+def get_container(obj):
+    """get container name from the resource object
+
+    :param obj: pypeliner resource object
+    :rtype: str
+    :return: container name
+    """
+    if getattr(obj, 'resource', None):
+        obj = obj.resource.filename
+    elif getattr(obj, 'filename', None):
+        obj = obj.filename
+    else:
+        return
+
+    if isinstance(obj, str) and  '/' in obj:
+        if obj.startswith('/'):
+            obj = obj[1:]
+        obj = obj.split('/')[0]
+        return obj
+
+
 def get_containers_from_obj(data, containers):
-    '''
-    recurse into the sent obj and get the container namess
-    '''
-    def get_container(obj):
-        if getattr(obj, 'resource', None):
-            obj = obj.resource.filename
-        elif getattr(obj, 'filename', None):
-            obj = obj.filename
+    """recurse into the resources object and extract
+    container names
 
-        if isinstance(obj, str) and  '/' in obj:
-            if obj.startswith('/'):
-                obj = obj[1:]
-            obj = obj.split('/')[0]
-            return obj
-
+    :param data: pypeliner resource object
+    :param set containers: set with the container names
+    """
     if getattr(data, 'inputs', None):
         get_containers_from_obj(data.inputs, containers)
     elif getattr(data, 'resources', None):
@@ -48,19 +60,23 @@ def get_containers_from_obj(data, containers):
                 get_containers_from_obj(val, containers)
             else:
                 containers.add(get_container(val))
-   
+
 def get_containers(sent):
-    args = list(sent.argset.args)  + sent.arglist + [sent.stdout_filename, sent.stderr_filename]
+    """get the container name from the pickle object.
+
+    :param sent: pypeliner job pickle object
+    :return: list with the container names
+    """
+    args = list(sent.argset.args)  + sent.arglist + [sent.stdout_storage, sent.stderr_storage]
     containers = set()
     get_containers_from_obj(args, containers)
-   
-    if None in containers: 
+
+    if None in containers:
         containers.remove(None)
     if '' in containers:
         containers.remove('')
 
     return containers
-    
 
 def print_batch_exception(batch_exception):
     """
