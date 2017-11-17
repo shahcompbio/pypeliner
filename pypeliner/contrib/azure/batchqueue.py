@@ -159,8 +159,8 @@ def create_pool(batch_service_client, pool_id, config):
     # configuration.
     # For more information about the virtual machine configuration, see:
     # https://azure.microsoft.com/documentation/articles/batch-linux-nodes/
-    account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-    account_key = os.environ['AZURE_STORAGE_KEY']
+    account_name = os.environ['AZURE_REF_STORAGE_ACCOUNT']
+    account_key = os.environ['AZURE_REF_STORAGE_KEY']
 
     start_vm_commands = _create_commands(config['create_vm_commands'])
     start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
