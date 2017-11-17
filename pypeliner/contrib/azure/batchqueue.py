@@ -206,7 +206,6 @@ def create_job(batch_service_client, job_id, pool_id):
     :param str job_id: The ID for the job.
     :param str pool_id: The ID for the pool.
     """
-    print('Creating job [{}]...'.format(job_id))
 
     job = batch.models.JobAddParameter(
         job_id,
