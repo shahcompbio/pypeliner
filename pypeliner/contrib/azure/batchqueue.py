@@ -409,6 +409,7 @@ def wait_for_pool_init(batch_client, pool_id):
                 return
         time.sleep(60)
 
+
 class AzureJobQueue(object):
     """ Azure batch job queue.
     """
@@ -454,7 +455,6 @@ class AzureJobQueue(object):
         self.compute_run_command = self.config['compute_run_command']
         self.compute_finish_commands = self.config['compute_finish_commands']
 
-        self.no_delete_tasks = self.config.get('no_delete_tasks', False)
         self.no_delete_pool = self.config.get('no_delete_pool', False)
         self.no_delete_job = self.config.get('no_delete_job', False)
 
@@ -499,13 +499,17 @@ class AzureJobQueue(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
+        self.logger.info('tear down')
+
         if not self.no_delete_pool:
+            self.logger.info("deleting pool {}".format(self.pool_id))
             try:
                 self.batch_client.pool.delete(self.pool_id)
             except Exception as e:
                 print(e)
 
         if not self.no_delete_job:
+            self.logger.info("deleting job {}".format(self.job_id))
             try:
                 self.batch_client.job.delete(self.job_id)
             except Exception as e:
@@ -613,25 +617,22 @@ class AzureJobQueue(object):
         # print("Monitoring all tasks for 'Completed' state, timeout in {}..."
         #       .format(timeout), end='')
         # 
-        while datetime.datetime.now() < timeout_expiration:
-            # print('.', end='')
-            sys.stdout.flush()
 
-            for task in self.batch_client.task.list(self.job_id):
-                if task.state == batchmodels.TaskState.completed:
-                    if self.no_delete_tasks:
-                        if task.id in self.job_names:
-                            return self.job_names.pop(task.id)
-                    else:
-                        self.batch_client.task.delete(self.job_id, task.id)
-                        if task.id in self.job_names:
-                            return self.job_names.pop(task.id)
-                        else:
-                            self.logger.warn('warning, unknown job {}'.format(task.id))
+        list_options = batchmodels.TaskListOptions(
+            filter="state eq 'completed'",
+        )
+
+        while datetime.datetime.now() < timeout_expiration:
+            for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
+                assert task.state == batchmodels.TaskState.completed
+                if task.id in self.job_names:
+                    return self.job_names[task.id]
+                else:
+                    self.logger.warn('warning, unknown job {}'.format(task.id))
+                    self._delete_task(task.id)
 
             time.sleep(5)
 
-        print()
         raise RuntimeError("ERROR: Tasks did not reach 'Completed' state within "
                            "timeout period of " + str(timeout))
 
@@ -665,39 +666,47 @@ class AzureJobQueue(object):
 
         """
 
+        task_id = self.job_task_ids.pop(name)
+        self.job_names.pop(task_id)
+        temps_dir = self.job_temps_dir.pop(name)
+        blobname_prefix = self.job_blobname_prefix.pop(name)
+
         download_blobs_from_container(
             self.blob_client,
             self.container_name,
-            self.job_temps_dir[name],
-            self.job_blobname_prefix[name])
+            temps_dir,
+            blobname_prefix)
 
-        job_after_filename = os.path.join(self.job_temps_dir[name], 'job_result.pickle')
+        job_after_filename = os.path.join(temps_dir, 'job_result.pickle')
 
         if not os.path.exists(job_after_filename):
-            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(self.job_temps_dir[name]))
+            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
 
         with open(job_after_filename, 'rb') as job_after_file:
             received = pickle.load(job_after_file)
 
         if received is None:
-            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(self.job_temps_dir[name]))
+            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
+
+        self._delete_task(task_id)
 
         return received
 
     @property
     def length(self):
         """ Number of jobs in the queue. """
-        num_tasks = 0
-        for task in self.batch_client.task.list(self.job_id):
-            if task.id not in self.job_names:
-                continue
-            num_tasks += 1
-        return num_tasks
+        return len(self.job_names)
 
     @property
     def empty(self):
         """ Queue is empty. """
         return self.length == 0
+
+    def _delete_task(self, task_id):
+        try:
+            self.batch_client.task.delete(self.job_id, task_id)
+        except Exception as e:
+            self.logger.warn('failed to delete ' + str(e))
 
 
 import pypeliner.tests.jobs
