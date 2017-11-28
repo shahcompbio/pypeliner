@@ -463,6 +463,10 @@ class AzureJobQueue(object):
         self.job_temps_dir = {}
         self.job_blobname_prefix = {}
 
+        self.most_recent_transition_time = None
+        self.completed_task_ids = set()
+        self.running_task_ids = set()
+
     debug_filenames = {
         'job stderr': 'stderr.txt',
         'job stdout': 'stdout.txt',
@@ -599,6 +603,8 @@ class AzureJobQueue(object):
             self.container_name, container_sas_token,
             self.job_blobname_prefix[name], self.blob_client)
 
+        self.running_task_ids.add(task_id)
+
     def wait(self, immediate=False):
         """ Wait for a job to finish.
 
@@ -610,31 +616,45 @@ class AzureJobQueue(object):
 
         """
 
-        timeout = datetime.timedelta(minutes=50)
+        timeout = datetime.timedelta(minutes=60)
 
-        timeout_expiration = datetime.datetime.now() + timeout
+        while True:
+            timeout_expiration = datetime.datetime.now() + timeout
 
-        # print("Monitoring all tasks for 'Completed' state, timeout in {}..."
-        #       .format(timeout), end='')
-        # 
+            while datetime.datetime.now() < timeout_expiration:
+                for task_id in self.running_task_ids.intersection(self.completed_task_ids):
+                    return self.job_names[task_id]
 
-        list_options = batchmodels.TaskListOptions(
-            filter="state eq 'completed'",
-        )
+                if not self._update_task_state():
+                    time.sleep(20)
 
-        while datetime.datetime.now() < timeout_expiration:
-            for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
-                assert task.state == batchmodels.TaskState.completed
-                if task.id in self.job_names:
-                    return self.job_names[task.id]
-                else:
-                    self.logger.warn('warning, unknown job {}'.format(task.id))
-                    self._delete_task(task.id)
+            self.logger.warn("Tasks did not reach 'Completed' state within timeout period of " + str(timeout))
 
-            time.sleep(5)
+    def _update_task_state(self):
+        """ Query azure and update task state. """
 
-        raise RuntimeError("ERROR: Tasks did not reach 'Completed' state within "
-                           "timeout period of " + str(timeout))
+        if self.most_recent_transition_time is None:
+            task_filter = "state eq 'completed'"
+        else:
+            assert self.most_recent_transition_time.tzname() == 'UTC'
+            filter_time = self.most_recent_transition_time - datetime.timedelta(seconds=10)
+            filter_time_string = filter_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            task_filter = "state eq 'completed' and stateTransitionTime gt DateTime'{}'".format(filter_time_string)
+
+        list_options = batchmodels.TaskListOptions(filter=task_filter)
+
+        updated = False
+        for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
+            assert task.state == batchmodels.TaskState.completed
+
+            self.completed_task_ids.add(task.id)
+
+            if self.most_recent_transition_time is None or task.state_transition_time > self.most_recent_transition_time:
+                self.most_recent_transition_time = task.state_transition_time
+
+            updated = True
+
+        return updated
 
     def _create_error_text(self, job_temp_dir):
         error_text = ['failed to execute']
@@ -688,7 +708,7 @@ class AzureJobQueue(object):
         if received is None:
             raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
 
-        self._delete_task(task_id)
+        self.running_task_ids.remove(task_id)
 
         return received
 
@@ -701,12 +721,6 @@ class AzureJobQueue(object):
     def empty(self):
         """ Queue is empty. """
         return self.length == 0
-
-    def _delete_task(self, task_id):
-        try:
-            self.batch_client.task.delete(self.job_id, task_id)
-        except Exception as e:
-            self.logger.warn('failed to delete ' + str(e))
 
 
 import pypeliner.tests.jobs
