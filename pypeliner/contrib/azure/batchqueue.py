@@ -187,7 +187,8 @@ def create_pool(batch_service_client, pool_id, config):
         start_task=batch.models.StartTask(
             command_line=wrap_commands_in_shell('linux', start_vm_commands),
             user_identity=batchmodels.UserIdentity(auto_user=user),
-            wait_for_success=True)
+            wait_for_success=True),
+        max_tasks_per_node=config['max_tasks_per_node'],
     )
 
     try:
