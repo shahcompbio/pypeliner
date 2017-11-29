@@ -616,7 +616,7 @@ class AzureJobQueue(object):
 
         """
 
-        timeout = datetime.timedelta(minutes=60)
+        timeout = datetime.timedelta(minutes=10)
 
         while True:
             timeout_expiration = datetime.datetime.now() + timeout
@@ -630,31 +630,43 @@ class AzureJobQueue(object):
 
             self.logger.warn("Tasks did not reach 'Completed' state within timeout period of " + str(timeout))
 
-    def _update_task_state(self):
+            self.logger.info("Most recent transition: {}".format(self.most_recent_transition_time))
+            task_filter = "state eq 'completed'"
+            list_options = batchmodels.TaskListOptions(filter=task_filter)
+            for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
+                if task.id not in self.completed_task_ids:
+                    self.logger.info("Missed completed task: {}".format(task.serialize()))
+
+    def _update_task_state(self, latest_transition_time=None):
         """ Query azure and update task state. """
 
-        if self.most_recent_transition_time is None:
-            task_filter = "state eq 'completed'"
-        else:
+        task_filter = "state eq 'completed'"
+
+        if self.most_recent_transition_time is not None:
             assert self.most_recent_transition_time.tzname() == 'UTC'
             filter_time = self.most_recent_transition_time - datetime.timedelta(seconds=10)
             filter_time_string = filter_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            task_filter = "state eq 'completed' and stateTransitionTime gt DateTime'{}'".format(filter_time_string)
+            task_filter += " and stateTransitionTime gt DateTime'{}'".format(filter_time_string)
 
-        list_options = batchmodels.TaskListOptions(filter=task_filter)
+        if latest_transition_time is not None:
+            assert latest_transition_time.tzname() == 'UTC'
+            filter_time_string = latest_transition_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            task_filter += " and stateTransitionTime lt DateTime'{}'".format(filter_time_string)
 
-        updated = False
-        for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
-            assert task.state == batchmodels.TaskState.completed
+        list_max_results = 1000
+        list_options = batchmodels.TaskListOptions(filter=task_filter, max_results=list_max_results)
+        tasks = list(self.batch_client.task.list(self.job_id, task_list_options=list_options))
+        sorted_transition_times = sorted([task.state_transition_time for task in tasks])
 
-            self.completed_task_ids.add(task.id)
+        if len(tasks) >= list_max_results:
+            mid_transition_time = sorted_transition_times[len(sorted_transition_times) / 2]
+            return self._update_task_state(latest_transition_time=mid_transition_time)
 
-            if self.most_recent_transition_time is None or task.state_transition_time > self.most_recent_transition_time:
-                self.most_recent_transition_time = task.state_transition_time
+        self.most_recent_transition_time = sorted_transition_times[-1]
 
-            updated = True
-
-        return updated
+        num_completed_before = len(self.completed_task_ids)
+        self.completed_task_ids.update([task.id for task in tasks])
+        return len(self.completed_task_ids) > num_completed_before
 
     def _create_error_text(self, job_temp_dir):
         error_text = ['failed to execute']
@@ -690,6 +702,7 @@ class AzureJobQueue(object):
         self.job_names.pop(task_id)
         temps_dir = self.job_temps_dir.pop(name)
         blobname_prefix = self.job_blobname_prefix.pop(name)
+        self.running_task_ids.remove(task_id)
 
         download_blobs_from_container(
             self.blob_client,
@@ -707,8 +720,6 @@ class AzureJobQueue(object):
 
         if received is None:
             raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
-
-        self.running_task_ids.remove(task_id)
 
         return received
 
