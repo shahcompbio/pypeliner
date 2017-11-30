@@ -634,9 +634,12 @@ class AzureJobQueue(object):
             self.logger.info("Most recent transition: {}".format(self.most_recent_transition_time))
             task_filter = "state eq 'completed'"
             list_options = batchmodels.TaskListOptions(filter=task_filter)
-            for task in self.batch_client.task.list(self.job_id, task_list_options=list_options):
+            tasks = list(self.batch_client.task.list(self.job_id, task_list_options=list_options))
+            self.logger.info("Received total {} tasks".format(len(tasks)))
+            for task in tasks:
                 if task.id not in self.completed_task_ids:
                     self.logger.info("Missed completed task: {}".format(task.serialize()))
+                    self.completed_task_ids.add(task.id)
 
     def _update_task_state(self, latest_transition_time=None):
         """ Query azure and update task state. """
@@ -645,8 +648,7 @@ class AzureJobQueue(object):
 
         if self.most_recent_transition_time is not None:
             assert self.most_recent_transition_time.tzname() == 'UTC'
-            filter_time = self.most_recent_transition_time - datetime.timedelta(seconds=10)
-            filter_time_string = filter_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            filter_time_string = self.most_recent_transition_time.strftime("%Y-%m-%dT%H:%M:%SZ")
             task_filter += " and stateTransitionTime gt DateTime'{}'".format(filter_time_string)
 
         if latest_transition_time is not None:
@@ -662,6 +664,9 @@ class AzureJobQueue(object):
         if len(tasks) >= list_max_results:
             mid_transition_time = sorted_transition_times[len(sorted_transition_times) / 2]
             return self._update_task_state(latest_transition_time=mid_transition_time)
+
+        elif len(tasks) == 0:
+            return False
 
         self.most_recent_transition_time = sorted_transition_times[-1]
 
