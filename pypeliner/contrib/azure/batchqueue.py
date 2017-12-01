@@ -17,66 +17,18 @@ import azure.batch.models as batchmodels
 
 import pypeliner.execqueue.base
 
+def get_container_names(dirs):
 
-def get_container(obj):
-    """get container name from the resource object
-
-    :param obj: pypeliner resource object
-    :rtype: str
-    :return: container name
-    """
-    if getattr(obj, 'resource', None):
-        obj = obj.resource.filename
-    elif getattr(obj, 'filename', None):
-        obj = obj.filename
-    else:
-        return
-
-    if isinstance(obj, str) and  '/' in obj:
-        if obj.startswith('/'):
-            obj = obj[1:]
-        obj = obj.split('/')[0]
-        return obj
-
-
-def get_containers_from_obj(data, containers):
-    """recurse into the resources object and extract
-    container names
-
-    :param data: pypeliner resource object
-    :param set containers: set with the container names
-    """
-    if getattr(data, 'inputs', None):
-        get_containers_from_obj(data.inputs, containers)
-    elif getattr(data, 'resources', None):
-        get_containers_from_obj(data.resources, containers)
-    else:
-        for val in data:
-            if isinstance(val, list):
-                get_containers_from_obj(val, containers)
-            elif getattr(val, 'inputs', None):
-                get_containers_from_obj(val, containers)
-            elif getattr(val, 'resources', None):
-                get_containers_from_obj(val, containers)
-            else:
-                containers.add(get_container(val))
-
-def get_containers(sent):
-    """get the container name from the pickle object.
-
-    :param sent: pypeliner job pickle object
-    :return: list with the container names
-    """
-    args = list(sent.argset.args)  + sent.arglist + [sent.stdout_storage, sent.stderr_storage]
     containers = set()
-    get_containers_from_obj(args, containers)
 
-    if None in containers:
-        containers.remove(None)
-    if '' in containers:
-        containers.remove('')
+    for dir in dirs:
+        if dir.startswith('/'):
+            dir = dir[1:]
+        dir = dir.split('/')[0]
+        containers.add(dir)
 
-    return containers
+    return list(set(containers))
+
 
 def print_batch_exception(batch_exception):
     """
@@ -574,7 +526,7 @@ class AzureJobQueue(object):
         run_script_filename = os.path.join(temps_dir, run_script_file_path)
         run_script_blobname = os.path.join(self.job_blobname_prefix[name], run_script_file_path)
 
-        containers = get_containers(sent)
+        containers = get_container_names(sent.dirs)
         mounts = ''
         for container in containers:
             mounts += ' -B $AZ_BATCH_TASK_WORKING_DIR/:/{container}/'.format(container=container)
