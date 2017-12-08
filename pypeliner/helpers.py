@@ -5,6 +5,7 @@ import shutil
 import hashlib
 import warnings
 import errno
+import json
 
 def pop_if(L, pred):
     for idx, item in enumerate(L):
@@ -22,6 +23,10 @@ class MultiLineFormatter(logging.Formatter):
     def format(self, record):
         header = logging.Formatter.format(self, record)
         return header + record.message.rstrip('\n').replace('\n', '\n\t')
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps(vars(record))
 
 def which(name):
     if os.environ.get('PATH', None) is not None:

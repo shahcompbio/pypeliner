@@ -96,8 +96,6 @@ import pypeliner.helpers
 import pypeliner.runskip
 import pypeliner.execqueue.factory
 
-from pythonjsonlogger.jsonlogger import JsonFormatter
-
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
 log_levels = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
@@ -206,7 +204,7 @@ class Pypeline(object):
         jsonlog = logging.FileHandler(json_log_file, mode='a')
         jsonlog.setLevel(self.config['loglevel'])
         jsonlog.addFilter(logging.Filter('pypeliner'))
-        logfmt=JsonFormatter()
+        logfmt=pypeliner.helpers.JsonFormatter()
         jsonlog.setFormatter(logfmt)
         logging.getLogger('').addHandler(jsonlog)
 

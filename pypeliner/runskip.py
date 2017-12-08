@@ -112,7 +112,7 @@ class InteractiveRunSkip(object):
         default_is_run_required, default_explaination = self.default(job)
 
         self._logger.info('job ' + job.displayname + ' default run: ' + str(default_is_run_required) + ' default explanation: ' + default_explaination,
-                          extra={'job_name': job.displayname, "explanation":default_explaination})
+                          extra={'job_name': job.displayname, "explanation":default_explaination, 'task_name': job.id[1]})
 
         runskip_cmd = RunSkipCmd(self.patterns)
 

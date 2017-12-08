@@ -108,9 +108,9 @@ class Scheduler(object):
         self._job_exc_dirs.add(exc_dir)
         
         self._logger.info('job ' + job.displayname + ' executing',
-                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
+                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing", 'task_name': job.id[1]})
         self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand,
-                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand})
+                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
@@ -118,7 +118,7 @@ class Scheduler(object):
         if not job.retry():
             return False
         self._logger.info('job ' + job.displayname + ' retry ' + str(job.retry_idx),
-                          extra={"id": job.displayname, "type":"job", "retry_count": job.retry_idx})
+                          extra={"id": job.displayname, "type":"job", "retry_count": job.retry_idx, 'task_name': job.id[1]})
         self._add_job(exec_queue, job)
         return True
 
@@ -130,13 +130,13 @@ class Scheduler(object):
                 return
             is_run_required, explaination = runskip(job)
             self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                              extra={"id": job.displayname, "type":"job", "explanation":explaination})
+                              extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
             if is_run_required:
                 self._add_job(exec_queue, job)
             else:
                 job.complete()
                 self._logger.info('job ' + job.displayname + ' skipped',
-                                  extra={"id": job.displayname, "type":"job", "status": "skipped"})
+                                  extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
 
     def _wait_next_job(self, exec_queue, workflow):
         name = exec_queue.wait()
@@ -150,7 +150,7 @@ class Scheduler(object):
             received = exec_queue.receive(name)
         except pypeliner.execqueue.base.ReceiveError as e:
             self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc(),
-                               extra={"id": job.displayname, "type":"job", "submit_error": traceback.format_exc()})
+                               extra={"id": job.displayname, "type":"job", "submit_error": traceback.format_exc(), 'task_name': job.id[1]})
             received = None
 
         if received is not None and job.id != received.id:
@@ -161,17 +161,17 @@ class Scheduler(object):
                 received.collect_logs()
             except Exception as e:
                 self._logger.error('job ' + job.displayname + ' collect logs error\n' + traceback.format_exc(),
-                                   extra={"id": job.displayname, "type":"job", "status":"error"})
+                                   extra={"id": job.displayname, "type":"job", "status":"error", 'task_name': job.id[1]})
             if received.finished:
                 self._logger.info('job ' + job.displayname + ' completed successfully',
-                                  extra={"id": job.displayname, "type":"job", "status": "success"})
+                                  extra={"id": job.displayname, "type":"job", "status": "success", 'task_name': job.id[1]})
             else:
                 self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
-                                   extra={"id": job.displayname, "type":"job", "status": "fail"})
+                                   extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
-                              extra={"id": job.displayname, "type":"job", "time": received.duration})
+                              extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
-                              extra={"id": job.displayname, "type":"job", "hostname": received.hostname})
+                              extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
 
         if received is None or not received.finished:
             if self._retry_job(exec_queue, job):
