@@ -118,6 +118,13 @@ def create_pool(batch_service_client, pool_id, config):
     start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
                             for command in start_vm_commands]
 
+
+    data_disks = []
+    if config['data_disk_sizes']:
+        for i,disk_size in enumerate(config['data_disk_sizes']):
+            data_disks.append(batchmodels.DataDisk(i, disk_size))
+
+
     sku_to_use, image_ref_to_use = \
         select_latest_verified_vm_image_with_node_agent_sku(
             batch_service_client,
@@ -131,7 +138,8 @@ def create_pool(batch_service_client, pool_id, config):
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use),
+            node_agent_sku_id=sku_to_use,
+            data_disks = data_disks),
         vm_size=config['pool_vm_size'],
         enable_auto_scale=True,
         auto_scale_formula=config['auto_scale_formula'],
