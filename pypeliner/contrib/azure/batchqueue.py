@@ -97,7 +97,7 @@ def _create_commands(commands_str):
     return filter(lambda a: len(a) > 0, commands_str.split('\n'))
 
 
-def create_pool(batch_service_client, pool_id, config):
+def create_pool(batch_service_client, blob_client, pool_id, config):
     """
     Creates a pool of compute nodes with the specified OS settings.
 
@@ -121,9 +121,21 @@ def create_pool(batch_service_client, pool_id, config):
 
     data_disks = []
     if config['data_disk_sizes']:
-        for i,disk_size in enumerate(config['data_disk_sizes']):
+        for i,disk_size in config['data_disk_sizes'].iteritems():
             data_disks.append(batchmodels.DataDisk(i, disk_size))
 
+    resource_files = []
+
+    if config['start_resources']:
+        for vm_file_name, (container_name, blob_name) in config['start_resources'].iteritems():
+            container_sas_token = get_container_sas_token(
+                blob_client,
+                container_name,
+                azureblob.BlobPermissions.READ)
+            output_sas_url = blob_client.make_blob_url(
+                container_name, blob_name,
+                sas_token=container_sas_token)
+            resource_files.append(batch.models.ResourceFile(output_sas_url, vm_file_name))
 
     sku_to_use, image_ref_to_use = \
         select_latest_verified_vm_image_with_node_agent_sku(
@@ -147,6 +159,7 @@ def create_pool(batch_service_client, pool_id, config):
         start_task=batch.models.StartTask(
             command_line=wrap_commands_in_shell('linux', start_vm_commands),
             user_identity=batchmodels.UserIdentity(auto_user=user),
+            resource_files=resource_files,
             wait_for_success=True),
         max_tasks_per_node=config['max_tasks_per_node'],
     )
@@ -296,6 +309,7 @@ def add_task(batch_service_client, job_id, task_id, input_file,
         upload_options = batchmodels.OutputFileUploadOptions('taskCompletion')
         return batchmodels.OutputFile(filename, destination, upload_options)
 
+
     task = batch.models.TaskAddParameter(
         task_id,
         wrap_commands_in_shell('linux', commands),
@@ -441,6 +455,7 @@ class AzureJobQueue(object):
             self.logger.info("creating pool {}".format(self.pool_id))
             create_pool(
                 self.batch_client,
+                self.blob_client,
                 self.pool_id,
                 self.config)
 
@@ -669,6 +684,7 @@ class AzureJobQueue(object):
         temps_dir = self.job_temps_dir.pop(name)
         blobname_prefix = self.job_blobname_prefix.pop(name)
         self.running_task_ids.remove(task_id)
+
 
         download_blobs_from_container(
             self.blob_client,
