@@ -18,7 +18,7 @@ import azure.batch.models as batchmodels
 import pypeliner.execqueue.base
 
 
-def unpack_path(self, filename):
+def unpack_path(filename):
     if filename.startswith('/'):
         filename = filename[1:]
     filename = filename.split('/')
