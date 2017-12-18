@@ -17,6 +17,15 @@ import azure.batch.models as batchmodels
 
 import pypeliner.execqueue.base
 
+
+def unpack_path(self, filename):
+    if filename.startswith('/'):
+        filename = filename[1:]
+    filename = filename.split('/')
+    container_name = filename[0]
+    filename = '/'.join(filename[1:])
+    return container_name, filename
+
 def get_container_names(dirs):
 
     containers = set()
@@ -127,7 +136,8 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     resource_files = []
 
     if config['start_resources']:
-        for vm_file_name, (container_name, blob_name) in config['start_resources'].iteritems():
+        for vm_file_name, blob_path in config['start_resources'].iteritems():
+            container_name, blob_name = unpack_path(blob_path)
             container_sas_token = get_container_sas_token(
                 blob_client,
                 container_name,
