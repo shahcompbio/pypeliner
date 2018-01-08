@@ -16,7 +16,7 @@ import pypeliner.identifiers
 import pypeliner.deep
 import pypeliner.storage
 
-from guppy import hpy
+import resource
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -238,15 +238,17 @@ class JobMemoryTracker(object):
         self._start = None
         self._finish = None
     def __enter__(self):
-        self._start = hpy()
+        self._start = 0
     def __exit__(self, exc_type, exc_value, traceback):
-        self._finish = self._start.heap()
+        # get memory usage for linux systems
+        corememusage = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / (1024*1024)
+        subprocmemusage = float(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / (1024*1024)
+        self._finish = round(corememusage + subprocmemusage, 2)
     @property
     def memoryused(self):
         if self._finish is None or self._start is None:
             return None
-        return self._finish.size
-    
+        return self._finish
 
 
 def resolve_arg(arg):
