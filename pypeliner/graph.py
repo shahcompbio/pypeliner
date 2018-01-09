@@ -75,7 +75,11 @@ class DependencyGraph:
         # Create the graph
         G = networkx.DiGraph()
         for job in self.jobs.itervalues():
-            job_node = ('job', job.id)
+            #only track job names, ignore the axes value.
+            #this will keep DAG smaller and speed up cycle testing
+            job_node = ('job', job.id[1])
+            if G.has_node(job_node):
+                continue
             G.add_node(job_node, job=job)
             for input in job.inputs:
                 resource_node = ('resource', input.id)
