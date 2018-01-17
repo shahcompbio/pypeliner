@@ -105,6 +105,8 @@ def select_latest_verified_vm_image_with_node_agent_sku(
 def _create_commands(commands_str):
     return filter(lambda a: len(a) > 0, commands_str.split('\n'))
 
+def generate_blob_url(blob_client, container_name, blob_name):
+    return blob_client.make_blob_url(container_name, blob_name)
 
 def create_pool(batch_service_client, blob_client, pool_id, config):
     """
@@ -138,14 +140,8 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     if config['start_resources']:
         for vm_file_name, blob_path in config['start_resources'].iteritems():
             container_name, blob_name = unpack_path(blob_path)
-            container_sas_token = get_container_sas_token(
-                blob_client,
-                container_name,
-                azureblob.BlobPermissions.READ)
-            output_sas_url = blob_client.make_blob_url(
-                container_name, blob_name,
-                sas_token=container_sas_token)
-            resource_files.append(batch.models.ResourceFile(output_sas_url, vm_file_name))
+            res_url = generate_blob_url(blob_client, container_name, blob_name)
+            resource_files.append(batch.models.ResourceFile(res_url, vm_file_name))
 
     sku_to_use, image_ref_to_use = \
         select_latest_verified_vm_image_with_node_agent_sku(
