@@ -244,7 +244,6 @@ class TempInputObjArg(Arg):
         self.obj = self.resource.get_obj()
         if self.func is not None:
             self.obj = self.func(self.obj)
-        del self.func
         return self.obj
 
 

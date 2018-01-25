@@ -1,7 +1,7 @@
 import inspect
 import logging
 import os
-import pickle
+import dill as pickle
 import sys
 import time
 import tempfile
