@@ -386,10 +386,18 @@ def wait_for_pool_init(batch_client, pool_id):
         nodes = list(batch_client.compute_node.list(pool_id))
         for node in nodes:
             state = batch_client.compute_node.get(pool_id, node.id).state
-            if state.value in ['idle','running']:
+            if state.value not in ['creating','starting']:
                 return
+
         time.sleep(60)
 
+def check_pool_for_failed_nodes(batch_client, pool_id):
+    nodes = list(batch_client.compute_node.list(pool_id))
+    states = set(batch_client.compute_node.get(pool_id, node.id).state.value for node in nodes)
+
+    # if all nodes have failed tasks
+    if set(["startTaskFailed"]) == states:
+        raise Exception("All nodes have a failed start task, please fix the issues and try again")
 
 class AzureJobQueue(object):
     """ Azure batch job queue.
@@ -468,6 +476,8 @@ class AzureJobQueue(object):
             # wait for nodes startup
             self.logger.info("waiting for pool {}".format(self.pool_id))
             wait_for_pool_init(self.batch_client, self.pool_id)
+
+        check_pool_for_failed_nodes(self.batch_client, self.pool_id)
 
         # Create a new job if needed
         job_ids = set([job.id for job in self.batch_client.job.list()])
@@ -609,6 +619,8 @@ class AzureJobQueue(object):
 
                 if not self._update_task_state():
                     time.sleep(20)
+
+            check_pool_for_failed_nodes(self.batch_client, self.pool_id)
 
             self.logger.warn("Tasks did not reach 'Completed' state within timeout period of " + str(timeout))
 
