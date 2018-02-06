@@ -382,6 +382,11 @@ def _random_string(length):
 
 
 def wait_for_pool_init(batch_client, pool_id):
+    """
+    wait for the pool to initialize
+    :param batch_client: A batch    service client
+    """
+
     while True:
         nodes = list(batch_client.compute_node.list(pool_id))
         for node in nodes:
@@ -393,11 +398,14 @@ def wait_for_pool_init(batch_client, pool_id):
 
 def check_pool_for_failed_nodes(batch_client, pool_id):
     nodes = list(batch_client.compute_node.list(pool_id))
-    states = set(batch_client.compute_node.get(pool_id, node.id).state.value for node in nodes)
 
-    # if all nodes have failed tasks
-    if set(["startTaskFailed"]) == states:
-        raise Exception("All nodes have a failed start task, please fix the issues and try again")
+    for node in nodes:
+        status = batch_client.compute_node.get(pool_id, node.id).state.value
+
+        if status in ["idle", "running"]:
+            break
+
+    raise Exception("All nodes are in failed state, please fix the issues and try again")
 
 class AzureJobQueue(object):
     """ Azure batch job queue.
