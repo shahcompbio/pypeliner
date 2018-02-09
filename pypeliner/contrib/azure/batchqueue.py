@@ -391,7 +391,7 @@ def wait_for_pool_init(batch_client, pool_id):
         nodes = list(batch_client.compute_node.list(pool_id))
         for node in nodes:
             state = batch_client.compute_node.get(pool_id, node.id).state
-            if state.value not in ['creating','starting']:
+            if state.value not in ['starting','waitingForStartTask']:
                 return
 
         time.sleep(60)
@@ -401,9 +401,8 @@ def check_pool_for_failed_nodes(batch_client, pool_id):
 
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
-
         if status in ["idle", "running"]:
-            break
+            return
 
     raise Exception("All nodes are in failed state, please fix the issues and try again")
 
@@ -423,9 +422,7 @@ class AzureJobQueue(object):
 
         self.logger = logging.getLogger('pypeliner.execqueue.azure_batch')
 
-        run_id = _random_string(8)
-        self.pool_id = self.config.get('pool_id_override', 'pypeliner_' + run_id)
-        self.job_id = self.config.get('job_id_override', 'pypeliner_' + run_id)
+        self.run_id = _random_string(8)
 
         self.logger.info('creating blob client')
 
@@ -472,33 +469,48 @@ class AzureJobQueue(object):
     }
 
     def __enter__(self):
-        # Create a new pool if needed
-        if not self.batch_client.pool.exists(self.pool_id):
-            self.logger.info("creating pool {}".format(self.pool_id))
-            create_pool(
-                self.batch_client,
-                self.blob_client,
-                self.pool_id,
-                self.config)
+        pools = self.config["pools"]
 
+        self.pool_job_map = {}
+
+        #start all pools
+        for pool_id, pool_params in pools.iteritems():
+            # Create a new pool if needed
+            if not self.batch_client.pool.exists(pool_id):
+                self.logger.info("creating pool {}".format(pool_id))
+                create_pool(
+                    self.batch_client,
+                    self.blob_client,
+                    pool_id,
+                    pool_params)
+
+        #wait until all pools are ready, create job for each pool
+        for pool_id, pool_params in pools.iteritems():
             # wait for nodes startup
-            self.logger.info("waiting for pool {}".format(self.pool_id))
-            wait_for_pool_init(self.batch_client, self.pool_id)
+            self.logger.info("waiting for pool {}".format(pool_id))
+            wait_for_pool_init(self.batch_client, pool_id)
+            check_pool_for_failed_nodes(self.batch_client, pool_id)
 
-        check_pool_for_failed_nodes(self.batch_client, self.pool_id)
 
-        # Create a new job if needed
-        job_ids = set([job.id for job in self.batch_client.job.list()])
-        if self.job_id not in job_ids:
-            self.logger.info("creating job {}".format(self.job_id))
-            create_job(
-                self.batch_client,
-                self.job_id,
-                self.pool_id)
+            # Create a new job if needed
+            if 'job_id_override' in pool_params:
+                 job_id = pool_params['job_id_override']
+            else:
+                 job_id = 'pypeliner_{}_{}'.format(pool_id, self.run_id)
 
-        # Delete previous tasks
-        for task in self.batch_client.task.list(self.job_id):
-            self.batch_client.task.delete(self.job_id, task.id)
+            self.pool_job_map[pool_id] = job_id
+
+            job_ids = set([job.id for job in self.batch_client.job.list()])
+            if job_id not in job_ids:
+                self.logger.info("creating job {}".format(job_id))
+                create_job(
+                    self.batch_client,
+                    job_id,
+                    pool_id)
+    
+            # Delete previous tasks
+            for task in self.batch_client.task.list(job_id):
+                self.batch_client.task.delete(job_id, task.id)
 
         return self
     
@@ -506,18 +518,21 @@ class AzureJobQueue(object):
         self.logger.info('tear down')
 
         if not self.no_delete_pool:
-            self.logger.info("deleting pool {}".format(self.pool_id))
-            try:
-                self.batch_client.pool.delete(self.pool_id)
-            except Exception as e:
-                print(e)
+
+            for pool_id, _ in self.pool_job_map.iteritems():
+                self.logger.info("deleting pool {}".format(pool_id))
+                try:
+                    self.batch_client.pool.delete(pool_id)
+                except Exception as e:
+                    print(e)
 
         if not self.no_delete_job:
-            self.logger.info("deleting job {}".format(self.job_id))
-            try:
-                self.batch_client.job.delete(self.job_id)
-            except Exception as e:
-                print(e)
+            for _, job_id in self.pool_job_map.iteritems():
+                self.logger.info("deleting job {}".format(job_id))
+                try:
+                    self.batch_client.job.delete(job_id)
+                except Exception as e:
+                    print(e)
 
     def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
@@ -529,6 +544,9 @@ class AzureJobQueue(object):
             temps_dir (str): unique path for strong job temps
 
         """
+
+        job_id = self.pool_job_map[ctx.get("pool_id", "default")]
+
 
         task_id = str(uuid.uuid1())
         self.logger.info('assigning task_id {} to job {}'.format(task_id, name))
@@ -598,7 +616,7 @@ class AzureJobQueue(object):
 
         # Add the task to the job
         add_task(
-            self.batch_client, self.job_id, task_id,
+            self.batch_client, job_id, task_id,
             job_before_file, run_script_file,
             self.container_name, container_sas_token,
             self.job_blobname_prefix[name], self.blob_client)
@@ -628,19 +646,20 @@ class AzureJobQueue(object):
                 if not self._update_task_state():
                     time.sleep(20)
 
-            check_pool_for_failed_nodes(self.batch_client, self.pool_id)
-
             self.logger.warn("Tasks did not reach 'Completed' state within timeout period of " + str(timeout))
 
             self.logger.info("Most recent transition: {}".format(self.most_recent_transition_time))
             task_filter = "state eq 'completed'"
             list_options = batchmodels.TaskListOptions(filter=task_filter)
-            tasks = list(self.batch_client.task.list(self.job_id, task_list_options=list_options))
-            self.logger.info("Received total {} tasks".format(len(tasks)))
-            for task in tasks:
-                if task.id not in self.completed_task_ids:
-                    self.logger.info("Missed completed task: {}".format(task.serialize()))
-                    self.completed_task_ids.add(task.id)
+
+            for pool_id, job_id in self.pool_job_map.iteritems():
+                check_pool_for_failed_nodes(self.batch_client, pool_id)
+                tasks = list(self.batch_client.task.list(job_id, task_list_options=list_options))
+                self.logger.info("Received total {} tasks".format(len(tasks)))
+                for task in tasks:
+                    if task.id not in self.completed_task_ids:
+                        self.logger.info("Missed completed task: {}".format(task.serialize()))
+                        self.completed_task_ids.add(task.id)
 
     def _update_task_state(self, latest_transition_time=None):
         """ Query azure and update task state. """
@@ -659,7 +678,10 @@ class AzureJobQueue(object):
 
         list_max_results = 1000
         list_options = batchmodels.TaskListOptions(filter=task_filter, max_results=list_max_results)
-        tasks = list(self.batch_client.task.list(self.job_id, task_list_options=list_options))
+
+        tasks = []
+        for _, job_id in self.pool_job_map.iteritems():
+            tasks += list(self.batch_client.task.list(job_id, task_list_options=list_options))
         sorted_transition_times = sorted([task.state_transition_time for task in tasks])
 
         if len(tasks) >= list_max_results:
