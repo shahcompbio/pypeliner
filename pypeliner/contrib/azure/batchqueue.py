@@ -220,7 +220,7 @@ def create_blob_batch_resource(block_blob_client, container_name, file_path, blo
         container_name,
         blob_name,
         permission=azureblob.BlobPermissions.READ,
-        expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=2))
+        expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=120))
 
     sas_url = block_blob_client.make_blob_url(container_name,
                                               blob_name,
@@ -263,7 +263,7 @@ def get_container_sas_token(block_blob_client,
         block_blob_client.generate_container_shared_access_signature(
             container_name,
             permission=blob_permissions,
-            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=24))
+            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=120))
 
     return container_sas_token
 
