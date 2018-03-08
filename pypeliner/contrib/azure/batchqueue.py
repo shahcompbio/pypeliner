@@ -391,7 +391,7 @@ def wait_for_pool_init(batch_client, pool_id):
     while True:
         nodes = list(batch_client.compute_node.list(pool_id))
         # if no nodes after 2 mins, pool was probably started with 0 nodes
-        if not nodes and i:
+        if not nodes and i>2:
             return
 
         for node in nodes:
