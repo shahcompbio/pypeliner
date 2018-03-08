@@ -387,21 +387,31 @@ def wait_for_pool_init(batch_client, pool_id):
     :param batch_client: A batch    service client
     """
 
+    i=0
     while True:
         nodes = list(batch_client.compute_node.list(pool_id))
+        # if no nodes after 2 mins, pool was probably started with 0 nodes
+        if not nodes and i:
+            return
+
         for node in nodes:
             state = batch_client.compute_node.get(pool_id, node.id).state
             if state.value not in ['starting','waitingForStartTask']:
                 return
 
         time.sleep(60)
+        i+=1
 
 def check_pool_for_failed_nodes(batch_client, pool_id):
     nodes = list(batch_client.compute_node.list(pool_id))
 
+    #pool with 0 nodes
+    if not nodes:
+        return
+
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
-        if status in ["idle", "running"]:
+        if status in ["idle", "running", "preempted"]:
             return
 
     raise Exception("All nodes are in failed state, please fix the issues and try again")
@@ -545,7 +555,13 @@ class AzureJobQueue(object):
 
         """
 
-        job_id = self.pool_job_map[ctx.get("pool_id", "default")]
+        if "pool_id" not in ctx:
+            pool=self.pool_job_map.keys()[0]
+        else:
+            pool = ctx["pool_id"]
+
+
+        job_id = self.pool_job_map[pool]
 
 
         task_id = str(uuid.uuid1())
