@@ -416,6 +416,16 @@ def check_pool_for_failed_nodes(batch_client, pool_id):
 
     raise Exception("All nodes are in failed state, please fix the issues and try again")
 
+def wait_for_job_deletion(batch_client, job_id):
+    while True:
+        try:
+            job = batch_client.job.get(job_id)
+        except batchmodels.batch_error.BatchErrorException:
+            break
+
+        print ("waiting for job deletion, job is "+job.state.value)
+        time.sleep(30)
+
 class AzureJobQueue(object):
     """ Azure batch job queue.
     """
@@ -543,6 +553,8 @@ class AzureJobQueue(object):
                     self.batch_client.job.delete(job_id)
                 except Exception as e:
                     print(e)
+                wait_for_job_deletion(self.batch_client,  job_id)
+
 
     def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
