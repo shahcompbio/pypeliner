@@ -396,13 +396,14 @@ def wait_for_pool_init(batch_client, pool_id):
 
         for node in nodes:
             state = batch_client.compute_node.get(pool_id, node.id).state
-            if state.value not in ['starting','waitingForStartTask']:
+
+            if state.value not in ['starting','waitingforstarttask']:
                 return
 
         time.sleep(60)
         i+=1
 
-def check_pool_for_failed_nodes(batch_client, pool_id):
+def check_pool_for_failed_nodes(batch_client, pool_id, logger):
     nodes = list(batch_client.compute_node.list(pool_id))
 
     #pool with 0 nodes
@@ -414,16 +415,16 @@ def check_pool_for_failed_nodes(batch_client, pool_id):
         if status in ["idle", "running", "preempted"]:
             return
 
-    raise Exception("All nodes are in failed state, please fix the issues and try again")
+    logger.warning("All nodes are in failed state, please fix the issues and try again")
 
-def wait_for_job_deletion(batch_client, job_id):
+def wait_for_job_deletion(batch_client, job_id, logger):
     while True:
         try:
             job = batch_client.job.get(job_id)
         except batchmodels.batch_error.BatchErrorException:
             break
 
-        print ("waiting for job deletion, job is "+job.state.value)
+        logger.info("waiting for job deletion, job is "+job.state.value)
         time.sleep(30)
 
 class AzureJobQueue(object):
@@ -509,7 +510,7 @@ class AzureJobQueue(object):
             # wait for nodes startup
             self.logger.info("waiting for pool {}".format(pool_id))
             wait_for_pool_init(self.batch_client, pool_id)
-            check_pool_for_failed_nodes(self.batch_client, pool_id)
+            check_pool_for_failed_nodes(self.batch_client, pool_id, self.logger)
 
 
             # Create a new job if needed
@@ -553,7 +554,7 @@ class AzureJobQueue(object):
                     self.batch_client.job.delete(job_id)
                 except Exception as e:
                     print(e)
-                wait_for_job_deletion(self.batch_client,  job_id)
+                wait_for_job_deletion(self.batch_client,  job_id, self.logger)
 
 
     def send(self, ctx, name, sent, temps_dir):
@@ -681,7 +682,7 @@ class AzureJobQueue(object):
             list_options = batchmodels.TaskListOptions(filter=task_filter)
 
             for pool_id, job_id in self.pool_job_map.iteritems():
-                check_pool_for_failed_nodes(self.batch_client, pool_id)
+                check_pool_for_failed_nodes(self.batch_client, pool_id, self.logger)
                 tasks = list(self.batch_client.task.list(job_id, task_list_options=list_options))
                 self.logger.info("Received total {} tasks".format(len(tasks)))
                 for task in tasks:
