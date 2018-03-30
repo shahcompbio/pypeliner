@@ -9,7 +9,11 @@ class Arg(object):
     is_split = False
     def get_inputs(self):
         return []
+    def get_merge_inputs(self):
+        return []
     def get_outputs(self):
+        return []
+    def get_split_outputs(self):
         return []
     def resolve(self):
         return None
@@ -99,7 +103,7 @@ class MergeTemplateArg(Arg):
                 self.formatted[node[-1][1]] = self.template.format(**dict(node))
             else:
                 self.formatted[node[-1][1]] = self.name.format(**dict(node))
-    def get_inputs(self):
+    def get_merge_inputs(self):
         return self.merge_inputs
     def resolve(self):
         return self.formatted
@@ -145,10 +149,13 @@ class MergeFileArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename)
             self.resources.append(resource)
             self.inputs.append(resource)
+        self.merge_inputs = []
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
-            self.inputs.append(dependency)
+            self.merge_inputs.append(dependency)
     def get_inputs(self):
         return self.inputs
+    def get_merge_inputs(self):
+        return self.merge_inputs
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
@@ -206,17 +213,18 @@ class SplitFileArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename, direct_write=kwargs['direct_write'])
             self.resources.append(resource)
             self.outputs.append(resource)
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
-            self.outputs.append(dependency)
+        self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
         filename_creator = db.get_user_filename_creator(
             self.name, self.node.axes + self.axes, fnames=self.fnames, template=self.template)
         self.filename_callback = UserFilenameCallback(
             db.file_storage, self.name, self.node, self.axes, self.direct_write, filename_creator)
-    def get_inputs(self):
+    def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
         return self.outputs
+    def get_split_outputs(self):
+        return self.split_outputs
     def resolve(self):
         return self.filename_callback
     def updatedb(self, db):
@@ -263,14 +271,12 @@ class TempMergeObjArg(Arg,SplitMergeArg):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempObjManager(db.obj_storage, self.name, node, filename)
             self.resources.append(resource)
-        self.merge_inputs = []
-        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
-            self.merge_inputs.append(dependency)
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node))
     def get_inputs(self):
         for resource in self.resources:
             yield resource.input
-        for dependency in self.merge_inputs:
-            yield dependency
+    def get_merge_inputs(self):
+        return self.merge_inputs
     def resolve(self):
         self.resolved = dict()
         for resource in self.resources:
@@ -317,19 +323,15 @@ class TempSplitObjArg(Arg,SplitMergeArg):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempObjManager(db.obj_storage, self.name, node, filename)
             self.resources.append(resource)
-        self.merge_inputs = []
-        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
-            self.merge_inputs.append(dependency)
-        self.split_outputs = []
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
-            self.split_outputs.append(dependency)
-    def get_inputs(self):
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
+        self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
+    def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
         for resource in self.resources:
             yield resource.output
-        for dependency in self.split_outputs:
-            yield dependency
+    def get_split_outputs(self):
+        return self.split_outputs
     def resolve(self):
         return self
     def updatedb(self, db):
@@ -380,10 +382,11 @@ class TempMergeFileArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename)
             self.resources.append(resource)
             self.inputs.append(resource)
-        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
-            self.inputs.append(dependency)
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node))
     def get_inputs(self):
         return self.inputs
+    def get_merge_inputs(self):
+        return self.merge_inputs
     def resolve(self):
         resolved = dict()
         for resource in self.resources:
@@ -483,17 +486,19 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename, direct_write=kwargs['direct_write'])
             self.resources.append(resource)
             self.outputs.append(resource)
-        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
-            self.inputs.append(dependency)
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
-            self.outputs.append(dependency)
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
+        self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
         self.filename_callback = TempFilenameCallback(
             db.file_storage, self.name, self.node, self.axes, self.direct_write,
             db.get_temp_filename_creator())
     def get_inputs(self):
         return self.inputs
+    def get_merge_inputs(self):
+        return self.merge_inputs
     def get_outputs(self):
         return self.outputs
+    def get_split_outputs(self):
+        return self.split_outputs
     def resolve(self):
         return self.filename_callback
     def updatedb(self, db):
@@ -525,14 +530,12 @@ class InputChunksArg(Arg):
     def __init__(self, db, name, node, axis, **kwargs):
         self.node = node
         self.axis = axis
-        self.inputs = []
-        for dependency in db.nodemgr.get_merge_inputs(self.axis, self.node):
-            self.inputs.append(dependency)
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axis, self.node))
         self.chunks = list(db.nodemgr.retrieve_chunks(self.axis, self.node))
         if len(self.axis) == 1:
             self.chunks = [chunk[0] for chunk in self.chunks]
-    def get_inputs(self):
-        return self.inputs
+    def get_merge_inputs(self):
+        return self.merge_inputs
     def resolve(self):
         return self.chunks
 
@@ -548,16 +551,12 @@ class OutputChunksArg(Arg,SplitMergeArg):
         self.axes = axes
         self.axes_origin = self.get_axes_origin(axes_origin)
         self.is_split = len(self.axes_origin) != 0
-        self.inputs = []
-        self.outputs = []
-        for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin):
-            self.inputs.append(dependency)
-        for dependency in db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin):
-            self.outputs.append(dependency)
-    def get_inputs(self):
-        return self.inputs
-    def get_outputs(self):
-        return self.outputs
+        self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
+        self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
+    def get_merge_inputs(self):
+        return self.merge_inputs
+    def get_split_outputs(self):
+        return self.split_outputs
     def resolve(self):
         return self
     def updatedb(self, db):

@@ -216,6 +216,35 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, ['0aline1\n', '1aline2\n', '2aline3\n', '3aline4\n', '4aline5\n', '5aline6\n', '6aline7\n', '7aline8\n'])
 
+    def test_simple_split_files(self):
+
+        workflow = pypeliner.workflow.Workflow()
+
+        workflow.transform(
+            name='split_files',
+            func=split_2_file_byline,
+            args=(
+                mgd.InputFile(self.input_filename),
+                mgd.TempOutputFile('output', 'split'),
+                mgd.TempOutputFile('output2', 'split', axes_origin=[]),
+            ),
+        )
+
+        workflow.transform(
+            name='merge_files',
+            func=merge_2_file_byline,
+            args=(
+                mgd.TempInputFile('output', 'split'),
+                mgd.TempInputFile('output2', 'split'),
+                mgd.OutputFile(self.output_filename)))
+
+        self.run_workflow(workflow)
+
+        with open(self.output_filename, 'r') as output_file:
+            output = output_file.readlines()
+
+        self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n', 'line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8\n'])
+
     def test_dict_args(self):
 
         workflow = pypeliner.workflow.Workflow()

@@ -29,6 +29,10 @@ def split_file_byline(in_filename, lines_per_file, out_filename_callback, max_fi
                 for line in lines:
                     out_file.write(line)
 
+def split_2_file_byline(in_filename, out_filename_1, out_filename_2):
+    split_file_byline(in_filename, 2, out_filename_1)
+    split_file_byline(in_filename, 2, out_filename_2)
+
 def do_file_stuff(in_filename, out_filename, toadd):
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
         line_number = 0
@@ -42,6 +46,14 @@ def merge_file_byline(in_filenames, out_filename):
             with open(in_filename, 'r') as in_file:
                 for line in in_file.readlines():
                     out_file.write(line)
+
+def merge_2_file_byline(in_filenames_1, in_filenames_2, out_filename):
+    with open(out_filename, 'w') as out_file:
+        for in_filenames in (in_filenames_1, in_filenames_2):
+            for id, in_filename in sorted(in_filenames.items()):
+                with open(in_filename, 'r') as in_file:
+                    for line in in_file.readlines():
+                        out_file.write(line)
 
 def split_by_line(stf):
     return dict([(ind,stuff(value)) for ind,value in enumerate(stf.some_string.split('\n'))])

@@ -83,17 +83,24 @@ class JobInstance(object):
         return arg, True
     def init_inputs_outputs(self):
         self.inputs = list()
+        self.outputs = list()
+        merge_inputs = list()
+        split_outputs = list()
         for arg in self.arglist:
             if isinstance(arg, pypeliner.arguments.Arg):
-                for input in arg.get_inputs():
-                    self.inputs.append(input)
+                self.inputs.extend(arg.get_inputs())
+                self.outputs.extend(arg.get_outputs())
+                merge_inputs.extend(arg.get_merge_inputs())
+                split_outputs.extend(arg.get_split_outputs())
+        # A dependency that is both a merge input and split output
+        # is only an output
+        split_output_ids = set([a.id for a in split_outputs])
+        for input_ in merge_inputs:
+            if input_.id not in split_output_ids:
+                self.inputs.append(input_)
+        self.outputs.extend(split_outputs)
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             self.inputs.append(node_input)
-        self.outputs = list()
-        for arg in self.arglist:
-            if isinstance(arg, pypeliner.arguments.Arg):
-                for output in arg.get_outputs():
-                    self.outputs.append(output)
     @property
     def id(self):
         return (self.node, self.job_def.name)
