@@ -52,11 +52,23 @@ class Resource(Dependency):
         raise NotImplementedError
     def touch(self):
         raise NotImplementedError
+    def allocate(self):
+        self.store.allocate()
+        for store in self.extra_stores:
+            store.allocate()
+    def push(self):
+        self.store.push()
+        for store in self.extra_stores:
+            store.push()
+    def pull(self):
+        self.store.pull()
+        for store in self.extra_stores:
+            store.pull()
 
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, storage, name, node, filename, direct_write=False):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
         self.name = name
         self.node = node
         self.filename = filename
@@ -68,6 +80,10 @@ class UserResource(Resource):
             self.store = None
         else:
             self.store = storage.create_store(self.filename, is_temp=False, direct_write=direct_write)
+        self.extra_stores = []
+        if extensions is not None:
+            for ext in extensions:
+                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write))
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
@@ -87,22 +103,20 @@ class UserResource(Resource):
         if not self.exists:
             raise Exception('cannot touch missing user output')
         self.store.touch()
-    def allocate(self):
-        self.store.allocate()
-    def push(self):
-        self.store.push()
-    def pull(self):
-        self.store.pull()
 
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, storage, name, node, filename, direct_write=False):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
         self.name = name
         self.node = node
         self.filename = filename
         self.is_temp = True
         self.store = storage.create_store(self.filename, is_temp=True, direct_write=direct_write)
+        self.extra_stores = []
+        if extensions is not None:
+            for ext in extensions:
+                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write))
     @property
     def exists(self):
         return self.store.get_exists()
@@ -118,12 +132,6 @@ class TempFileResource(Resource):
         if self.exists:
             logging.getLogger('pypeliner.resources').debug('removing ' + self.filename)
             self.store.delete()
-    def allocate(self):
-        self.store.allocate()
-    def push(self):
-        self.store.push()
-    def pull(self):
-        self.store.pull()
 
 
 class TempObjResource(Resource):

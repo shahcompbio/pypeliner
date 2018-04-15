@@ -24,12 +24,15 @@ class OutputMissingException(Exception):
 
 
 class RegularFile(object):
-    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, direct_write=True):
+    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, extension=None, direct_write=True):
         self.filename = filename
         self.exists_cache = exists_cache
         self.createtime_cache = createtime_cache
         self.createtime_save = createtime_save
         self.write_filename = filename + ('.tmp', '')[direct_write]
+        if extension is not None:
+            self.filename = filename + extension
+            self.write_filename = self.write_filename + extension
     def allocate(self):
         pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
