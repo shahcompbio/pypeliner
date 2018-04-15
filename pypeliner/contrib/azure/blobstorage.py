@@ -80,7 +80,9 @@ class AzureBlobStorage(object):
     def __setstate__(self, state):
         self.storage_account_name, self.storage_account_key, self.cached_createtimes = state
         self.connect()
-    def create_store(self, filename, **kwargs):
+    def create_store(self, filename, extension=None, **kwargs):
+        if extension is not None:
+            filename = filename + extension
         blob_name = _get_blob_name(filename)
         return AzureBlob(self, filename, blob_name, **kwargs)
     def push(self, blob_name, filename, createtime):
