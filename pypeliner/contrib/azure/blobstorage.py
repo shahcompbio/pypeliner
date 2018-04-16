@@ -4,6 +4,7 @@ import time
 import yaml
 
 import azure.storage.blob
+import azure.common
 
 import pypeliner.helpers
 import pypeliner.storage
@@ -12,6 +13,10 @@ import pypeliner.flyweight
 
 def _get_blob_name(filename):
     return filename.strip('/')
+
+
+class BlobMissing(Exception):
+    pass
 
 
 class AzureBlob(object):
@@ -30,10 +35,17 @@ class AzureBlob(object):
     def pull(self):
         self.storage.pull(self.blob_name, self.filename)
     def get_exists(self):
-        return self.get_createtime() is not None
+        createtime = self.get_createtime()
+        return createtime is not None and createtime != 'missing'
     def get_createtime(self):
         createtime = self.createtime_cache.get()
         if createtime is None:
+            try:
+                createtime = self.storage.retrieve_blob_createtime(self.blob_name)
+            except BlobMissing:
+                createtime = 'missing'
+            self.createtime_cache.set(createtime)
+        if createtime == 'missing':
             return None
         createtime = datetime.datetime.strptime(createtime, '%Y/%m/%d-%H:%M:%S')
         return time.mktime(createtime.timetuple())
@@ -105,6 +117,17 @@ class AzureBlobStorage(object):
         if filesize != blob.properties.content_length:
             raise Exception('file size mismatch for {}:{} compared to {}:{}'.format(
                 blob_name, blob.properties.content_length, filename, filesize))
+    def retrieve_blob_createtime(self, blob_name):
+        container_name, blob_name = self.unpack_path(blob_name)
+        try:
+            blob = self.blob_client.get_blob_properties(
+                container_name,
+                blob_name)
+        except azure.common.AzureMissingResourceHttpError:
+            raise BlobMissing((container_name, blob_name))
+        if 'create_time' in blob.metadata:
+            return blob.metadata['create_time']
+        return blob.properties.last_modified.strftime('%Y/%m/%d-%H:%M:%S')
     def update_blob_createtime(self, blob_name, createtime):
         container_name, blob_name = self.unpack_path(blob_name)
         self.blob_client.set_blob_metadata(
