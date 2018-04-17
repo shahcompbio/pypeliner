@@ -284,7 +284,6 @@ class TempMergeObjArg(Arg,SplitMergeArg):
             if self.func is not None:
                 obj = self.func(obj)
             self.resolved[self.get_node_chunks(resource.node)] = obj
-        del self.func
         return self.resolved
 
 
