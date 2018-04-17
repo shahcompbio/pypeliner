@@ -2,7 +2,6 @@ import collections
 import errno
 import itertools
 import os
-import pickle
 import logging
 import shutil
 import shelve
