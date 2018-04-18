@@ -381,28 +381,6 @@ def _random_string(length):
     return ''.join(random.choice(string.lowercase) for i in range(length))
 
 
-def wait_for_pool_init(batch_client, pool_id):
-    """
-    wait for the pool to initialize
-    :param batch_client: A batch    service client
-    """
-
-    i=0
-    while True:
-        nodes = list(batch_client.compute_node.list(pool_id))
-        # if no nodes after 2 mins, pool was probably started with 0 nodes
-        if not nodes and i>2:
-            return
-
-        for node in nodes:
-            state = batch_client.compute_node.get(pool_id, node.id).state
-
-            if state.value not in ['starting','waitingforstarttask']:
-                return
-
-        time.sleep(60)
-        i+=1
-
 def check_pool_for_failed_nodes(batch_client, pool_id, logger):
     nodes = list(batch_client.compute_node.list(pool_id))
 
@@ -412,10 +390,11 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
 
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
-        if status in ["idle", "running", "preempted"]:
+        if status in ["idle", "running", "preempted", "waitingforstarttask"]:
             return
 
     logger.warning("All nodes are in failed state, please fix the issues and try again")
+
 
 def wait_for_job_deletion(batch_client, job_id, logger):
     while True:
@@ -505,13 +484,8 @@ class AzureJobQueue(object):
                     pool_id,
                     pool_params)
 
-        #wait until all pools are ready, create job for each pool
         for pool_id, pool_params in pools.iteritems():
-            # wait for nodes startup
-            self.logger.info("waiting for pool {}".format(pool_id))
-            wait_for_pool_init(self.batch_client, pool_id)
             check_pool_for_failed_nodes(self.batch_client, pool_id, self.logger)
-
 
             # Create a new job if needed
             if 'job_id_override' in pool_params:
