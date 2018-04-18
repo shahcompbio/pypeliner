@@ -6,6 +6,8 @@ import time
 import traceback
 import socket
 import datetime
+import signal
+
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -76,6 +78,7 @@ class JobInstance(object):
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
         self.init_inputs_outputs()
+
     def _create_arg(self, mg):
         if not isinstance(mg, pypeliner.managed.Managed):
             return None, False
@@ -190,7 +193,8 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir)
+        timeout = self.ctx.get("timeout", None)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, timeout)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -232,6 +236,53 @@ class JobTimer(object):
         return int(self._finish - self._start)
 
 
+
+class TimeOutError(Exception):
+    """Exception Type for throwing timeout errors"""
+    pass
+
+
+class JobTimeOut(object):
+    """ TimeOut using a context manager
+        set an alarm for the timeout, catch it and throw an Exception.
+    """
+    def __init__(self, timeout):
+        self._timeout_string = timeout
+
+        if not timeout:
+            self._timeout = None
+            return
+
+        if timeout.endswith("s"):
+            multiplier = 1
+        elif timeout.endswith("m"):
+            multiplier = 60
+        elif timeout.endswith("h"):
+            multiplier = 60 * 60
+        elif timeout.endswith("d"):
+            multiplier = 60 * 60 * 24
+        else:
+            raise ValueError("Invalid timeout interval: {}."\
+                             " Timeout should be a number followed by a suffix. "\
+                             "SUFFIX may be s for seconds, m for minutes, h for hours "\
+                             "or d for days".format(timeout))
+
+        time_interval = int(timeout[:-1])
+
+        self._timeout = time_interval * multiplier
+
+    def handler(self, signum, frame):
+        raise TimeOutError("Execution time exceeded the specified timeout of {}.".format(self._timeout_string))
+
+    def __enter__(self):
+        if self._timeout:
+            signal.signal(signal.SIGALRM, self.handler)
+            signal.alarm(self._timeout)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+
 class JobMemoryTracker(object):
     """ track memory use"""
     def __init__(self):
@@ -259,7 +310,7 @@ def resolve_arg(arg):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, arglist, storage, logs_dir):
+    def __init__(self, id, func, argset, arglist, storage, logs_dir, timeout):
         self.storage = storage
         self.id = id
         self.func = func
@@ -272,6 +323,7 @@ class JobCallable(object):
         self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
         self.job_mem_tracker = JobMemoryTracker()
+        self.job_time_out = JobTimeOut(timeout)
         self.hostname = None
         self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
     @property
@@ -311,7 +363,7 @@ class JobCallable(object):
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
                 self.hostname = socket.gethostname()
-                with self.job_timer, self.job_mem_tracker:
+                with self.job_timer, self.job_mem_tracker, self.job_time_out:
                     self.allocate()
                     self.pull()
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
@@ -371,7 +423,8 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
     def create_callable(self):
-        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir)
+        timeout = self.job_def.ctx.get("timeout", None)
+        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, timeout)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):
