@@ -414,7 +414,9 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
 
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
-        if status in ["idle", "running", "preempted", "waitingforstarttask"]:
+        #node states are inconsistent with lower and upper cases
+        status = status.lower()
+        if status in ["idle", "running", "preempted", "waitingforstarttask", "leavingpool"]:
             return
 
     logger.warning("All nodes are in failed state, please fix the issues and try again")
