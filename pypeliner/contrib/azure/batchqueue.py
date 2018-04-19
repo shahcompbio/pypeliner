@@ -15,7 +15,23 @@ import azure.batch.batch_service_client as batch
 import azure.batch.batch_auth as batchauth
 import azure.batch.models as batchmodels
 
+from azure.common.credentials import ServicePrincipalCredentials
+from azure.mgmt.storage import StorageManagementClient
+
 import pypeliner.execqueue.base
+
+
+def _get_blob_key(accountname):
+    blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
+                                                   secret=os.environ["SECRET_KEY"],
+                                                   tenant=os.environ["TENANT_ID"])
+
+    storage_client = StorageManagementClient(blob_credentials, os.environ["SUBSCRIPTION_ID"])
+    keys = storage_client.storage_accounts.list_keys(os.environ["RESOURCE_GROUP"],
+                                                     accountname)
+    keys = {v.key_name: v.value for v in keys.keys}
+
+    return keys["key1"]
 
 
 def unpack_path(filename):
@@ -118,20 +134,34 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     :param dict config: Configuration details.
     """
 
+    if "IMAGE_ID" in os.environ:
+         image_ref_to_use = batchmodels.ImageReference(
+                              virtual_machine_image_id=os.environ["IMAGE_ID"])
+         sku_to_use = os.environ["SKU"]
+    else:
+        sku_to_use, image_ref_to_use = \
+            select_latest_verified_vm_image_with_node_agent_sku(
+                batch_service_client,
+                config['node_os_publisher'],
+                config['node_os_offer'],
+                config['node_os_sku'])
+    account_name = os.environ['AZURE_STORAGE_ACCOUNT']
+    account_key = _get_blob_key(account_name)
+
     # Get the node agent SKU and image reference for the virtual machine
     # configuration.
     # For more information about the virtual machine configuration, see:
     # https://azure.microsoft.com/documentation/articles/batch-linux-nodes/
-    account_name = os.environ['AZURE_REF_STORAGE_ACCOUNT']
-    account_key = os.environ['AZURE_REF_STORAGE_KEY']
 
-    start_vm_commands = _create_commands(config['create_vm_commands'])
-    start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
-                            for command in start_vm_commands]
+    start_vm_commands = None
+    if config.get('create_vm_commands', None):
+        start_vm_commands = _create_commands(config['create_vm_commands'])
+        start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
+                                for command in start_vm_commands]
 
-
-    data_disks = []
+    data_disks = None
     if config['data_disk_sizes']:
+        data_disks = []
         for i,disk_size in config['data_disk_sizes'].iteritems():
             data_disks.append(batchmodels.DataDisk(i, disk_size))
 
@@ -143,12 +173,6 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
             res_url = generate_blob_url(blob_client, container_name, blob_name)
             resource_files.append(batch.models.ResourceFile(res_url, vm_file_name))
 
-    sku_to_use, image_ref_to_use = \
-        select_latest_verified_vm_image_with_node_agent_sku(
-            batch_service_client,
-            config['node_os_publisher'],
-            config['node_os_offer'],
-            config['node_os_sku'])
     user = batchmodels.AutoUserSpecification(
         scope=batchmodels.AutoUserScope.pool,
         elevation_level=batchmodels.ElevationLevel.admin)
@@ -156,7 +180,7 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use,
+            node_agent_sku_id=sku_to_use,),
             data_disks = data_disks),
         vm_size=config['pool_vm_size'],
         enable_auto_scale=True,
@@ -410,12 +434,16 @@ class AzureJobQueue(object):
     """ Azure batch job queue.
     """
     def __init__(self, config_filename=None, **kwargs):
-        self.batch_account_name = os.environ['AZURE_BATCH_ACCOUNT']
         self.batch_account_url = os.environ['AZURE_BATCH_URL']
-        self.batch_account_key = os.environ['AZURE_BATCH_KEY']
+        self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
+        self.client_id = os.environ['CLIENT_ID']
+        self.tenant_id = os.environ['TENANT_ID']
+        self.secret_key = os.environ['SECRET_KEY']
+
+
 
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-        self.storage_account_key = os.environ['AZURE_STORAGE_KEY']
+        self.storage_account_key = _get_blob_key(self.storage_account_name)
 
         with open(config_filename) as f:
             self.config = yaml.load(f)
@@ -430,9 +458,11 @@ class AzureJobQueue(object):
             account_name=self.storage_account_name,
             account_key=self.storage_account_key)
 
-        self.credentials = batchauth.SharedKeyCredentials(
-            self.batch_account_name,
-            self.batch_account_key)
+
+        self.credentials = ServicePrincipalCredentials(client_id=self.client_id,
+                                              secret=self.secret_key,
+                                              tenant=self.tenant_id,
+                                              resource="https://batch.core.windows.net/")
 
         self.logger.info('creating batch client')
 

@@ -10,6 +10,21 @@ import pypeliner.helpers
 import pypeliner.storage
 import pypeliner.flyweight
 
+from azure.common.credentials import ServicePrincipalCredentials
+from azure.mgmt.storage import StorageManagementClient
+
+def _get_blob_key(accountname):
+    blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
+                                                   secret=os.environ["SECRET_KEY"],
+                                                   tenant=os.environ["TENANT_ID"])
+
+    storage_client = StorageManagementClient(blob_credentials, os.environ["SUBSCRIPTION_ID"])
+    keys = storage_client.storage_accounts.list_keys(os.environ["RESOURCE_GROUP"],
+                                                     accountname)
+    keys = {v.key_name: v.value for v in keys.keys}
+
+    return keys["key1"]
+
 
 def _get_blob_name(filename):
     return filename.strip('/')
@@ -61,7 +76,7 @@ class AzureBlob(object):
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-        self.storage_account_key = os.environ['AZURE_STORAGE_KEY']
+        self.storage_account_key = _get_blob_key(self.storage_account_name)
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.connect()
     def connect(self):
