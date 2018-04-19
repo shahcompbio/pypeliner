@@ -180,7 +180,7 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use,),
+            node_agent_sku_id=sku_to_use,
             data_disks = data_disks),
         vm_size=config['pool_vm_size'],
         enable_auto_scale=True,
