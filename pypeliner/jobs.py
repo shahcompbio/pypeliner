@@ -16,6 +16,7 @@ import pypeliner.identifiers
 import pypeliner.deep
 import pypeliner.storage
 
+from guppy import hpy
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -231,6 +232,23 @@ class JobTimer(object):
         return int(self._finish - self._start)
 
 
+class JobMemoryTracker(object):
+    """ track memory use"""
+    def __init__(self):
+        self._start = None
+        self._finish = None
+    def __enter__(self):
+        self._start = hpy()
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._finish = self._start.heap()
+    @property
+    def memoryused(self):
+        if self._finish is None or self._start is None:
+            return None
+        return self._finish.size
+    
+
+
 def resolve_arg(arg):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
@@ -251,11 +269,15 @@ class JobCallable(object):
         self.stdout_storage = self.storage.create_store(self.stdout_filename)
         self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
+        self.job_mem_tracker = JobMemoryTracker()
         self.hostname = None
         self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
     @property
     def duration(self):
         return self.job_timer.duration
+    @property
+    def memoryused(self):
+        return self.job_mem_tracker.memoryused
     def log_text(self):
         text = '--- stdout ---\n'
         with open(self.stdout_filename, 'r') as job_stdout:
@@ -287,7 +309,7 @@ class JobCallable(object):
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
                 self.hostname = socket.gethostname()
-                with self.job_timer:
+                with self.job_timer, self.job_mem_tracker:
                     self.allocate()
                     self.pull()
                     self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)

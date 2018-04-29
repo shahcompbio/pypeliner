@@ -170,6 +170,8 @@ class Scheduler(object):
                                    extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
                               extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
+            self._logger.info('job ' + job.displayname + ' memory ' + str(received.memoryused) + 'k',
+                              extra={"id": job.displayname, "type":"job", "memory": received.memoryused, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
                               extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
 
