@@ -228,7 +228,8 @@ class Pypeline(object):
         self.sch.cleanup = not self.config['nocleanup']
 
         if self.config['sentinal_only']:
-            self.runskip = pypeliner.runskip.SentinalRunSkip()
+            self.runskip = pypeliner.runskip.SentinalRunSkip(
+                rerun=self.config['rerun'])
         else:
             self.runskip = pypeliner.runskip.BasicRunSkip(
                 repopulate=self.config['repopulate'],

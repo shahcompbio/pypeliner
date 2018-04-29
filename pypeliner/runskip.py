@@ -24,14 +24,15 @@ class BasicRunSkip(object):
 
 
 class SentinalRunSkip(object):
-    def __init__(self):
-        pass
+    def __init__(self, rerun=False):
+        self.rerun = rerun
 
     def __call__(self, job):
+        if self.rerun:
+            return True, 'rerun requested\n' + job.explain_out_of_date()
         if job.already_run():
             return False, 'already run'
-        else:
-            return True, 'not yet run'
+        return True, 'not yet run'
 
     def close(self):
         pass
