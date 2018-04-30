@@ -42,18 +42,6 @@ def unpack_path(filename):
     filename = '/'.join(filename[1:])
     return container_name, filename
 
-def get_container_names(dirs):
-
-    containers = set()
-
-    for dir in dirs:
-        if dir.startswith('/'):
-            dir = dir[1:]
-        dir = dir.split('/')[0]
-        containers.add(dir)
-
-    return list(set(containers))
-
 
 def print_batch_exception(batch_exception):
     """
@@ -625,11 +613,6 @@ class AzureJobQueue(object):
         run_script_file_path = 'job.sh'
         run_script_filename = os.path.join(temps_dir, run_script_file_path)
         run_script_blobname = os.path.join(self.job_blobname_prefix[name], run_script_file_path)
-
-        containers = get_container_names(sent.dirs)
-        mounts = ''
-        for container in containers:
-            mounts += ' -B $AZ_BATCH_TASK_WORKING_DIR/:/{container}/'.format(container=container)
 
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')

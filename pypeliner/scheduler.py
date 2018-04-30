@@ -112,13 +112,6 @@ class Scheduler(object):
         self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand,
                           extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
 
-        dirs = [self.temps_dir, self.logs_dir]
-        #need these to track the output file and the inputs
-        dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
-        dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
-
-        sent.dirs = dirs
-
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
     def _retry_job(self, exec_queue, job):
