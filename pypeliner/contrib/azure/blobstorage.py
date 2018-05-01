@@ -13,6 +13,11 @@ import pypeliner.flyweight
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
 
+from pypeliner.helpers import Backoff
+
+from azure.common import AzureHttpError
+
+
 def _get_blob_key(accountname):
     blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
                                                    secret=os.environ["SECRET_KEY"],
@@ -28,6 +33,15 @@ def _get_blob_key(accountname):
 
 def _get_blob_name(filename):
     return filename.strip('/')
+
+
+@Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
+def download_from_blob_to_path(blob_client, container_name, blob_name, destination_file_path):
+    blob = blob_client.get_blob_to_path(container_name,
+                                        blob_name,
+                                        destination_file_path)
+
+    return blob
 
 
 class BlobMissing(Exception):
@@ -122,7 +136,8 @@ class AzureBlobStorage(object):
                 container_name,
                 blob_name)
             blob_size = blob.properties.content_length
-            blob = self.blob_client.get_blob_to_path(
+            blob = download_from_blob_to_path(
+                self.blob_client,
                 container_name,
                 blob_name,
                 filename)

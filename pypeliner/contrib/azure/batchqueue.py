@@ -12,13 +12,14 @@ import yaml
 
 import azure.storage.blob as azureblob
 import azure.batch.batch_service_client as batch
-import azure.batch.batch_auth as batchauth
 import azure.batch.models as batchmodels
+from azure.common import AzureHttpError
 
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
 
 import pypeliner.execqueue.base
+from pypeliner.helpers import Backoff
 
 
 def _get_blob_key(accountname):
@@ -123,9 +124,9 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     """
 
     if "IMAGE_ID" in os.environ:
-         image_ref_to_use = batchmodels.ImageReference(
+        image_ref_to_use = batchmodels.ImageReference(
                               virtual_machine_image_id=os.environ["IMAGE_ID"])
-         sku_to_use = os.environ["SKU"]
+        sku_to_use = os.environ["SKU"]
     else:
         sku_to_use, image_ref_to_use = \
             select_latest_verified_vm_image_with_node_agent_sku(
@@ -343,6 +344,12 @@ def add_task(batch_service_client, job_id, task_id, input_file,
 
     batch_service_client.task.add(job_id, task)
 
+@Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
+def download_from_blob_to_path(blob_client, container_name, blob_name, destination_file_path):
+        blob_client.get_blob_to_path(container_name,
+                                     blob_name,
+                                     destination_file_path)
+
 
 def download_blobs_from_container(block_blob_client,
                                   container_name,
@@ -377,9 +384,10 @@ def download_blobs_from_container(block_blob_client,
         except:
             pass
 
-        block_blob_client.get_blob_to_path(container_name,
-                                           blob.name,
-                                           destination_file_path)
+        download_from_blob_to_path(block_blob_client,
+                                   container_name,
+                                   blob.name,
+                                   destination_file_path)
 
     #     print('  Downloaded blob [{}] from container [{}] to {}'.format(
     #         blob.name,
@@ -394,30 +402,45 @@ def _random_string(length):
 
 
 def check_pool_for_failed_nodes(batch_client, pool_id, logger):
+    node_status_ok = ["idle", "running", "preempted",\
+                      "waitingforstarttask", "leavingpool", 'starting']
+
+    good_nodes_in_pool = False
+
     nodes = list(batch_client.compute_node.list(pool_id))
 
     #pool with 0 nodes
     if not nodes:
         return
 
+    all_node_states = set()
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
         #node states are inconsistent with lower and upper cases
         status = status.lower()
-        if status in ["idle", "running", "preempted", "waitingforstarttask", "leavingpool"]:
-            return
 
-    logger.warning("All nodes are in failed state, please fix the issues and try again")
+        all_node_states.add(status)
+
+        #dont send jobs to failed nodes
+        if status not in node_status_ok:
+            batch_client.compute_node.disable_scheduling(pool_id, node.id)
+        else:
+            good_nodes_in_pool = True
+
+    if not good_nodes_in_pool:
+        all_node_states = " ".join(sorted(all_node_states))
+        logger.warning("Please verify pool status, "\
+            "node states are {}".format(all_node_states))
 
 
 def wait_for_job_deletion(batch_client, job_id, logger):
+
     while True:
         try:
-            job = batch_client.job.get(job_id)
+            batch_client.job.get(job_id)
         except batchmodels.batch_error.BatchErrorException:
             break
 
-        logger.info("waiting for job deletion, job is "+job.state.value)
         time.sleep(30)
 
 class AzureJobQueue(object):
@@ -509,9 +532,9 @@ class AzureJobQueue(object):
 
             # Create a new job if needed
             if 'job_id_override' in pool_params:
-                 job_id = pool_params['job_id_override']
+                job_id = pool_params['job_id_override']
             else:
-                 job_id = 'pypeliner_{}_{}'.format(pool_id, self.run_id)
+                job_id = 'pypeliner_{}_{}'.format(pool_id, self.run_id)
 
             self.pool_job_map[pool_id] = job_id
 
