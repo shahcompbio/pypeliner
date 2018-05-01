@@ -6,6 +6,107 @@ import hashlib
 import warnings
 import errno
 import json
+import time
+import random
+from functools import wraps
+
+class Backoff(object):
+    """
+    wrapper for functions that fail but require retries until it succeeds
+    """
+
+    def __init__(self, exception_type=Exception, max_backoff=3600, backoff_time=1, randomize=False,
+                 num_retries=None, backoff="exponential", step_size=2):
+        self.func = None
+
+        if backoff not in ["exponential", "linear", "fixed"]:
+            raise Exception(
+                "Currently supports only exponential, linear and fixed backoff")
+
+        self.exception_type = exception_type
+
+        self.max_backoff = max_backoff
+        self.backoff_time = backoff_time
+
+        self.randomize = randomize
+
+        self.num_retries = num_retries
+
+        self.backoff = backoff
+
+        self.step_size = step_size
+
+        self.success = False
+
+        self.elapsed_time = 0
+
+    def __call__(self, func):
+        self.func = func
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            return self._run_with_exponential_backoff(*args, **kwargs)
+
+        return wrapped
+
+    def _run_with_exponential_backoff(self, *args, **kwargs):
+        """
+        keep running the function until we go over the
+        max wait time or num retries
+        """
+
+        retry_no = 0
+
+        while True:
+
+            if self.elapsed_time >= self.max_backoff:
+                break
+
+            if self.num_retries and retry_no > self.num_retries:
+                break
+
+            try:
+                result = self.func(*args, **kwargs)
+            except self.exception_type as exc:
+                self._update_backoff_time()
+                warnings.warn(
+                    "error {} caught, retrying after {} seconds".format(
+                        exc.message,
+                        self.backoff_time))
+                retry_no += 1
+                time.sleep(self.backoff_time)
+
+            else:
+                self.success = True
+                break
+
+        # try it one last time
+        if not self.success:
+            result = self.func(*args, **kwargs)
+
+        return result
+
+    def _update_backoff_time(self):
+        """
+        update the backoff time
+        """
+
+        if self.backoff == "exponential":
+            self.backoff_time = self.step_size * (self.backoff_time or 1)
+
+        elif self.backoff == "linear":
+            self.backoff_time += self.step_size
+
+        if self.randomize:
+            lower_bound = int(0.9 * self.backoff_time)
+            upper_bound = int(1.1 * self.backoff_time)
+            self.backoff_time = random.randint(lower_bound, upper_bound)
+
+        if self.elapsed_time + self.backoff_time > self.max_backoff:
+            self.backoff_time = self.max_backoff - self.elapsed_time
+
+        self.elapsed_time += self.backoff_time
+
 
 def pop_if(L, pred):
     for idx, item in enumerate(L):
