@@ -470,6 +470,17 @@ class FilenameCallback(object):
         self.filename_creator = filename_creator
         self.resources = dict()
         self.kwargs = kwargs
+    def get_filename(self, *chunks):
+        if len(self.axes) != len(chunks):
+            raise ValueError('expected ' + str(len(self.axes)) + ' values for axes ' + str(self.axes))
+        node = self.node
+        for axis, chunk in zip(self.axes, chunks):
+            node += pypeliner.identifiers.AxisInstance(axis, chunk)
+        filename = self.filename_creator(self.name, node)
+        resource = self.create_resource(self.storage, self.name, node, filename,
+            direct_write=self.kwargs.get('direct_write'),
+            extensions=self.kwargs.get('extensions'))
+        return resource.write_filename
     def __call__(self, *chunks):
         return self.__getitem__(*chunks)
     def __getitem__(self, *chunks):
