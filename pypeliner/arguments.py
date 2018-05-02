@@ -79,6 +79,7 @@ class TempSpaceArg(Arg):
     def pull(self):
         if self.cleanup in ('before', 'both'):
             pypeliner.helpers.removefiledir(self.filename)
+        pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
         if self.cleanup in ('after', 'both'):
             pypeliner.helpers.removefiledir(self.filename)
