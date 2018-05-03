@@ -1,7 +1,6 @@
 from __future__ import print_function
 import datetime
 import os
-import sys
 import time
 import random
 import string
@@ -10,6 +9,10 @@ import logging
 import uuid
 import yaml
 
+import pypeliner.execqueue.base
+from pypeliner.helpers import Backoff
+
+from azure.common import AzureHttpError
 import azure.storage.blob as azureblob
 import azure.batch.batch_service_client as batch
 import azure.batch.models as batchmodels
@@ -18,16 +21,22 @@ from azure.common import AzureHttpError
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
 
-import pypeliner.execqueue.base
-from pypeliner.helpers import Backoff
 
-
-def _get_blob_key(accountname):
+def get_storage_account_key(accountname):
+    """
+    Uses the azure management package and the active directory
+    credentials to fetch the authentication key for a storage
+    account from azure
+    :param str accountname: storage account name
+    """
     blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
-                                                   secret=os.environ["SECRET_KEY"],
+                                                   secret=os.environ[
+                                                       "SECRET_KEY"],
                                                    tenant=os.environ["TENANT_ID"])
 
-    storage_client = StorageManagementClient(blob_credentials, os.environ["SUBSCRIPTION_ID"])
+    storage_client = StorageManagementClient(
+        blob_credentials,
+        os.environ["SUBSCRIPTION_ID"])
     keys = storage_client.storage_accounts.list_keys(os.environ["RESOURCE_GROUP"],
                                                      accountname)
     keys = {v.key_name: v.value for v in keys.keys}
@@ -35,13 +44,22 @@ def _get_blob_key(accountname):
     return keys["key1"]
 
 
-def unpack_path(filename):
-    if filename.startswith('/'):
-        filename = filename[1:]
-    filename = filename.split('/')
-    container_name = filename[0]
-    filename = '/'.join(filename[1:])
-    return container_name, filename
+def get_container_and_blob_path(filepath):
+    """
+    pypeliner assumes blob paths start with container name followed
+    by the blob path. This function extracts the container name and blob path
+    from the input paths.
+    :param str filepath: the composite filepath with container and blob paths
+    """
+
+    if filepath.startswith('/'):
+        filepath = filepath[1:]
+
+    filepath = filepath.split('/')
+    container_name = filepath[0]
+    blobpath = '/'.join(filepath[1:])
+
+    return container_name, blobpath
 
 
 def print_batch_exception(batch_exception):
@@ -110,8 +128,10 @@ def select_latest_verified_vm_image_with_node_agent_sku(
 def _create_commands(commands_str):
     return filter(lambda a: len(a) > 0, commands_str.split('\n'))
 
+
 def generate_blob_url(blob_client, container_name, blob_name):
     return blob_client.make_blob_url(container_name, blob_name)
+
 
 def create_pool(batch_service_client, blob_client, pool_id, config):
     """
@@ -125,7 +145,7 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
 
     if "IMAGE_ID" in os.environ:
         image_ref_to_use = batchmodels.ImageReference(
-                              virtual_machine_image_id=os.environ["IMAGE_ID"])
+            virtual_machine_image_id=os.environ["IMAGE_ID"])
         sku_to_use = os.environ["SKU"]
     else:
         sku_to_use, image_ref_to_use = \
@@ -134,8 +154,9 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
                 config['node_os_publisher'],
                 config['node_os_offer'],
                 config['node_os_sku'])
+
     account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-    account_key = _get_blob_key(account_name)
+    account_key = get_storage_account_key(account_name)
 
     # Get the node agent SKU and image reference for the virtual machine
     # configuration.
@@ -146,40 +167,48 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     if config.get('create_vm_commands', None):
         start_vm_commands = _create_commands(config['create_vm_commands'])
         start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
-                                for command in start_vm_commands]
+                             for command in start_vm_commands]
 
     data_disks = None
     if config['data_disk_sizes']:
         data_disks = []
-        for i,disk_size in config['data_disk_sizes'].iteritems():
+        for i, disk_size in config['data_disk_sizes'].iteritems():
             data_disks.append(batchmodels.DataDisk(i, disk_size))
 
     resource_files = []
 
     if config['start_resources']:
         for vm_file_name, blob_path in config['start_resources'].iteritems():
-            container_name, blob_name = unpack_path(blob_path)
+            container_name, blob_name = get_container_and_blob_path(blob_path)
             res_url = generate_blob_url(blob_client, container_name, blob_name)
-            resource_files.append(batch.models.ResourceFile(res_url, vm_file_name))
+            resource_files.append(
+                batch.models.ResourceFile(
+                    res_url,
+                    vm_file_name))
 
     user = batchmodels.AutoUserSpecification(
         scope=batchmodels.AutoUserScope.pool,
         elevation_level=batchmodels.ElevationLevel.admin)
+
+    vm_configuration = batchmodels.VirtualMachineConfiguration(
+        image_reference=image_ref_to_use,
+        node_agent_sku_id=sku_to_use,
+        data_disks=data_disks)
+
+    vm_start_task = batch.models.StartTask(
+        command_line=wrap_commands_in_shell('linux', start_vm_commands),
+        user_identity=batchmodels.UserIdentity(auto_user=user),
+        resource_files=resource_files,
+        wait_for_success=True)
+
     new_pool = batch.models.PoolAddParameter(
         id=pool_id,
-        virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use,
-            data_disks = data_disks),
+        virtual_machine_configuration=vm_configuration,
         vm_size=config['pool_vm_size'],
         enable_auto_scale=True,
         auto_scale_formula=config['auto_scale_formula'],
         auto_scale_evaluation_interval=datetime.timedelta(minutes=5),
-        start_task=batch.models.StartTask(
-            command_line=wrap_commands_in_shell('linux', start_vm_commands),
-            user_identity=batchmodels.UserIdentity(auto_user=user),
-            resource_files=resource_files,
-            wait_for_success=True),
+        start_task=vm_start_task,
         max_tasks_per_node=config['max_tasks_per_node'],
     )
 
@@ -211,7 +240,8 @@ def create_job(batch_service_client, job_id, pool_id):
         raise
 
 
-def create_blob_batch_resource(block_blob_client, container_name, file_path, blob_name, job_file_path):
+def create_blob_batch_resource(
+        block_blob_client, container_name, file_path, blob_name, job_file_path):
     """
     Uploads a local file to an Azure Blob storage container for use as
     an azure batch resource.
@@ -298,25 +328,11 @@ def add_task(batch_service_client, job_id, task_id, input_file,
     :param output_container_sas_token: A SAS token granting write access to
     the specified Azure Blob storage container.
     """
-    # print('Adding task {} to job [{}]...'.format(task_id, job_id))
-
-    # Test Commmand
-    # This command sets up the environment enough to support
-    # a simple pypeliner_delegate call
-    # commands = [
-    #     'wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh',
-    #     'bash Miniconda2-latest-Linux-x86_64.sh -b -p $AZ_BATCH_TASK_WORKING_DIR/miniconda2',
-    #     'export PATH=$AZ_BATCH_TASK_WORKING_DIR/miniconda2/bin:$PATH',
-    #     'pip install --user azure-storage',
-    #     'pip install --user networkx',
-    #     'pip install --user --upgrade https://bitbucket.org/dranew/pypeliner/get/azure_dev.zip',
-    #     './.local/bin/pypeliner_delegate {} {}'.format(input_file.file_path, output_filename),
-    #     'ls *',
-    # ]
 
     commands = ['/bin/bash job.sh']
 
-    # WORKAROUND: for some reason there is no function to create an url for a container
+    # WORKAROUND: for some reason there is no function to create an url for a
+    # container
     output_sas_url = blob_client.make_blob_url(
         output_container_name, 'null',
         sas_token=output_container_sas_token).replace('/null', '')
@@ -328,7 +344,6 @@ def add_task(batch_service_client, job_id, task_id, input_file,
         upload_options = batchmodels.OutputFileUploadOptions('taskCompletion')
         return batchmodels.OutputFile(filename, destination, upload_options)
 
-
     task = batch.models.TaskAddParameter(
         task_id,
         wrap_commands_in_shell('linux', commands),
@@ -336,19 +351,42 @@ def add_task(batch_service_client, job_id, task_id, input_file,
             input_file,
             job_script_file],
         output_files=[
-            create_output_file('../stdout.txt', os.path.join(output_blob_prefix, 'stdout.txt')),
-            create_output_file('../stderr.txt', os.path.join(output_blob_prefix, 'stderr.txt')),
-            create_output_file('job_result.pickle', os.path.join(output_blob_prefix, 'job_result.pickle')),
+            create_output_file(
+                '../stdout.txt',
+                os.path.join(
+                    output_blob_prefix,
+                    'stdout.txt')),
+            create_output_file(
+                '../stderr.txt',
+                os.path.join(
+                    output_blob_prefix,
+                    'stderr.txt')),
+            create_output_file(
+                'job_result.pickle',
+                os.path.join(
+                    output_blob_prefix,
+                    'job_result.pickle')),
         ]
     )
 
     batch_service_client.task.add(job_id, task)
 
+
 @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
-def download_from_blob_to_path(blob_client, container_name, blob_name, destination_file_path):
-        blob_client.get_blob_to_path(container_name,
-                                     blob_name,
-                                     destination_file_path)
+def download_from_blob_to_path(
+        blob_client, container_name, blob_name, destination_file_path):
+    """
+    Backoff wrapper will retry with exponential backoff during egress errors
+
+    :param block_blob_client: A blob service client.
+    :type block_blob_client: `azure.storage.blob.BlockBlobService`
+    :param container_name: The Azure Blob storage container from which to
+     download files.
+    :param directory_path: The local directory to which to download the files.
+    """
+    blob_client.get_blob_to_path(container_name,
+                                 blob_name,
+                                 destination_file_path)
 
 
 def download_blobs_from_container(block_blob_client,
@@ -364,10 +402,9 @@ def download_blobs_from_container(block_blob_client,
      download files.
     :param directory_path: The local directory to which to download the files.
     """
-    # print('Downloading all files from container [{}]...'.format(
-    #     container_name))
-
-    container_blobs = block_blob_client.list_blobs(container_name, prefix=prefix)
+    container_blobs = block_blob_client.list_blobs(
+        container_name,
+        prefix=prefix)
 
     for blob in container_blobs.items:
         destination_filename = blob.name
@@ -377,7 +414,9 @@ def download_blobs_from_container(block_blob_client,
         destination_filename = destination_filename[(len(prefix)):]
         destination_filename = destination_filename.strip('/')
 
-        destination_file_path = os.path.join(directory_path, destination_filename)
+        destination_file_path = os.path.join(
+            directory_path,
+            destination_filename)
 
         try:
             os.makedirs(os.path.dirname(destination_file_path))
@@ -389,39 +428,40 @@ def download_blobs_from_container(block_blob_client,
                                    blob.name,
                                    destination_file_path)
 
-    #     print('  Downloaded blob [{}] from container [{}] to {}'.format(
-    #         blob.name,
-    #         container_name,
-    #         destination_file_path))
-    # 
-    # print('  Download complete!')
-
 
 def _random_string(length):
-    return ''.join(random.choice(string.lowercase) for i in range(length))
+    return ''.join(random.choice(string.lowercase) for _ in range(length))
 
 
 def check_pool_for_failed_nodes(batch_client, pool_id, logger):
-    node_status_ok = ["idle", "running", "preempted",\
+    """
+    Collects node state information from the batch pool, disables
+    any failed nodes and warns user if required
+    :param batch_client: batch service client
+    :param str pool_id: ID of pool to monitor
+    :param logger: logger object to issue warnings
+    """
+
+    node_status_ok = ["idle", "running", "preempted",
                       "waitingforstarttask", "leavingpool", 'starting']
 
     good_nodes_in_pool = False
 
     nodes = list(batch_client.compute_node.list(pool_id))
 
-    #pool with 0 nodes
+    # pool with 0 nodes
     if not nodes:
         return
 
     all_node_states = set()
     for node in nodes:
         status = batch_client.compute_node.get(pool_id, node.id).state.value
-        #node states are inconsistent with lower and upper cases
+        # node states are inconsistent with lower and upper cases
         status = status.lower()
 
         all_node_states.add(status)
 
-        #dont send jobs to failed nodes
+        # dont send jobs to failed nodes
         if status not in node_status_ok:
             batch_client.compute_node.disable_scheduling(pool_id, node.id)
         else:
@@ -429,11 +469,18 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
 
     if not good_nodes_in_pool:
         all_node_states = " ".join(sorted(all_node_states))
-        logger.warning("Please verify pool status, "\
-            "node states are {}".format(all_node_states))
+        logger.warning("Please verify pool status, "
+                       "node states are {}".format(all_node_states))
 
 
 def wait_for_job_deletion(batch_client, job_id, logger):
+    """
+    Wait until the job is deleted. avoids issues when running
+    multiple pipelines with same run id serially.
+    :param batch_client: batch service client
+    :param str job_id: job identifier
+    :param logger: logging object for issuing warnings
+    """
 
     while True:
         try:
@@ -443,9 +490,41 @@ def wait_for_job_deletion(batch_client, job_id, logger):
 
         time.sleep(30)
 
+
+def get_pool_and_job_info(config, run_id, logger):
+    """
+    reads the pool information from the config, generates jobids
+    :param: dict config: yaml submit config data
+    :param str run_id: run identifier string.
+    :param logger: logging object for issuing warnings
+    """
+
+    pool_and_job_info = {}
+
+    primary_pool = None
+
+    for pool_id, pool_params in config["pools"].iteritems():
+
+        job_id = 'pypeliner_{}_{}'.format(pool_id, run_id)
+
+        if pool_params.get("primary", None):
+            primary_pool = pool_id
+
+        pool_and_job_info[pool_id] = (job_id, pool_params)
+
+    if not primary_pool:
+        primary_pool = pool_and_job_info.keys()[0]
+        logger.warn(
+            "Couldn't detect primary pool, using {} as primary".format(
+                primary_pool))
+
+    return pool_and_job_info, primary_pool
+
+
 class AzureJobQueue(object):
     """ Azure batch job queue.
     """
+
     def __init__(self, config_filename=None, **kwargs):
         self.batch_account_url = os.environ['AZURE_BATCH_URL']
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
@@ -453,17 +532,19 @@ class AzureJobQueue(object):
         self.tenant_id = os.environ['TENANT_ID']
         self.secret_key = os.environ['SECRET_KEY']
 
-
-
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-        self.storage_account_key = _get_blob_key(self.storage_account_name)
+        self.storage_account_key = get_storage_account_key(
+            self.storage_account_name)
 
         with open(config_filename) as f:
             self.config = yaml.load(f)
 
         self.logger = logging.getLogger('pypeliner.execqueue.azure_batch')
 
-        self.run_id = _random_string(8)
+        if 'run_id' in self.config:
+            self.run_id = self.config['run_id']
+        else:
+            self.run_id = _random_string(8)
 
         self.logger.info('creating blob client')
 
@@ -471,11 +552,10 @@ class AzureJobQueue(object):
             account_name=self.storage_account_name,
             account_key=self.storage_account_key)
 
-
         self.credentials = ServicePrincipalCredentials(client_id=self.client_id,
-                                              secret=self.secret_key,
-                                              tenant=self.tenant_id,
-                                              resource="https://batch.core.windows.net/")
+                                                       secret=self.secret_key,
+                                                       tenant=self.tenant_id,
+                                                       resource="https://batch.core.windows.net/")
 
         self.logger.info('creating batch client')
 
@@ -504,6 +584,11 @@ class AzureJobQueue(object):
         self.completed_task_ids = set()
         self.running_task_ids = set()
 
+        self.pool_and_job_info, self.primary_pool_info = get_pool_and_job_info(
+            self.config,
+            self.run_id,
+            self.logger)
+
     debug_filenames = {
         'job stderr': 'stderr.txt',
         'job stdout': 'stdout.txt',
@@ -512,12 +597,9 @@ class AzureJobQueue(object):
     }
 
     def __enter__(self):
-        pools = self.config["pools"]
 
-        self.pool_job_map = {}
-
-        #start all pools
-        for pool_id, pool_params in pools.iteritems():
+        # start all pools
+        for pool_id, (job_id, pool_params) in self.pool_and_job_info.iteritems():
             # Create a new pool if needed
             if not self.batch_client.pool.exists(pool_id):
                 self.logger.info("creating pool {}".format(pool_id))
@@ -527,17 +609,6 @@ class AzureJobQueue(object):
                     pool_id,
                     pool_params)
 
-        for pool_id, pool_params in pools.iteritems():
-            check_pool_for_failed_nodes(self.batch_client, pool_id, self.logger)
-
-            # Create a new job if needed
-            if 'job_id_override' in pool_params:
-                job_id = pool_params['job_id_override']
-            else:
-                job_id = 'pypeliner_{}_{}'.format(pool_id, self.run_id)
-
-            self.pool_job_map[pool_id] = job_id
-
             job_ids = set([job.id for job in self.batch_client.job.list()])
             if job_id not in job_ids:
                 self.logger.info("creating job {}".format(job_id))
@@ -545,34 +616,33 @@ class AzureJobQueue(object):
                     self.batch_client,
                     job_id,
                     pool_id)
-    
+
             # Delete previous tasks
             for task in self.batch_client.task.list(job_id):
                 self.batch_client.task.delete(job_id, task.id)
 
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.info('tear down')
 
-        if not self.no_delete_pool:
+        for pool_id, (job_id, _) in self.pool_and_job_info.iteritems():
 
-            for pool_id, _ in self.pool_job_map.iteritems():
+            if not self.no_delete_pool:
+
                 self.logger.info("deleting pool {}".format(pool_id))
                 try:
                     self.batch_client.pool.delete(pool_id)
                 except Exception as e:
                     print(e)
 
-        if not self.no_delete_job:
-            for _, job_id in self.pool_job_map.iteritems():
+            if not self.no_delete_job:
                 self.logger.info("deleting job {}".format(job_id))
                 try:
                     self.batch_client.job.delete(job_id)
                 except Exception as e:
                     print(e)
-                wait_for_job_deletion(self.batch_client,  job_id, self.logger)
-
+                wait_for_job_deletion(self.batch_client, job_id, self.logger)
 
     def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
@@ -586,16 +656,15 @@ class AzureJobQueue(object):
         """
 
         if "pool_id" not in ctx:
-            pool=self.pool_job_map.keys()[0]
+            job_id,_ = self.pool_and_job_info[self.primary_pool_info]
         else:
-            pool = ctx["pool_id"]
-
-
-        job_id = self.pool_job_map[pool]
-
+            job_id,_ = self.pool_and_job_info[ctx["pool_id"]]
 
         task_id = str(uuid.uuid1())
-        self.logger.info('assigning task_id {} to job {}'.format(task_id, name))
+        self.logger.info(
+            'assigning task_id {} to job {}'.format(
+                task_id,
+                name))
 
         self.job_names[task_id] = name
         self.job_task_ids[name] = task_id
@@ -604,7 +673,9 @@ class AzureJobQueue(object):
 
         job_before_file_path = 'job.pickle'
         job_before_filename = os.path.join(temps_dir, job_before_file_path)
-        job_before_blobname = os.path.join(self.job_blobname_prefix[name], job_before_file_path)
+        job_before_blobname = os.path.join(
+            self.job_blobname_prefix[name],
+            job_before_file_path)
 
         with open(job_before_filename, 'wb') as before:
             pickle.dump(sent, before)
@@ -614,7 +685,9 @@ class AzureJobQueue(object):
 
         job_after_file_path = 'job_result.pickle'
         job_after_filename = os.path.join(temps_dir, job_after_file_path)
-        job_after_blobname = os.path.join(self.job_blobname_prefix[name], job_after_file_path)
+        job_after_blobname = os.path.join(
+            self.job_blobname_prefix[name],
+            job_after_file_path)
 
         # Delete any previous job result file locally and in blob
         delete_from_container(
@@ -635,13 +708,19 @@ class AzureJobQueue(object):
         # Create a bash script for running the job
         run_script_file_path = 'job.sh'
         run_script_filename = os.path.join(temps_dir, run_script_file_path)
-        run_script_blobname = os.path.join(self.job_blobname_prefix[name], run_script_file_path)
+        run_script_blobname = os.path.join(
+            self.job_blobname_prefix[name],
+            run_script_file_path)
 
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')
             f.write('set -o pipefail\n\n')
             f.write(self.compute_start_commands + '\n')
-            f.write(self.compute_run_command.format(input_filename=job_before_file_path, output_filename=job_after_file_path) + '\n')
+            f.write(
+                self.compute_run_command.format(
+                    input_filename=job_before_file_path,
+                    output_filename=job_after_file_path) +
+                '\n')
             f.write(self.compute_finish_commands + '\n')
             f.write('wait')
 
@@ -681,25 +760,38 @@ class AzureJobQueue(object):
             timeout_expiration = datetime.datetime.now() + timeout
 
             while datetime.datetime.now() < timeout_expiration:
-                for task_id in self.running_task_ids.intersection(self.completed_task_ids):
+                for task_id in self.running_task_ids.intersection(
+                        self.completed_task_ids):
                     return self.job_names[task_id]
 
                 if not self._update_task_state():
                     time.sleep(20)
 
-            self.logger.warn("Tasks did not reach 'Completed' state within timeout period of " + str(timeout))
+            self.logger.warn(
+                "Tasks did not reach 'Completed' state within timeout period of " +
+                str(timeout))
 
-            self.logger.info("Most recent transition: {}".format(self.most_recent_transition_time))
+            self.logger.info(
+                "Most recent transition: {}".format(
+                    self.most_recent_transition_time))
             task_filter = "state eq 'completed'"
             list_options = batchmodels.TaskListOptions(filter=task_filter)
 
-            for pool_id, job_id in self.pool_job_map.iteritems():
-                check_pool_for_failed_nodes(self.batch_client, pool_id, self.logger)
-                tasks = list(self.batch_client.task.list(job_id, task_list_options=list_options))
+            for pool_id, (job_id, _) in self.pool_and_job_info.iteritems():
+                check_pool_for_failed_nodes(
+                    self.batch_client,
+                    pool_id,
+                    self.logger)
+                tasks = list(
+                    self.batch_client.task.list(
+                        job_id,
+                        task_list_options=list_options))
                 self.logger.info("Received total {} tasks".format(len(tasks)))
                 for task in tasks:
                     if task.id not in self.completed_task_ids:
-                        self.logger.info("Missed completed task: {}".format(task.serialize()))
+                        self.logger.info(
+                            "Missed completed task: {}".format(
+                                task.serialize()))
                         self.completed_task_ids.add(task.id)
 
     def _update_task_state(self, latest_transition_time=None):
@@ -709,25 +801,36 @@ class AzureJobQueue(object):
 
         if self.most_recent_transition_time is not None:
             assert self.most_recent_transition_time.tzname() == 'UTC'
-            filter_time_string = self.most_recent_transition_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            task_filter += " and stateTransitionTime gt DateTime'{}'".format(filter_time_string)
+            filter_time_string = self.most_recent_transition_time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            task_filter += " and stateTransitionTime gt DateTime'{}'".format(
+                filter_time_string)
 
         if latest_transition_time is not None:
             assert latest_transition_time.tzname() == 'UTC'
-            filter_time_string = latest_transition_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            task_filter += " and stateTransitionTime lt DateTime'{}'".format(filter_time_string)
+            filter_time_string = latest_transition_time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            task_filter += " and stateTransitionTime lt DateTime'{}'".format(
+                filter_time_string)
 
         list_max_results = 1000
-        list_options = batchmodels.TaskListOptions(filter=task_filter, max_results=list_max_results)
+        list_options = batchmodels.TaskListOptions(
+            filter=task_filter,
+            max_results=list_max_results)
 
         tasks = []
-        for _, job_id in self.pool_job_map.iteritems():
-            tasks += list(self.batch_client.task.list(job_id, task_list_options=list_options))
-        sorted_transition_times = sorted([task.state_transition_time for task in tasks])
+        for _, (job_id, _) in self.pool_and_job_info.iteritems():
+            tasks += list(self.batch_client.task.list(job_id,
+                                                      task_list_options=list_options))
+        sorted_transition_times = sorted(
+            [task.state_transition_time for task in tasks])
 
         if len(tasks) >= list_max_results:
-            mid_transition_time = sorted_transition_times[len(sorted_transition_times) / 2]
-            return self._update_task_state(latest_transition_time=mid_transition_time)
+            mid_transition_time = sorted_transition_times[
+                len(sorted_transition_times) /
+                2]
+            return self._update_task_state(
+                latest_transition_time=mid_transition_time)
 
         elif len(tasks) == 0:
             return False
@@ -746,12 +849,12 @@ class AzureJobQueue(object):
 
             if not os.path.exists(debug_filename):
                 error_text += [debug_type + ': missing']
-            
+
                 continue
-            
+
             with open(debug_filename, 'r') as debug_file:
                 error_text += [debug_type + ':']
-                
+
                 for line in debug_file:
                     error_text += ['\t' + line.rstrip()]
 
@@ -774,7 +877,6 @@ class AzureJobQueue(object):
         blobname_prefix = self.job_blobname_prefix.pop(name)
         self.running_task_ids.remove(task_id)
 
-
         download_blobs_from_container(
             self.blob_client,
             self.container_name,
@@ -784,13 +886,15 @@ class AzureJobQueue(object):
         job_after_filename = os.path.join(temps_dir, 'job_result.pickle')
 
         if not os.path.exists(job_after_filename):
-            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
+            raise pypeliner.execqueue.base.ReceiveError(
+                self._create_error_text(temps_dir))
 
         with open(job_after_filename, 'rb') as job_after_file:
             received = pickle.load(job_after_file)
 
         if received is None:
-            raise pypeliner.execqueue.base.ReceiveError(self._create_error_text(temps_dir))
+            raise pypeliner.execqueue.base.ReceiveError(
+                self._create_error_text(temps_dir))
 
         return received
 
@@ -824,4 +928,3 @@ if __name__ == "__main__":
 
         job2 = queue.receive(finished_name)
         print(job2.called)
-
