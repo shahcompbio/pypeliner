@@ -143,4 +143,5 @@ def _call_process(command, stdin, stdout, stderr):
         if e.errno == 2:
             raise CommandNotFoundException(command, command[0])
         else:
-            raise e
+            raise
+
