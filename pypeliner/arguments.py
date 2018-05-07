@@ -69,7 +69,13 @@ class TempSpaceArg(Arg):
         self.name = name
         self.node = node
         self.cleanup = cleanup
-        self.filename = db.get_temp_filename(name, node)
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.UserResource(db.file_storage, name, node, filename,
+                            direct_write=kwargs.get('direct_write'),
+                            extensions=kwargs.get('extensions'))
+        self.filename = self.resource.filename
+    def allocate(self):
+        self.resource.allocate()
     def get_outputs(self):
         yield pypeliner.resources.Dependency(self.name, self.node)
     def resolve(self):
