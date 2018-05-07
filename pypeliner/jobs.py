@@ -7,7 +7,7 @@ import traceback
 import socket
 import datetime
 import signal
-
+import warnings
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -16,7 +16,6 @@ import pypeliner.managed
 import pypeliner.resources
 import pypeliner.identifiers
 import pypeliner.deep
-import pypeliner.storage
 
 import resource
 
@@ -235,7 +234,21 @@ class JobTimer(object):
             return None
         return int(self._finish - self._start)
 
-
+class JobLogger(object):
+    def __init__(self):
+        self.trap = warnings.catch_warnings(record=True)
+    def __enter__(self):
+        self.trapped_warnings = self.trap.__enter__()
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.trap.__exit__()
+    @property
+    def warnings(self):
+        """
+        only keep the user warnings, filter all other warnings. This should get rid of
+        most deprecation warnings and other runtime warnings from numpy, scipy etc.
+        """
+        warnings = filter(lambda i: issubclass(i.category, UserWarning), self.trapped_warnings)
+        return warnings
 
 class TimeOutError(Exception):
     """Exception Type for throwing timeout errors"""
@@ -324,6 +337,7 @@ class JobCallable(object):
         self.job_timer = JobTimer()
         self.job_mem_tracker = JobMemoryTracker()
         self.job_time_out = JobTimeOut(timeout)
+        self.job_logger = JobLogger()
         self.hostname = None
     @property
     def duration(self):
@@ -331,6 +345,9 @@ class JobCallable(object):
     @property
     def memoryused(self):
         return self.job_mem_tracker.memoryused
+    @property
+    def warnings(self):
+        return self.job_logger.warnings
     def log_text(self):
         text = '--- stdout ---\n'
         with open(self.stdout_filename, 'r') as job_stdout:
@@ -361,7 +378,7 @@ class JobCallable(object):
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
                 self.hostname = socket.gethostname()
-                with self.job_timer, self.job_mem_tracker, self.job_time_out:
+                with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
                     ret_value = self.func(*callset.args, **callset.kwargs)
