@@ -51,6 +51,8 @@ class BlobMissing(Exception):
 class AzureBlob(object):
     def __init__(self, storage, filename, blob_name, **kwargs):
         self.storage = storage
+        if filename.startswith('/'):
+            filename = filename[1:]
         self.filename = filename
         self.write_filename = filename
         self.blob_name = blob_name

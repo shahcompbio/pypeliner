@@ -72,15 +72,17 @@ class UserResource(Resource):
     def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
         self.name = name
         self.node = node
-        self.filename = filename
         # Note:
         # filenames may be none if they are not yet defined
         # for example for a job that creates axis chunks that
         # are used by the same job's outputs
         if filename is None:
             self.store = None
+            self.filename = None
         else:
-            self.store = storage.create_store(self.filename, is_temp=False, direct_write=direct_write)
+            self.store = storage.create_store(filename, is_temp=False, direct_write=direct_write)
+            self.filename = self.store.filename
+
         self.extra_stores = []
         if extensions is not None:
             for ext in extensions:
@@ -111,9 +113,9 @@ class TempFileResource(Resource):
     def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
         self.name = name
         self.node = node
-        self.filename = filename
         self.is_temp = True
-        self.store = storage.create_store(self.filename, is_temp=True, direct_write=direct_write)
+        self.store = storage.create_store(filename, is_temp=True, direct_write=direct_write)
+        self.filename = self.store.filename
         self.extra_stores = []
         if extensions is not None:
             for ext in extensions:
