@@ -40,14 +40,14 @@ class Scheduler(object):
         return self._workflow_dir
     @workflow_dir.setter
     def workflow_dir(self, value):
-        self._workflow_dir = pypeliner.helpers.abspath(value)
+        self._workflow_dir = value
 
     @property
     def logs_dir(self):
         return self._logs_dir
     @logs_dir.setter
     def logs_dir(self, value):
-        self._logs_dir = pypeliner.helpers.abspath(value)
+        self._logs_dir = value
 
     def run(self, workflow_def, exec_queue, file_storage, runskip):
         """ Run the pipeline

@@ -462,7 +462,7 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
         all_node_states.add(status)
 
         # dont send jobs to failed nodes
-        if status not in node_status_ok:
+        if status not in node_status_ok and not status == "disabled":
             batch_client.compute_node.disable_scheduling(pool_id, node.id)
         else:
             good_nodes_in_pool = True
