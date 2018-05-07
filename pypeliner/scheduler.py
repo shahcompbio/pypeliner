@@ -6,7 +6,6 @@ Job scheduling class
 import logging
 import traceback
 
-import pypeliner.helpers
 import pypeliner.graph
 import pypeliner.execqueue.base
 import pypeliner.database
@@ -174,6 +173,9 @@ class Scheduler(object):
                               extra={"id": job.displayname, "type":"job", "memory": received.memoryused, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
                               extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
+
+            for warning in received.warnings:
+                self._logger.warn('job ' + job.displayname + ' warning: ' +  str(warning.message))
 
         if received is None or not received.finished:
             if self._retry_job(exec_queue, job):
