@@ -42,9 +42,9 @@ class SplitMergeArg(object):
 
 
 class TemplateArg(Arg):
-    """ Templated name argument 
+    """ Templated name argument
 
-    The name parameter is treated as a string with named formatting.  Resolves to the name formatted using the node 
+    The name parameter is treated as a string with named formatting.  Resolves to the name formatted using the node
     dictionary.
 
     """
@@ -146,19 +146,17 @@ class MergeFileArg(Arg,SplitMergeArg):
         self.fnames = fnames
         self.template = template
         self.resources = []
-        self.inputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
-            self.inputs.append(resource)
         self.merge_inputs = []
         for dependency in db.nodemgr.get_merge_inputs(self.axes, self.node):
             self.merge_inputs.append(dependency)
     def get_inputs(self):
-        return self.inputs
+        return self.resources
     def get_merge_inputs(self):
         return self.merge_inputs
     def resolve(self):
@@ -213,14 +211,12 @@ class SplitFileArg(Arg,SplitMergeArg):
         self.fnames = fnames
         self.template = template
         self.resources = []
-        self.outputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
-            self.outputs.append(resource)
         self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
         filename_creator = db.get_user_filename_creator(
@@ -230,7 +226,7 @@ class SplitFileArg(Arg,SplitMergeArg):
     def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
-        return self.outputs
+        return self.resources
     def get_split_outputs(self):
         return self.split_outputs
     def resolve(self):
@@ -385,17 +381,15 @@ class TempMergeFileArg(Arg,SplitMergeArg):
         self.node = node
         self.axes = axes
         self.resources = []
-        self.inputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
-            self.inputs.append(resource)
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node))
     def get_inputs(self):
-        return self.inputs
+        return self.resources
     def get_merge_inputs(self):
         return self.merge_inputs
     def resolve(self):
@@ -482,7 +476,7 @@ class UserFilenameCallback(FilenameCallback):
 class TempSplitFileArg(Arg,SplitMergeArg):
     """ Temp output file arguments from a split
 
-    Resolves to a filename callback that can be used to create a temporary filename for each chunk of the split on the 
+    Resolves to a filename callback that can be used to create a temporary filename for each chunk of the split on the
     given axis.  Finalizes with resource manager to move from temporary filename to final filename.
 
     """
@@ -493,26 +487,21 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         self.axes_origin = self.get_axes_origin(axes_origin)
         self.is_split = len(self.axes_origin) != 0
         self.resources = []
-        self.inputs = []
-        self.outputs = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
-            self.outputs.append(resource)
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
         self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
         self.filename_callback = TempFilenameCallback(
             db.file_storage, self.name, self.node, self.axes,
             db.get_temp_filename_creator(), **kwargs)
-    def get_inputs(self):
-        return self.inputs
     def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
-        return self.outputs
+        return self.resources
     def get_split_outputs(self):
         return self.split_outputs
     def resolve(self):
@@ -577,4 +566,3 @@ class OutputChunksArg(Arg,SplitMergeArg):
         return self
     def updatedb(self, db):
         db.nodemgr.store_chunks(self.axes, self.node, self.value, subset=self.axes_origin)
-
