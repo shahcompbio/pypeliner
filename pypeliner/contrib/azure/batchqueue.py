@@ -455,14 +455,18 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
 
     all_node_states = set()
     for node in nodes:
-        status = batch_client.compute_node.get(pool_id, node.id).state.value
+        try:
+            status = batch_client.compute_node.get(pool_id, node.id).state.value
+        except BatchErrorException:
+            logger.warning("Couldn't get status for node {} ".format(node.id))
+            continue
         # node states are inconsistent with lower and upper cases
         status = status.lower()
 
         all_node_states.add(status)
 
         # dont send jobs to failed nodes
-        if status not in node_status_ok and not status == "disabled":
+        if status not in node_status_ok and not status == "offline":
             batch_client.compute_node.disable_scheduling(pool_id, node.id)
         else:
             good_nodes_in_pool = True
