@@ -95,6 +95,8 @@ import pypeliner.execqueue
 import pypeliner.helpers
 import pypeliner.runskip
 import pypeliner.execqueue.factory
+import pypeliner.storage
+
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
