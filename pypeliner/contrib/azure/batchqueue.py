@@ -143,10 +143,10 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     :param dict config: Configuration details.
     """
 
-    if "IMAGE_ID" in os.environ:
+    if config.get("node_resource_id", None):
         image_ref_to_use = batchmodels.ImageReference(
-            virtual_machine_image_id=os.environ["IMAGE_ID"])
-        sku_to_use = os.environ["SKU"]
+            virtual_machine_image_id=config["node_resource_id"])
+        sku_to_use = config['node_os_sku']
     else:
         sku_to_use, image_ref_to_use = \
             select_latest_verified_vm_image_with_node_agent_sku(
@@ -457,7 +457,7 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
     for node in nodes:
         try:
             status = batch_client.compute_node.get(pool_id, node.id).state.value
-        except BatchErrorException:
+        except batchmodels.batch_error.BatchErrorException:
             logger.warning("Couldn't get status for node {} ".format(node.id))
             continue
         # node states are inconsistent with lower and upper cases
