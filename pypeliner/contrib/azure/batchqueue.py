@@ -8,6 +8,7 @@ import pickle
 import logging
 import uuid
 import yaml
+import re
 
 import pypeliner.execqueue.base
 from pypeliner.helpers import Backoff
@@ -20,6 +21,38 @@ from azure.common import AzureHttpError
 
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
+
+
+def get_task_id(name, azure_task_name_max_len=64):
+    """
+    generate uniq string, fill in the leftover space
+    with job information
+    :param str name: pypeliner's internal task name
+    :return str: unique azure compatible task id
+    """
+
+    uniq_string = str(uuid.uuid1())
+
+    leftover_space = azure_task_name_max_len - len(uniq_string) - 1
+
+    # last few characters are more useful for identifying tasks
+    name = name[-leftover_space:]
+
+    name = '-'.join(re.split(':|/', name)[1:])
+
+    name = "{}-{}".format(uniq_string, name)
+
+    return name
+
+
+def get_pool_id_from_job(batch_client, job_id):
+    """
+    get pool id from job id
+    :param batch_client: azure batch service client
+    :param str job_id: azure batch job id
+    :return str: azure batch pool id
+    """
+    return batch_client.job.get(job_id).pool_info.pool_id
 
 
 def get_storage_account_key(accountname):
@@ -433,48 +466,59 @@ def _random_string(length):
     return ''.join(random.choice(string.lowercase) for _ in range(length))
 
 
+def verify_node_status(node_id, pool_id, batch_client, logger):
+    '''
+    check if the node is in working state, if not disable it.
+    :param str node_id: compute node id
+    :param str pool_id: batch pool id
+    :param batch_client: azure batch service client
+    :param logger: pypeliner logger object
+    '''
+
+    healthy_states = ["idle", "running", "preempted",
+                      "waitingforstarttask", "leavingpool", 'starting']
+
+    try:
+        status = batch_client.compute_node.get(pool_id, node_id).state.value
+    except batchmodels.batch_error.BatchErrorException:
+        logger.warning("Couldn't get status for node {} ".format(node_id))
+
+    # dont send jobs to failed nodes
+    if status not in healthy_states and not status == "offline":
+        logger.warning(
+            'node {} is in {} state and will be disabled'.format(
+                node_id,
+                status))
+        batch_client.compute_node.disable_scheduling(pool_id, node_id)
+
+
 def check_pool_for_failed_nodes(batch_client, pool_id, logger):
     """
-    Collects node state information from the batch pool, disables
-    any failed nodes and warns user if required
+    Collects node state information from the batch pool
     :param batch_client: batch service client
     :param str pool_id: ID of pool to monitor
     :param logger: logger object to issue warnings
     """
 
-    node_status_ok = ["idle", "running", "preempted",
+    healthy_states = ["idle", "running", "preempted",
                       "waitingforstarttask", "leavingpool", 'starting']
 
-    good_nodes_in_pool = False
-
-    nodes = list(batch_client.compute_node.list(pool_id))
-
-    # pool with 0 nodes
-    if not nodes:
-        return
-
-    all_node_states = set()
-    for node in nodes:
+    for node in batch_client.compute_node.list(pool_id):
         try:
-            status = batch_client.compute_node.get(pool_id, node.id).state.value
+            status = batch_client.compute_node.get(
+                pool_id,
+                node.id).state.value
         except batchmodels.batch_error.BatchErrorException:
             logger.warning("Couldn't get status for node {} ".format(node.id))
             continue
+
         # node states are inconsistent with lower and upper cases
-        status = status.lower()
+        # stop looking when atleast one working node exists
+        if status.lower() in healthy_states:
+            return
 
-        all_node_states.add(status)
-
-        # dont send jobs to failed nodes
-        if status not in node_status_ok and not status == "offline":
-            batch_client.compute_node.disable_scheduling(pool_id, node.id)
-        else:
-            good_nodes_in_pool = True
-
-    if not good_nodes_in_pool:
-        all_node_states = " ".join(sorted(all_node_states))
-        logger.warning("Please verify pool status, "
-                       "node states are {}".format(all_node_states))
+    logger.warning(
+        "Couldn't find any working nodes in pool. Please verify pool status")
 
 
 def wait_for_job_deletion(batch_client, job_id, logger):
@@ -503,7 +547,8 @@ def get_pool_and_job_info(config, run_id, logger):
     :param logger: logging object for issuing warnings
     """
 
-    pool_and_job_info = {}
+    pool_info = {}
+    job_info = {}
 
     primary_pool = None
 
@@ -514,15 +559,16 @@ def get_pool_and_job_info(config, run_id, logger):
         if pool_params.get("primary", None):
             primary_pool = pool_id
 
-        pool_and_job_info[pool_id] = (job_id, pool_params)
+        pool_info[pool_id] = pool_params
+        job_info[pool_id] = job_id
 
     if not primary_pool:
-        primary_pool = pool_and_job_info.keys()[0]
+        primary_pool = pool_info.keys()[0]
         logger.warn(
             "Couldn't detect primary pool, using {} as primary".format(
                 primary_pool))
 
-    return pool_and_job_info, primary_pool
+    return pool_info, job_info, primary_pool
 
 
 class AzureJobQueue(object):
@@ -584,14 +630,19 @@ class AzureJobQueue(object):
         self.job_temps_dir = {}
         self.job_blobname_prefix = {}
 
+        self.mapping_from_tasks_to_job = {}
+
         self.most_recent_transition_time = None
         self.completed_task_ids = set()
         self.running_task_ids = set()
 
-        self.pool_and_job_info, self.primary_pool_info = get_pool_and_job_info(
+        self.pool_info, self.job_info, self.primary_pool_id = get_pool_and_job_info(
             self.config,
             self.run_id,
             self.logger)
+
+        self.active_pools = set()
+        self.active_jobs = set()
 
     debug_filenames = {
         'job stderr': 'stderr.txt',
@@ -601,36 +652,12 @@ class AzureJobQueue(object):
     }
 
     def __enter__(self):
-
-        # start all pools
-        for pool_id, (job_id, pool_params) in self.pool_and_job_info.iteritems():
-            # Create a new pool if needed
-            if not self.batch_client.pool.exists(pool_id):
-                self.logger.info("creating pool {}".format(pool_id))
-                create_pool(
-                    self.batch_client,
-                    self.blob_client,
-                    pool_id,
-                    pool_params)
-
-            job_ids = set([job.id for job in self.batch_client.job.list()])
-            if job_id not in job_ids:
-                self.logger.info("creating job {}".format(job_id))
-                create_job(
-                    self.batch_client,
-                    job_id,
-                    pool_id)
-
-            # Delete previous tasks
-            for task in self.batch_client.task.list(job_id):
-                self.batch_client.task.delete(job_id, task.id)
-
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.info('tear down')
 
-        for pool_id, (job_id, _) in self.pool_and_job_info.iteritems():
+        for pool_id in self.active_pools:
 
             if not self.no_delete_pool:
 
@@ -640,13 +667,48 @@ class AzureJobQueue(object):
                 except Exception as e:
                     print(e)
 
+        for job_id in self.active_jobs:
+
             if not self.no_delete_job:
+
                 self.logger.info("deleting job {}".format(job_id))
                 try:
                     self.batch_client.job.delete(job_id)
                 except Exception as e:
                     print(e)
                 wait_for_job_deletion(self.batch_client, job_id, self.logger)
+
+    def prep_pools_and_jobs(self, pool_id, job_id):
+        """
+        start a pool and job for the task if it hasnt been initialized already
+        :param str pool_id: azure batch pool id
+        :param str job_id: azure batch job id
+        """
+
+        if pool_id not in self.active_pools and \
+                not self.batch_client.pool.exists(pool_id):
+            pool_params = self.pool_info[pool_id]
+            self.logger.info("creating pool {}".format(pool_id))
+            create_pool(
+                self.batch_client,
+                self.blob_client,
+                pool_id,
+                pool_params)
+            self.active_pools.add(pool_id)
+
+        job_ids = set([job.id for job in self.batch_client.job.list()])
+        if job_id not in self.active_jobs and job_id not in job_ids:
+            self.logger.info("creating job {}".format(job_id))
+            create_job(
+                self.batch_client,
+                job_id,
+                pool_id)
+            self.active_jobs.add(job_id)
+
+            for task in self.batch_client.task.list(job_id):
+                self.batch_client.task.delete(job_id, task.id)
+
+        return job_id
 
     def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
@@ -659,17 +721,23 @@ class AzureJobQueue(object):
 
         """
 
-        if "pool_id" not in ctx:
-            job_id,_ = self.pool_and_job_info[self.primary_pool_info]
-        else:
-            job_id,_ = self.pool_and_job_info[ctx["pool_id"]]
+        pool_id = ctx.get('pool_id', None)
 
-        task_id = str(uuid.uuid1())
+        if not pool_id:
+            pool_id = self.primary_pool_id
+
+        job_id = self.job_info[pool_id]
+
+        self.prep_pools_and_jobs(pool_id, job_id)
+
+        task_id = get_task_id(name)
+
         self.logger.info(
             'assigning task_id {} to job {}'.format(
                 task_id,
                 name))
 
+        self.mapping_from_tasks_to_job[task_id] = job_id
         self.job_names[task_id] = name
         self.job_task_ids[name] = task_id
         self.job_temps_dir[name] = temps_dir
@@ -781,11 +849,13 @@ class AzureJobQueue(object):
             task_filter = "state eq 'completed'"
             list_options = batchmodels.TaskListOptions(filter=task_filter)
 
-            for pool_id, (job_id, _) in self.pool_and_job_info.iteritems():
+            for pool_id in self.active_pools:
                 check_pool_for_failed_nodes(
                     self.batch_client,
                     pool_id,
                     self.logger)
+
+            for job_id in self.active_jobs:
                 tasks = list(
                     self.batch_client.task.list(
                         job_id,
@@ -823,7 +893,7 @@ class AzureJobQueue(object):
             max_results=list_max_results)
 
         tasks = []
-        for _, (job_id, _) in self.pool_and_job_info.iteritems():
+        for job_id in self.active_jobs:
             tasks += list(self.batch_client.task.list(job_id,
                                                       task_list_options=list_options))
         sorted_transition_times = sorted(
@@ -845,8 +915,13 @@ class AzureJobQueue(object):
         self.completed_task_ids.update([task.id for task in tasks])
         return len(self.completed_task_ids) > num_completed_before
 
-    def _create_error_text(self, job_temp_dir):
-        error_text = ['failed to execute']
+    def _create_error_text(self, job_temp_dir, hostname=None):
+        error_text = 'failed to execute'
+
+        if hostname:
+            error_text += ' on node {}'.format(hostname)
+
+        error_text = [error_text]
 
         for debug_type, debug_filename in self.debug_filenames.iteritems():
             debug_filename = os.path.join(job_temp_dir, debug_filename)
@@ -881,6 +956,14 @@ class AzureJobQueue(object):
         blobname_prefix = self.job_blobname_prefix.pop(name)
         self.running_task_ids.remove(task_id)
 
+        job_id = self.mapping_from_tasks_to_job[task_id]
+
+        # hostname on the node doesnt match id in azure ui(affinity id in API)
+        # overrides the hostname collected from node with affinity id.
+        hostname = self.batch_client.task.get(
+            job_id,
+            task_id).node_info.node_id
+
         download_blobs_from_container(
             self.blob_client,
             self.container_name,
@@ -891,14 +974,27 @@ class AzureJobQueue(object):
 
         if not os.path.exists(job_after_filename):
             raise pypeliner.execqueue.base.ReceiveError(
-                self._create_error_text(temps_dir))
+                self._create_error_text(temps_dir, hostname=hostname))
 
         with open(job_after_filename, 'rb') as job_after_file:
             received = pickle.load(job_after_file)
 
         if received is None:
             raise pypeliner.execqueue.base.ReceiveError(
-                self._create_error_text(temps_dir))
+                self._create_error_text(temps_dir, hostname=hostname))
+
+        received.hostname = hostname
+
+        # batch keeps scheduling tasks on nodes in failed state, need to
+        # explicitly disable failed nodes.
+        if not received.finished:
+            pool_id = get_pool_id_from_job(self.batch_client, job_id)
+
+            verify_node_status(
+                hostname,
+                pool_id,
+                self.batch_client,
+                self.logger)
 
         return received
 
