@@ -50,6 +50,11 @@ class Managed(object):
         self.axes = axes
         self.kwargs = kwargs
     def create_arg(self, job):
+
+        #add cleanup as arg to override tempspace's cleanup option
+        if job.workflow.cleanup is not None and not job.workflow.cleanup:
+            self.kwargs["cleanup"] = job.workflow.cleanup
+
         common = 0
         for node_axis, axis in zip((a[0] for a in job.node), self.axes):
             if node_axis != axis:
