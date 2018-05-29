@@ -43,6 +43,10 @@ class Managed(object):
     def create_arg(self, job):
         return self.arg(job, self.name, self.axes, **self.kwargs)
 
+        #add cleanup as arg to override tempspace's cleanup option
+        if job.workflow.cleanup is not None and not job.workflow.cleanup:
+            self.kwargs["cleanup"] = job.workflow.cleanup
+
 class Template(Managed):
     """ Represents a name templated by axes
 
