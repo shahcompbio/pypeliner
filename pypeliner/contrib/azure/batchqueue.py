@@ -618,7 +618,7 @@ class AzureJobQueue(object):
             f.write('set -e\n')
             f.write('set -o pipefail\n\n')
             f.write(self.compute_start_commands + '\n')
-            f.write(self.compute_run_command.format(input_filename=job_before_file_path, output_filename=job_after_file_path, container=container,  mounts=mounts) + '\n')
+            f.write(self.compute_run_command.format(input_filename=job_before_file_path, output_filename=job_after_file_path) + '\n')
             f.write(self.compute_finish_commands + '\n')
             f.write('wait')
 
