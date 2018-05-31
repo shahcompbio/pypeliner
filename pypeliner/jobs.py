@@ -8,6 +8,7 @@ import socket
 import datetime
 import signal
 import warnings
+import importlib
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -320,6 +321,13 @@ def resolve_arg(arg):
         return None, False
     return arg.resolve(), True
 
+def import_function(import_string):
+    module, funcname = import_string.rsplit('.', 1)
+
+    mod = importlib.import_module(module)
+    met = getattr(mod, funcname)
+
+    return met
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
@@ -381,6 +389,8 @@ class JobCallable(object):
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
+                    if isinstance(self.func, str):
+                        self.func = import_function(self.func)
                     ret_value = self.func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
@@ -427,7 +437,7 @@ class SubWorkflowDefinition(JobDefinition):
         self.name = name
         self.axes = axes
         self.ctx = {}
-        self.func = func
+        self.func = import_function(func) if isinstance(func, str) else func
         self.argset = argset
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
