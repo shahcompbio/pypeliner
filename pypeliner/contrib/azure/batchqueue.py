@@ -668,14 +668,15 @@ class AzureJobQueue(object):
                     print(e)
 
         for job_id in self.active_jobs:
-
             if not self.no_delete_job:
-
                 self.logger.info("deleting job {}".format(job_id))
                 try:
                     self.batch_client.job.delete(job_id)
                 except Exception as e:
                     print(e)
+
+        for job_id in self.active_jobs:
+            if not self.no_delete_job:
                 wait_for_job_deletion(self.batch_client, job_id, self.logger)
 
     def prep_pools_and_jobs(self, pool_id, job_id):
