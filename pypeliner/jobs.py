@@ -9,6 +9,7 @@ import datetime
 import signal
 import warnings
 import importlib
+import resource
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -18,7 +19,6 @@ import pypeliner.resources
 import pypeliner.identifiers
 import pypeliner.deep
 
-import resource
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
