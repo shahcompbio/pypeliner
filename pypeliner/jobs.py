@@ -10,6 +10,7 @@ import signal
 import collections
 import warnings
 import importlib
+import resource
 
 
 import pypeliner.helpers
@@ -20,7 +21,6 @@ import pypeliner.resources
 import pypeliner.identifiers
 import pypeliner.deep
 
-import resource
 
 
 class CallSet(object):
