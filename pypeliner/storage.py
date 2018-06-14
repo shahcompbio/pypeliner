@@ -115,6 +115,8 @@ def create(requested_storage, workflow_dir=None):
         raise Exception('No storage specified')
     elif requested_storage == 'local':
         storage_name = 'pypeliner.storage.FileStorage'
+    elif requested_storage == 'azureblob':
+        storage_name = 'pypeliner.contrib.azure.blobstorage.AzureBlobStorage'
     else:
         storage_name = requested_storage
 
