@@ -14,6 +14,8 @@ def create(requested_queue, modules=None, native_spec=None, config_filename=None
         exec_queue_name = 'pypeliner.execqueue.qsub.PbsJobQueue'
     elif requested_queue == 'drmaa':
         exec_queue_name = 'pypeliner.execqueue.drmaa.DrmaaJobQueue'
+    elif requested_queue == 'azurebatch':
+        exec_queue_name = 'pypeliner.contrib.azure.batchqueue.AzureJobQueue'
     else:
         exec_queue_name = requested_queue
 
