@@ -17,6 +17,8 @@ from pypeliner.helpers import Backoff
 
 from azure.common import AzureHttpError
 
+from rabbitmq import RabbitMqSemaphore
+
 
 def _get_blob_key(accountname):
     blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
@@ -91,10 +93,16 @@ class AzureBlob(object):
 
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
+        self.rabbitmq_username = os.environ["RABBIT_USERNAME"]
+        self.rabbitmq_password = os.environ["RABBIT_PASSWORD"]
+        self.rabbitmq_ipaddress = os.environ["RABBIT_IP_ADDRESS"]
+        self.rabbitmq_qname = os.environ["RABBIT_QUEUE"]
+
         self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
         self.storage_account_key = _get_blob_key(self.storage_account_name)
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.connect()
+
     def connect(self):
         self.blob_client = azure.storage.blob.BlockBlobService(
             account_name=self.storage_account_name,
@@ -138,11 +146,15 @@ class AzureBlobStorage(object):
                 container_name,
                 blob_name)
             blob_size = blob.properties.content_length
-            blob = download_from_blob_to_path(
-                self.blob_client,
-                container_name,
-                blob_name,
-                filename)
+
+            with RabbitMqSemaphore(self.rabbitmq_username, self.rabbitmq_password,
+                                   self.rabbitmq_ipaddress, self.rabbitmq_qname):
+                blob = download_from_blob_to_path(
+                    self.blob_client,
+                    container_name,
+                    blob_name,
+                    filename)
+
         except azure.common.AzureMissingResourceHttpError:
             print blob_name, filename
             raise pypeliner.storage.InputMissingException(blob_name)
