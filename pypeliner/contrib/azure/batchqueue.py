@@ -13,7 +13,6 @@ import re
 import pypeliner.execqueue.base
 from pypeliner.helpers import Backoff
 
-from azure.common import AzureHttpError
 import azure.storage.blob as azureblob
 import azure.batch.batch_service_client as batch
 import azure.batch.models as batchmodels

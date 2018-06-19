@@ -1,23 +1,20 @@
 import os
 import datetime
 import time
-import yaml
-
-import azure.storage.blob
-import azure.common
 
 import pypeliner.helpers
 import pypeliner.storage
 import pypeliner.flyweight
-
-from azure.common.credentials import ServicePrincipalCredentials
-from azure.mgmt.storage import StorageManagementClient
-
 from pypeliner.helpers import Backoff
 
+from rabbitmq import RabbitMqSemaphore
+
+import azure.storage.blob
+import azure.common
+from azure.common.credentials import ServicePrincipalCredentials
+from azure.mgmt.storage import StorageManagementClient
 from azure.common import AzureHttpError
 
-from rabbitmq import RabbitMqSemaphore
 
 
 def _get_blob_key(accountname):
@@ -38,11 +35,21 @@ def _get_blob_name(filename):
 
 
 @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
-def download_from_blob_to_path(blob_client, container_name, blob_name, destination_file_path):
-    blob = blob_client.get_blob_to_path(container_name,
-                                        blob_name,
-                                        destination_file_path)
-
+def download_from_blob_to_path(blob_client, account_name, container_name, blob_name,
+                               destination_file_path, username, password,
+                               ipaddress, vhost):
+    if username:
+        queue = "{}_pull".format(account_name)
+        with RabbitMqSemaphore(username, password,
+                               ipaddress, queue,
+                               vhost):
+            blob = blob_client.get_blob_to_path(container_name,
+                                                blob_name,
+                                                destination_file_path)
+    else:
+        blob = blob_client.get_blob_to_path(container_name,
+                                            blob_name,
+                                            destination_file_path)
     return blob
 
 
@@ -93,20 +100,21 @@ class AzureBlob(object):
 
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
-        self.rabbitmq_username = os.environ["RABBIT_USERNAME"]
-        self.rabbitmq_password = os.environ["RABBIT_PASSWORD"]
-        self.rabbitmq_ipaddress = os.environ["RABBIT_IP_ADDRESS"]
-        self.rabbitmq_qname = os.environ["RABBIT_QUEUE"]
-
-        self.storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-        self.storage_account_key = _get_blob_key(self.storage_account_name)
+        self.rabbitmq_username = os.environ.get("RABBITMQ_USERNAME", None)
+        self.rabbitmq_password = os.environ.get("RABBITMQ_PASSWORD", None)
+        self.rabbitmq_ipaddress = os.environ.get("RABBITMQ_IP", None)
+        self.rabbitmq_vhost = os.environ.get("RABBITMQ_VHOST", None)
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
-        self.connect()
-
-    def connect(self):
+        self.blob_client = None
+    def connect(self, storage_account_name):
+        #dont need to regenerate client if already exists
+        client = getattr(self, "blob_client", None)
+        if client and client.account_name == storage_account_name:
+            return
+        storage_account_key = _get_blob_key(storage_account_name)
         self.blob_client = azure.storage.blob.BlockBlobService(
-            account_name=self.storage_account_name,
-            account_key=self.storage_account_key)
+            account_name=storage_account_name,
+            account_key=storage_account_key)
     def create_createtime_cache(self, blob_name):
         return self.cached_createtimes.create_flyweight(blob_name)
     def __enter__(self):
@@ -115,46 +123,51 @@ class AzureBlobStorage(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.cached_createtimes.__exit__(exc_type, exc_value, traceback)
     def __getstate__(self):
-        return (self.storage_account_name, self.storage_account_key, self.cached_createtimes)
+        return (self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,
+                self.rabbitmq_ipaddress, self.rabbitmq_vhost)
     def __setstate__(self, state):
-        self.storage_account_name, self.storage_account_key, self.cached_createtimes = state
-        self.connect()
+        self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,\
+        self.rabbitmq_ipaddress, self.rabbitmq_vhost = state
     def create_store(self, filename, extension=None, **kwargs):
         if extension is not None:
             filename = filename + extension
         blob_name = _get_blob_name(filename)
         return AzureBlob(self, filename, blob_name, **kwargs)
+    def unpack_path(self, filename):
+        if filename.startswith('/'):
+            filename = filename[1:]
+        filename = filename.split('/')
+        storage_account = filename[0]
+        container_name = filename[1]
+        filename = '/'.join(filename[2:])
+        return storage_account, container_name, filename
     def push(self, blob_name, filename, createtime):
-        container_name, blob_name = self.unpack_path(blob_name)
+        storage_account, container_name, blob_name = self.unpack_path(blob_name)
+        self.connect(storage_account)
         self.blob_client.create_container(container_name)
         self.blob_client.create_blob_from_path(
             container_name,
             blob_name,
             filename,
             metadata={'create_time': createtime})
-    def unpack_path(self, filename):
-        if filename.startswith('/'):
-            filename = filename[1:]
-        filename = filename.split('/')
-        container_name = filename[0]
-        filename = '/'.join(filename[1:])
-        return container_name, filename
     def pull(self, blob_name, filename):
         try:
-            container_name, blob_name = self.unpack_path(blob_name)
+            storage_account, container_name, blob_name = self.unpack_path(blob_name)
+            self.connect(storage_account)
             blob = self.blob_client.get_blob_properties(
                 container_name,
                 blob_name)
             blob_size = blob.properties.content_length
-
-            with RabbitMqSemaphore(self.rabbitmq_username, self.rabbitmq_password,
-                                   self.rabbitmq_ipaddress, self.rabbitmq_qname):
-                blob = download_from_blob_to_path(
-                    self.blob_client,
-                    container_name,
-                    blob_name,
-                    filename)
-
+            blob = download_from_blob_to_path(
+                self.blob_client,
+                storage_account,
+                container_name,
+                blob_name,
+                filename,
+                self.rabbitmq_username,
+                self.rabbitmq_password,
+                self.rabbitmq_ipaddress,
+                self.rabbitmq_vhost)
         except azure.common.AzureMissingResourceHttpError:
             print blob_name, filename
             raise pypeliner.storage.InputMissingException(blob_name)
@@ -164,8 +177,9 @@ class AzureBlobStorage(object):
             raise Exception('file size mismatch for {}:{} compared to {}:{}'.format(
                 blob_name, blob.properties.content_length, filename, filesize))
     def retrieve_blob_createtime(self, blob_name):
-        container_name, blob_name = self.unpack_path(blob_name)
+        storage_account, container_name, blob_name = self.unpack_path(blob_name)
         try:
+            self.connect(storage_account)
             blob = self.blob_client.get_blob_properties(
                 container_name,
                 blob_name)
@@ -175,13 +189,15 @@ class AzureBlobStorage(object):
             return blob.metadata['create_time']
         return blob.properties.last_modified.strftime('%Y/%m/%d-%H:%M:%S')
     def update_blob_createtime(self, blob_name, createtime):
-        container_name, blob_name = self.unpack_path(blob_name)
+        storage_account, container_name, blob_name = self.unpack_path(blob_name)
+        self.connect(storage_account)
         self.blob_client.set_blob_metadata(
             container_name,
             blob_name,
             {'create_time': createtime})
     def delete_blob(self, blob_name):
-        container_name, blob_name = self.unpack_path(blob_name)
+        storage_account, container_name, blob_name = self.unpack_path(blob_name)
+        self.connect(storage_account)
         self.blob_client.delete_blob(
             container_name,
             blob_name)
