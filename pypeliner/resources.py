@@ -1,6 +1,7 @@
 import os
 import shutil
 import logging
+import pickle
 
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -142,7 +143,7 @@ class TempObjResource(Resource):
         self.filename = filename + ('._i', '._o')[is_input]
         self.is_input = is_input
         self.is_temp = True
-        self.store = storage.create_store(self.filename)
+        self.store = storage.create_store(self.filename, is_temp=True)
     @property
     def exists(self):
         return self.store.get_exists()
@@ -154,9 +155,15 @@ class TempObjResource(Resource):
             raise Exception('cannot touch missing object')
         self.store.touch()
     def get_obj(self):
-        return self.store.get()
+        self.store.allocate()
+        self.store.pull()
+        with open(self.store.filename, 'rb') as f:
+            return pickle.load(f)
     def put_obj(self, obj):
-        self.store.put(obj)
+        self.store.allocate()
+        with open(self.store.write_filename, 'wb') as f:
+            pickle.dump(obj, f)
+        self.store.push()
 
 
 def obj_equal(obj1, obj2):

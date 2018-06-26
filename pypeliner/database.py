@@ -41,7 +41,7 @@ class NodeManager(object):
     def retrieve_axis_chunks(self, axis, node):
         if (axis, node) not in self.cached_chunks:
             filename = self.db.get_temp_filename(axis, node)
-            resource = pypeliner.resources.TempObjManager(self.db.obj_storage, axis, node, filename)
+            resource = pypeliner.resources.TempObjManager(self.db.file_storage, axis, node, filename)
             chunks = resource.get_obj()
             if chunks is None:
                 chunks = (None,)
@@ -76,7 +76,7 @@ class NodeManager(object):
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         filename = self.db.get_temp_filename(axis, node)
-        resource = pypeliner.resources.TempObjManager(self.db.obj_storage, axis, node, filename)
+        resource = pypeliner.resources.TempObjManager(self.db.file_storage, axis, node, filename)
         resource.finalize(chunks)
     def get_merge_inputs(self, axes, node, subset=None):
         if subset is None:
@@ -94,13 +94,13 @@ class NodeManager(object):
     def get_chunks_resource(self, axes, node, subset):
         if 0 in subset:
             filename = self.db.get_temp_filename(axes[0], node)
-            yield pypeliner.resources.TempObjManager(self.db.obj_storage, axes[0], node, filename)
+            yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[0], node, filename)
         for level in xrange(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
                 filename = self.db.get_temp_filename(axes[level], level_node)
-                yield pypeliner.resources.TempObjManager(self.db.obj_storage, axes[level], level_node, filename)
+                yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[level], level_node, filename)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
@@ -158,9 +158,8 @@ class TempFilenameCreator(object):
 
 
 class WorkflowDatabase(object):
-    def __init__(self, temps_dir, workflow_dir, logs_dir, file_storage, obj_storage, job_shelf, path_info, instance_subdir):
+    def __init__(self, temps_dir, workflow_dir, logs_dir, file_storage, job_shelf, path_info, instance_subdir):
         self.file_storage = file_storage
-        self.obj_storage = obj_storage
         self.job_shelf = job_shelf
         self.path_info = path_info
         self.instance_subdir = instance_subdir
@@ -200,14 +199,12 @@ class WorkflowDatabaseFactory(object):
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
         self.file_storage = file_storage
-        obj_storage_prefix = os.path.join(self.workflow_dir, 'objs_')
-        self.obj_storage = pypeliner.storage.ShelveObjectStorage(metadata_prefix=obj_storage_prefix)
         self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
         db = WorkflowDatabase(
-            self.temps_dir, self.workflow_dir, self.logs_dir, self.file_storage, self.obj_storage,
+            self.temps_dir, self.workflow_dir, self.logs_dir, self.file_storage,
             self.job_shelf, path_info, instance_subdir)
         return db
     def _add_lock(self, instance_subdir):
@@ -222,11 +219,9 @@ class WorkflowDatabaseFactory(object):
                 raise
         self.lock_directories.append(lock_directory)
     def __enter__(self):
-        self.obj_storage.__enter__()
         self.job_shelf = shelve.open(self.job_shelf_filename)
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        self.obj_storage.__exit__(exc_type, exc_value, traceback)
         self.job_shelf.close()
         for lock_directory in self.lock_directories:
             try:
