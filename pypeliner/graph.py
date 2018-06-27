@@ -306,28 +306,26 @@ class WorkflowInstance(object):
                 self._logger.info('subworkflow ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
                                   extra={"id": job.displayname, "type":"subworkflow", "explanation":explaination, 'task_name': job.id[1]})
                 if is_run_required:
-                    send = job.create_callable()
+                    job_callable = job.create_callable()
                     self._logger.info('creating subworkflow ' + job.displayname,
                                       extra={"id": job.displayname, "type":"subworkflow", 'task_name': job.id[1]})
-                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + send.displaycommand,
-                                      extra={"id": job.displayname, "type":"subworkflow", "cmd":send.displaycommand, 'task_name': job.id[1]})
-                    send()
-                    received = send
-                    if not received.finished:
-                        self._logger.error('subworkflow ' + job.displayname + ' failed to complete\n' + received.log_text(),
+                    workflow_def = job_callable()
+                    if not job_callable.finished:
+                        self._logger.error('subworkflow ' + job.displayname + ' failed to complete\n' + job_callable.log_text(),
                                            extra={"id": job.displayname, "type":"subworkflow", "status": "fail", 'task_name': job.id[1]})
                         raise IncompleteWorkflowException()
-                    workflow_def = received.ret_value
                     if not isinstance(workflow_def, pypeliner.workflow.Workflow):
-                        self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + received.log_text(),
+                        self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + job_callable.log_text(),
                                            extra={"id": job.displayname, "type":"subworkflow", "status": "error", 'task_name': job.id[1]})
                         raise IncompleteWorkflowException()
                     if workflow_def.empty:
-                        self._logger.warning('subworkflow ' + job.displayname + ' returned an empty workflow\n' + received.log_text(),
+                        self._logger.warning('subworkflow ' + job.displayname + ' returned an empty workflow\n' + job_callable.log_text(),
                                              extra={"id": job.displayname, "type":"subworkflow", "status":"empty", 'task_name': job.id[1]})
+                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + job_callable.displaycommand,
+                                      extra={"id": job.displayname, "type":"subworkflow", "cmd":job_callable.displaycommand, 'task_name': job.id[1]})
                     node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
                     workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, cleanup=self.cleanup)
-                    self.subworkflows.append((job, received, workflow))
+                    self.subworkflows.append((job, job_callable, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped',
                                       extra={"id": job.displayname, "type":"subworkflow", "status":"skipped", 'task_name': job.id[1]})
@@ -336,14 +334,13 @@ class WorkflowInstance(object):
             elif isinstance(job, pypeliner.jobs.SetObjInstance):
                 self._logger.info('setting object ' + job.obj_displayname,
                                   extra={"id": job.obj_displayname, "type":"object", 'task_name': job.id[1]})
-                send = job.create_callable()
-                send()
-                received = send
-                if not received.finished:
-                    self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + received.log_text(),
+                job_callable = job.create_callable()
+                job_callable()
+                if not job_callable.finished:
+                    self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + job_callable.log_text(),
                                   extra={"id": job.obj_displayname, "type":"object", "status":"fail", 'task_name': job.id[1]})
                     raise IncompleteJobException()
-                job.finalize(received)
+                job.finalize(job_callable)
                 job.complete()
             else:
                 return job

@@ -18,7 +18,7 @@ class Arg(object):
         return []
     def resolve(self):
         return None
-    def finalize(self, db):
+    def finalize(self, v):
         pass
     def allocate(self):
         pass
@@ -345,6 +345,10 @@ class TempInputObjArg(Arg):
         if self.func is not None:
             self.obj = self.func(self.obj)
         return self.obj
+    def allocate(self):
+        self.resource.allocate()
+    def pull(self):
+        self.resource.pull()
 
 
 class TempMergeObjArg(Arg,SplitMergeArg):
@@ -377,6 +381,12 @@ class TempMergeObjArg(Arg,SplitMergeArg):
                 obj = self.func(obj)
             self.resolved[self.get_node_chunks(resource.node)] = obj
         return self.resolved
+    def allocate(self):
+        for resource in self.resources:
+            resource.allocate()
+    def pull(self):
+        for resource in self.resources:
+            resource.pull()
 
 
 class TempOutputObjArg(Arg):
@@ -392,8 +402,12 @@ class TempOutputObjArg(Arg):
         yield self.resource.output
     def resolve(self):
         return self
-    def finalize(self, db):
-        self.resource.finalize(self.value)
+    def finalize(self, value):
+        self.resource.finalize(value)
+    def allocate(self):
+        self.resource.allocate()
+    def push(self):
+        self.resource.push()
 
 
 class TempSplitObjArg(Arg,SplitMergeArg):
@@ -415,6 +429,8 @@ class TempSplitObjArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.TempObjManager(db.file_storage, self.name, node, filename)
             self.resources.append(resource)
         self.merge_inputs = get_merge_resources(db, self.node, self.axes)
+        self.storage = db.file_storage
+        self.filename_creator = db.get_temp_filename_creator()
     def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
@@ -422,16 +438,27 @@ class TempSplitObjArg(Arg,SplitMergeArg):
             yield resource.output
     def resolve(self):
         return self
-    def finalize(self, db):
-        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            node_chunks = self.get_node_chunks(node)
-            if node_chunks not in self.value:
-                raise ValueError('unable to extract ' + str(node) + ' from ' + self.name + ' with values ' + str(self.value))
-            instance_value = self.value[node_chunks]
-            filename = db.get_temp_filename(self.name, node)
-            resource = pypeliner.resources.TempObjManager(db.obj_storage, self.name, node, filename)
-            resource.finalize(instance_value)
-
+    def finalize(self, values):
+        self.chunks_list = values.keys()
+        self.resources = []
+        for chunks, value in values.iteritems():
+            if not isinstance(chunks, tuple):
+                chunks = (chunks,)
+            if len(self.axes) != len(chunks):
+                raise ValueError('expected ' + str(len(self.axes)) + ' values for axes ' + str(self.axes))
+            node = self.node
+            for axis, chunk in zip(self.axes, chunks):
+                node += pypeliner.identifiers.AxisInstance(axis, chunk)
+            filename = self.filename_creator(self.name, node)
+            resource = pypeliner.resources.TempObjManager(self.storage, self.name, node, filename)
+            resource.allocate()
+            resource.finalize(value)
+            self.resources.append(resource)
+    def push(self):
+        for resource in self.resources:
+            resource.push()
+    def updatedb(self, db):
+        db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
 
 class TempSplitOriginObjArg(Arg,SplitMergeArg):
     """ Temporary output object arguments from a split
@@ -453,6 +480,8 @@ class TempSplitOriginObjArg(Arg,SplitMergeArg):
             resource = pypeliner.resources.TempObjManager(db.obj_storage, self.name, node, filename)
             self.resources.append(resource)
         self.merge_inputs, self.split_outputs = get_split_merge_resources(db, self.node, self.axes, self.origins)
+        self.storage = db.file_storage
+        self.filename_creator = db.get_temp_filename_creator()
     def get_merge_inputs(self):
         return self.merge_inputs
     def get_outputs(self):
@@ -476,7 +505,6 @@ class TempSplitOriginObjArg(Arg,SplitMergeArg):
         for origin in self.origins:
             for node, level_chunks in get_level_chunks(self.node, origin, chunks):
                 yield origin, node, level_chunks
-
 
 class TempInputFileArg(Arg):
     """ Temp input file argument
@@ -736,3 +764,5 @@ class OutputChunksArg(Arg,SplitMergeArg):
         for origin in self.origins:
             for node, level_chunks in get_level_chunks(self.node, origin, chunks):
                 yield origin, node, level_chunks
+    def finalize(self, value):
+        self.chunks_list = value

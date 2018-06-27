@@ -411,7 +411,6 @@ class JobCallable(object):
         self.job_mem_tracker = JobMemoryTracker()
         self.job_time_out = JobTimeOut(timeout)
         self.hostname = None
-        self.callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
     @property
     def duration(self):
         return self.job_timer.duration
@@ -426,12 +425,6 @@ class JobCallable(object):
         with open(self.stderr_filename, 'r') as job_stderr:
             text += job_stderr.read()
         return text
-    @property
-    def displaycommand(self):
-        if self.func == pypeliner.commandline.execute:
-            return '"' + ' '.join(str(arg) for arg in self.callset.args) + '"'
-        else:
-            return self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in self.callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in self.callset.kwargs.iteritems()) + ')'
     def allocate(self):
         for arg in self.arglist:
             arg.allocate()
@@ -442,6 +435,11 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
+        callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
+        if self.func == pypeliner.commandline.execute:
+            self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
+        else:
+            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
@@ -452,9 +450,9 @@ class JobCallable(object):
                 with self.job_timer, self.job_mem_tracker, self.job_time_out:
                     self.allocate()
                     self.pull()
-                    self.ret_value = self.func(*self.callset.args, **self.callset.kwargs)
-                    if self.callset.ret is not None:
-                        self.callset.ret.value = self.ret_value
+                    ret_value = self.func(*callset.args, **callset.kwargs)
+                    if callset.ret is not None:
+                        callset.ret.finalize(ret_value)
                     self.push()
                 self.finished = True
             except:
@@ -463,6 +461,7 @@ class JobCallable(object):
                 sys.stdout, sys.stderr = old_stdout, old_stderr
         self.stdout_storage.push()
         self.stderr_storage.push()
+        return ret_value
     def collect_logs(self):
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
