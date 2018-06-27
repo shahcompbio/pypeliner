@@ -7,6 +7,7 @@ import traceback
 import socket
 import datetime
 import signal
+import collections
 
 
 import pypeliner.helpers
@@ -19,6 +20,7 @@ import pypeliner.deep
 import pypeliner.storage
 
 import resource
+
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -39,22 +41,58 @@ class CallSet(object):
         else:
             self.kwargs = kwargs
 
+
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
-    def __init__(self, name, axes, ctx, func, argset):
+    def __init__(self, name, axes, ctx, func, argset, origins):
         self.name = name
         self.axes = axes
         self.ctx = ctx
         self.func = func
         self.argset = argset
+        self.origins = origins
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield JobInstance(self, workflow, db, node)
+
 
 def _pretty_date(ts):
     if ts is None:
         return 'none'
     return datetime.datetime.fromtimestamp(ts).strftime('%Y/%m/%d-%H:%M:%S')
+
+
+class JobArgMismatchException(Exception):
+    def __init__(self, name, axes, node):
+        self.name = name
+        self.axes = axes
+        self.node = node
+        self.job_name = 'unknown'
+    def __str__(self):
+        return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(self.name, self.axes, self.job_name, tuple(a[0] for a in self.node))
+
+
+def _is_subseq(seq1, seq2):
+    """ Check if seq1 is a subsequence of seq2.
+    """
+    for i in range(len(seq1)):
+        if i >= len(seq2):
+            return False
+        elif seq1[i] != seq2[i]:
+            return False
+    return True
+
+
+def _max_subseq(seq1, seq2):
+    """ Find the length of the common prefix between seq1 and seq2.
+    """
+    common = 0
+    for a, b in zip(seq1, seq2):
+        if a != b:
+            break
+        common += 1
+    return common
+
 
 class JobInstance(object):
     """ Represents a job including function and arguments """
@@ -65,11 +103,14 @@ class JobInstance(object):
         self.db = db
         self.node = node
         self.arglist = list()
+        self.inputs = list()
+        self.outputs = list()
+        self.origins_check = set()
         try:
             self.argset = pypeliner.deep.deeptransform(
                 self.job_def.argset,
                 self._create_arg)
-        except pypeliner.managed.JobArgMismatchException as e:
+        except JobArgMismatchException as e:
             e.job_name = self.displayname
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
@@ -77,34 +118,65 @@ class JobInstance(object):
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
-        self.init_inputs_outputs()
+        for origin in (set(self.job_def.origins) - self.origins_check):
+            raise Exception('origin {} not created by any arg for job {}'.format(
+                origin, self.displayname))
 
     def _create_arg(self, mg):
         if not isinstance(mg, pypeliner.managed.Managed):
             return None, False
-        arg = mg.create_arg(self)
+
+        # Match managed argument axes to job axes
+        if mg.axes is None:
+            base_node = self.node
+            arg_axes = ()
+        else:
+            common = _max_subseq(mg.axes, self.node.axes)
+            base_node = self.node[:common]
+            arg_axes = mg.axes[common:]
+
+        # Nodes on which to split / merge if any
+        arg_nodes = list(self.db.nodemgr.retrieve_nodes(arg_axes, base_node))
+        is_split_merge = (len(arg_axes) > 0)
+
+        # Check if this argument is an origin for any axes for this job
+        arg_origins = []
+        for origin in self.job_def.origins:
+
+            # Each origin should have the jobs axes as a prefix
+            if not _is_subseq(self.node.axes, origin):
+                raise ValueError('invalid origin {} for job {}'.format(
+                    origin, self.displayname))
+            arg_origin = origin[len(self.node.axes):]
+
+            if _is_subseq(arg_origin, arg_axes):
+                arg_origins.append(arg_origin)
+                self.origins_check.add(origin)
+
+        # Create an argument for the given managed object
+        if len(arg_axes) == 0 and mg.normal is not None:
+            arg = mg.normal(self.db, mg.name, base_node,
+                direct_write=self.direct_write,
+                **mg.kwargs)
+        elif len(arg_axes) > 0 and len(arg_origins) > 0 and mg.splitorigin is not None:
+            arg = mg.splitorigin(self.db, mg.name, base_node, arg_axes, arg_origins,
+                direct_write=self.direct_write,
+                **mg.kwargs)
+        elif len(arg_axes) > 0 and len(arg_origins) == 0 and mg.splitmerge is not None:
+            arg = mg.splitmerge(self.db, mg.name, base_node, arg_axes,
+                direct_write=self.direct_write,
+                **mg.kwargs)
+        else:
+            raise JobArgMismatchException(mg.name, mg.axes, self.node)
+
+        self.inputs.extend(arg.get_inputs())
+        self.inputs.extend(arg.get_merge_inputs())
+        self.outputs.extend(arg.get_outputs())
+        self.outputs.extend(arg.get_split_outputs())
+
         self.arglist.append(arg)
         return arg, True
-    def init_inputs_outputs(self):
-        self.inputs = list()
-        self.outputs = list()
-        merge_inputs = list()
-        split_outputs = list()
-        for arg in self.arglist:
-            if isinstance(arg, pypeliner.arguments.Arg):
-                self.inputs.extend(arg.get_inputs())
-                self.outputs.extend(arg.get_outputs())
-                merge_inputs.extend(arg.get_merge_inputs())
-                split_outputs.extend(arg.get_split_outputs())
-        # A dependency that is both a merge input and split output
-        # is only an output
-        split_output_ids = set([a.id for a in split_outputs])
-        for input_ in merge_inputs:
-            if input_.id not in split_output_ids:
-                self.inputs.append(input_)
-        self.outputs.extend(split_outputs)
-        for node_input in self.db.nodemgr.get_node_inputs(self.node):
-            self.inputs.append(node_input)
+
     @property
     def id(self):
         return (self.node, self.job_def.name)
@@ -186,12 +258,6 @@ class JobInstance(object):
     def touch_outputs(self):
         for output in self.output_resources:
             output.touch()
-    def check_require_regenerate(self):
-        for arg in self.arglist:
-            if isinstance(arg, pypeliner.arguments.Arg):
-                if arg.is_split:
-                    return True
-        return False
     def create_callable(self):
         timeout = self.ctx.get("timeout", None)
         return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, timeout)
@@ -200,8 +266,28 @@ class JobInstance(object):
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
     def finalize(self, callable):
-        callable.updatedb(self.db)
-        if self.check_require_regenerate():
+        regenerate = False
+        arg_chunks = collections.defaultdict(dict)
+        for arg in callable.arglist:
+            for origin, node, chunks in arg.get_origin_chunks():
+                arg_chunks[(origin, node)][(arg.name, arg.axes)] = chunks
+        for origin, node in arg_chunks.keys():
+            origin_chunks = None
+            for (arg_name, arg_axes), chunks in arg_chunks[(origin, node)].iteritems():
+                if origin_chunks is None:
+                    origin_chunks = chunks
+                    arg_name_0, arg_axes_0 = arg_name, arg_axes
+                    continue
+                elif chunks != origin_chunks:
+                    raise Exception('chunk mismatch for job {}, node {}, arg {}: {} and arg {}: {}'.format(
+                        self.displayname, node,
+                        (arg_name, arg_axes), origin_chunks,
+                        (arg_name_0, arg_axes_0), chunks))
+            self.db.nodemgr.store_axis_chunks(origin[-1], node, origin_chunks)
+            regenerate = True
+        for arg in callable.arglist:
+            arg.finalize(self.db)
+        if regenerate:
             self.workflow.regenerate()
     def complete(self):
         self.db.job_shelf[self.displayname] = True
@@ -382,18 +468,16 @@ class JobCallable(object):
         self.stderr_storage.allocate()
         self.stdout_storage.pull()
         self.stderr_storage.pull()
-    def updatedb(self, db):
-        for arg in self.arglist:
-            arg.updatedb(db)
 
 def _setobj_helper(value):
     return value
 
 class SetObjDefinition(JobDefinition):
-    def __init__(self, name, axes, obj, value):
+    def __init__(self, name, axes, obj, value, origins):
         super(SetObjDefinition, self).__init__(
             name, axes, {}, _setobj_helper,
-            CallSet(ret=obj, args=(value,)))
+            CallSet(ret=obj, args=(value,)),
+            origins)
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield SetObjInstance(self, workflow, db, node)
@@ -413,6 +497,7 @@ class SubWorkflowDefinition(JobDefinition):
         self.ctx = {}
         self.func = func
         self.argset = argset
+        self.origins = ()
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield SubWorkflowInstance(self, workflow, db, node)

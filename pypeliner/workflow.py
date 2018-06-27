@@ -38,7 +38,7 @@ class Workflow(object):
         return len(self.job_definitions) == 0
 
     def set_filenames(self, name, *axes, **kwargs):
-        """ Set the filename for a 
+        """ Set the filename for a
         """
         user_file_id = (name, axes)
         if user_file_id in self.path_info:
@@ -53,7 +53,7 @@ class Workflow(object):
         else:
             raise ValueError('One of fnames, template, or filename must be set')
 
-    def setobj(self, obj=None, value=None, axes=()):
+    def setobj(self, obj=None, value=None, axes=(), origins=()):
         """ Set a managed temp object with a specified value.
 
         :param obj: managed object to be set with a given value
@@ -65,6 +65,7 @@ class Workflow(object):
                      of obj, this setobj is a split operation that defines the additional
                      axis in obj.
         :type axes: tuple
+        :param origins: Which axes this job is responsible for
 
         This function is most useful for tracking changes to small objects and parameters.
         Set the object to a given value using this function.  Then use the managed version
@@ -75,7 +76,7 @@ class Workflow(object):
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
-        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
+        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value, origins)
 
     def commandline(self, name='', axes=(), ctx=None, args=None):
         """ Add a command line based transform to the pipeline
@@ -89,9 +90,9 @@ class Workflow(object):
         """
         self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args)
 
-    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
+    def transform(self, name='', axes=(), ctx=None, func=None, origins=(), ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
-        provided python function ``func`` to take input dependencies and create/update 
+        provided python function ``func`` to take input dependencies and create/update
         output dependents.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -106,7 +107,8 @@ class Workflow(object):
                     ``ctx['local'] = True`` will result in the job being run locally on
                     the calling machine even when a cluster is being used.
         :param func: The function to call for this job.
-        :param ret: The return value 
+        :param origins: Which axes this job is responsible for
+        :param ret: The return value
         :param args: The list of positional arguments to be used for the function call.
         :param kwargs: The list of keyword arguments to be used for the function call.
 
@@ -126,11 +128,14 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        if not isinstance(origins, tuple) or not all([isinstance(o, tuple) for o in origins]):
+            raise ValueError('origins is {} but should be tuple of tuples for job {}'.format(
+                origins, name))
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), origins)
 
     def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
-        takes the input dependencies and creates/updates output dependents.  The python 
+        takes the input dependencies and creates/updates output dependents.  The python
         function ``func`` should return a workflow object containing the set of jobs.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -159,4 +164,3 @@ class Workflow(object):
         for job_def in self.job_definitions.itervalues():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst
-

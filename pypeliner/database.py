@@ -47,9 +47,7 @@ class NodeManager(object):
                 chunks = (None,)
             self.cached_chunks[(axis, node)] = chunks
         return self.cached_chunks[(axis, node)]
-    def store_chunks(self, axes, node, chunks, subset=None):
-        if subset is None:
-            subset = set([])
+    def store_chunks(self, axes, node, chunks):
         if len(chunks) == 0:
             raise ValueError('must be at least one chunk per axis')
         def _convert_tuple(a):
@@ -60,16 +58,14 @@ class NodeManager(object):
         chunks = [_convert_tuple(a) for a in chunks]
         if len(axes) != len(chunks[0]):
             raise ValueError('for multiple axis, chunks must be a tuple of the same length')
-        for level in xrange(len(axes)):
-            if level not in subset:
-                continue
-            for pre_chunks, level_chunks in itertools.groupby(sorted(chunks), lambda a: a[:level]):
-                level_node = node
-                for idx in xrange(level):
-                    level_node += pypeliner.identifiers.AxisInstance(axes[idx], pre_chunks[idx])
-                level_chunks = set([a[level] for a in level_chunks])
-                self.store_axis_chunks(axes[level], level_node, level_chunks)
+        for pre_chunks, level_chunks in itertools.groupby(sorted(chunks), lambda a: a[:-1]):
+            level_node = node
+            for idx in xrange(len(axes)):
+                level_node += pypeliner.identifiers.AxisInstance(axes[idx], pre_chunks[idx])
+            level_chunks = set([a[-1] for a in level_chunks])
+            self.store_axis_chunks(axes[level], level_node, level_chunks)
     def store_axis_chunks(self, axis, node, chunks):
+        print axis ,node, chunks
         for chunk in chunks:
             new_node = node + pypeliner.identifiers.AxisInstance(axis, chunk)
             pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
@@ -78,29 +74,22 @@ class NodeManager(object):
         filename = self.db.get_temp_filename(axis, node)
         resource = pypeliner.resources.TempObjManager(self.db.file_storage, axis, node, filename)
         resource.finalize(chunks)
-    def get_merge_inputs(self, axes, node, subset=None):
-        if subset is None:
-            subset = set([])
-        subset = set(range(len(axes))).difference(subset)
-        resources = self.get_chunks_resource(axes, node, subset)
+    def get_merge_inputs(self, axes, node):
+        resources = self.get_chunks_resource(axes, node)
         inputs = [resource.input for resource in resources]
         return inputs
-    def get_split_outputs(self, axes, node, subset=None):
-        if subset is None:
-            subset = set([])
-        resources = self.get_chunks_resource(axes, node, subset)
+    def get_split_outputs(self, axes, node):
+        resources = self.get_chunks_resource(axes, node)
         outputs = [resource.output for resource in resources]
         return outputs
-    def get_chunks_resource(self, axes, node, subset):
-        if 0 in subset:
+    def get_chunks_resource(self, axes, node):
+        if len(axes) == 0:
             filename = self.db.get_temp_filename(axes[0], node)
             yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[0], node, filename)
-        for level in xrange(1, len(axes)):
-            if level not in subset:
-                continue
-            for level_node in self.retrieve_nodes(axes[:level], base_node=node):
-                filename = self.db.get_temp_filename(axes[level], level_node)
-                yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[level], level_node, filename)
+        else:
+            for level_node in self.retrieve_nodes(axes[:-1], base_node=node):
+                filename = self.db.get_temp_filename(axes[-1], level_node)
+                yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[-1], level_node, filename)
     def get_node_inputs(self, node):
         if len(node) >= 1:
             yield pypeliner.resources.Dependency(node[-1][0], node[:-1])
@@ -228,6 +217,3 @@ class WorkflowDatabaseFactory(object):
                 os.rmdir(lock_directory)
             except:
                 logging.exception('unable to unlock ' + lock_directory)
-
-
-

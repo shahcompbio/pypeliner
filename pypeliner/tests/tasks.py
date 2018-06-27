@@ -25,7 +25,7 @@ def split_file_byline(in_filename, lines_per_file, out_filename_callback, max_fi
         for file_idx, lines in itertools.groupby(in_file, key=line_group):
             if max_files is not None and file_idx >= max_files:
                 break
-            with open(out_filename_callback(file_idx), 'w') as out_file:
+            with open(out_filename_callback[file_idx], 'w') as out_file:
                 for line in lines:
                     out_file.write(line)
 
