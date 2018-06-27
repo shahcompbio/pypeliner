@@ -109,8 +109,6 @@ class Scheduler(object):
         
         self._logger.info('job ' + job.displayname + ' executing',
                           extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing", 'task_name': job.id[1]})
-        self._logger.info('job ' + job.displayname + ' -> ' + sent.displaycommand,
-                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
@@ -168,6 +166,8 @@ class Scheduler(object):
             else:
                 self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
                                    extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
+            self._logger.info('job ' + job.displayname + ' -> ' + received.displaycommand,
+                              extra={"id": job.displayname, "type":"job", "cmd": received.displaycommand, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
                               extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' memory ' + str(received.memoryused) + 'G',

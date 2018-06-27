@@ -154,16 +154,18 @@ class TempObjResource(Resource):
         if not self.exists:
             raise Exception('cannot touch missing object')
         self.store.touch()
-    def get_obj(self):
+    def allocate(self):
         self.store.allocate()
+    def push(self):
+        self.store.push()
+    def pull(self):
         self.store.pull()
+    def get_obj(self):
         with open(self.store.filename, 'rb') as f:
             return pickle.load(f)
     def put_obj(self, obj):
-        self.store.allocate()
         with open(self.store.write_filename, 'wb') as f:
             pickle.dump(obj, f)
-        self.store.push()
 
 
 def obj_equal(obj1, obj2):
@@ -189,10 +191,23 @@ class TempObjManager(object):
         self.node = node
         self.input = TempObjResource(storage, name, node, filename, is_input=True)
         self.output = TempObjResource(storage, name, node, filename, is_input=False)
+        self.input_updated = False
     def get_obj(self):
         if self.input.exists:
             return self.input.get_obj()
     def finalize(self, obj):
         self.output.put_obj(obj)
+        self.input_updated = False
         if not self.input.exists or not obj_equal(obj, self.get_obj()):
             self.input.put_obj(obj)
+            self.input_updated = True
+    def allocate(self):
+        self.input.allocate()
+        self.output.allocate()
+    def push(self):
+        self.output.push()
+        if self.input_updated:
+            self.input.push()
+    def pull(self):
+        self.input.pull()
+        self.output.pull()
