@@ -154,6 +154,7 @@ class WorkflowDatabase(object):
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         self.temps_dir = os.path.join(temps_dir, instance_subdir)
         pypeliner.helpers.makedirs(self.nodes_dir)
+        pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
     def get_user_filename_creator(self, name, axes, fnames=None, template=None):
