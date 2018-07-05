@@ -483,7 +483,7 @@ class TempSplitOriginObjArg(Arg,SplitMergeArg):
         self.resources = []
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             filename = db.get_temp_filename(self.name, node)
-            resource = pypeliner.resources.TempObjManager(db.obj_storage, self.name, node, filename)
+            resource = pypeliner.resources.TempObjManager(db.file_storage, self.name, node, filename)
             self.resources.append(resource)
         self.merge_inputs, self.split_outputs = get_split_merge_resources(db, self.node, self.axes, self.origins)
         self.storage = db.file_storage
@@ -498,6 +498,7 @@ class TempSplitOriginObjArg(Arg,SplitMergeArg):
     def resolve(self):
         return self
     def finalize(self, db):
+        ##TODO::: reimplement
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             node_chunks = self.get_node_chunks(node)
             if node_chunks not in self.value:

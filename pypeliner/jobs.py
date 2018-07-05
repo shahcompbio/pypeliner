@@ -286,8 +286,8 @@ class JobInstance(object):
                         (arg_name_0, arg_axes_0), chunks))
             self.db.nodemgr.store_axis_chunks(origin[-1], node, origin_chunks)
             regenerate = True
-        for arg in callable.arglist:
-            arg.finalize(self.db)
+#        for arg in callable.arglist:
+#            arg.finalize(self.db)
         if regenerate:
             self.workflow.regenerate()
     def complete(self):
