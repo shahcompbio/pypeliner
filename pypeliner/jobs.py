@@ -374,6 +374,8 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
+        if isinstance(self.func, str):
+            self.func = import_function(self.func)
         callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
         if self.func == pypeliner.commandline.execute:
             self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
@@ -389,8 +391,6 @@ class JobCallable(object):
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
-                    if isinstance(self.func, str):
-                        self.func = import_function(self.func)
                     ret_value = self.func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
