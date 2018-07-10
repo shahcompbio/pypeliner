@@ -497,20 +497,25 @@ class TempSplitOriginObjArg(Arg,SplitMergeArg):
         return self.split_outputs
     def resolve(self):
         return self
-    def finalize(self, db):
-        ##TODO::: reimplement
-        for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
-            node_chunks = self.get_node_chunks(node)
-            if node_chunks not in self.value:
-                raise ValueError('unable to extract ' + str(node) + ' from ' + self.name + ' with values ' + str(self.value))
-            instance_value = self.value[node_chunks]
-            filename = db.get_temp_filename(self.name, node)
-            resource = pypeliner.resources.TempObjManager(db.file_storage, self.name, node, filename)
-            resource.finalize(instance_value)
+    def finalize(self, values):
+        self.chunks_list = values.keys()
+        self.resources = []
+        for chunks, value in values.iteritems():
+            if not isinstance(chunks, tuple):
+                chunks = (chunks,)
+            if len(self.axes) != len(chunks):
+                raise ValueError('expected ' + str(len(self.axes)) + ' values for axes ' + str(self.axes))
+            node = self.node
+            for axis, chunk in zip(self.axes, chunks):
+                node += pypeliner.identifiers.AxisInstance(axis, chunk)
+            filename = self.filename_creator(self.name, node)
+            resource = pypeliner.resources.TempObjManager(self.storage, self.name, node, filename)
+            resource.allocate()
+            resource.finalize(value)
+            self.resources.append(resource)
     def get_origin_chunks(self):
-        chunks = self.value.keys()
         for origin in self.origins:
-            for node, level_chunks in get_level_chunks(self.node, origin, chunks):
+            for node, level_chunks in get_level_chunks(self.node, origin, self.chunks_list):
                 yield origin, node, level_chunks
 
 class TempInputFileArg(Arg):
@@ -778,9 +783,8 @@ class OutputChunksArg(Arg,SplitMergeArg):
     def resolve(self):
         return self
     def get_origin_chunks(self):
-        chunks = self.value
         for origin in self.origins:
-            for node, level_chunks in get_level_chunks(self.node, origin, chunks):
+            for node, level_chunks in get_level_chunks(self.node, origin, self.chunks_list):
                 yield origin, node, level_chunks
     def finalize(self, value):
         self.chunks_list = value
