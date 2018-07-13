@@ -24,7 +24,7 @@ class OutputMissingException(Exception):
 
 
 class RegularFile(object):
-    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, extension=None, direct_write=True):
+    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, store_dir=None, extension=None, direct_write=True):
         self.filename = filename
         self.exists_cache = exists_cache
         self.createtime_cache = createtime_cache
