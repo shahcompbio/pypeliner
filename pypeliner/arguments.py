@@ -123,6 +123,7 @@ class TempSpaceArg(Arg):
         filename = db.get_temp_filename(name, node)
         self.resource = pypeliner.resources.UserResource(db.file_storage, name, node, filename,
                             direct_write=kwargs.get('direct_write'),
+                            store_dir = kwargs.get('store_dir'),
                             extensions=kwargs.get('extensions'))
         self.filename = self.resource.filename
     def allocate(self):
@@ -178,6 +179,7 @@ class InputFileArg(Arg):
         filename = db.get_user_filename(name, node, fnames=fnames, template=template)
         self.resource = pypeliner.resources.UserResource(db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
+            store_dir = kwargs.get('store_dir'),
             extensions=kwargs.get('extensions'))
     def get_inputs(self):
         yield self.resource
@@ -207,6 +209,7 @@ class MergeFileArg(Arg,SplitMergeArg):
             filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
+                store_dir = kwargs.get('store_dir'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = get_merge_resources(db, self.node, self.axes)
@@ -238,6 +241,7 @@ class OutputFileArg(Arg):
         filename = db.get_user_filename(name, node, fnames=fnames, template=template)
         self.resource = pypeliner.resources.UserResource(db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
+            store_dir = kwargs.get('store_dir'),
             extensions=kwargs.get('extensions'))
     def get_outputs(self):
         yield self.resource
@@ -270,6 +274,7 @@ class SplitFileArg(Arg,SplitMergeArg):
             filename = db.get_user_filename(self.name, node, fnames=self.fnames, template=self.template)
             resource = pypeliner.resources.UserResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
+                store_dir = kwargs.get('store_dir'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = get_merge_resources(db, self.node, self.axes)
@@ -528,6 +533,7 @@ class TempInputFileArg(Arg):
         filename = db.get_temp_filename(name, node)
         self.resource = pypeliner.resources.TempFileResource(db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
+            store_dir = kwargs.get('store_dir'),
             extensions=kwargs.get('extensions'))
     def get_inputs(self):
         yield self.resource
@@ -554,6 +560,7 @@ class TempMergeFileArg(Arg,SplitMergeArg):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
+                store_dir = kwargs.get('store_dir'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = get_merge_resources(db, self.node, self.axes)
@@ -584,6 +591,7 @@ class TempOutputFileArg(Arg):
         filename = db.get_temp_filename(name, node)
         self.resource = pypeliner.resources.TempFileResource(db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
+            store_dir = kwargs.get('store_dir'),
             extensions=kwargs.get('extensions'))
     def get_outputs(self):
         yield self.resource
@@ -615,6 +623,7 @@ class FilenameCallback(object):
         filename = self.filename_creator(self.name, node)
         resource = self.create_resource(self.storage, self.name, node, filename,
             direct_write=self.kwargs.get('direct_write'),
+            store_dir = self.kwargs.get('store_dir'),
             extensions=self.kwargs.get('extensions'))
         return resource.write_filename
     def __call__(self, *chunks):
@@ -628,6 +637,7 @@ class FilenameCallback(object):
         filename = self.filename_creator(self.name, node)
         resource = self.create_resource(self.storage, self.name, node, filename,
             direct_write=self.kwargs.get('direct_write'),
+            store_dir = self.kwargs.get('store_dir'),
             extensions=self.kwargs.get('extensions'))
         if len(chunks) == 1:
             self.resources[chunks[0]] = resource
@@ -671,6 +681,7 @@ class TempSplitFileArg(Arg,SplitMergeArg):
             filename = db.get_temp_filename(self.name, node)
             resource = pypeliner.resources.TempFileResource(db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
+                store_dir = kwargs.get('store_dir'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = get_merge_resources(db, self.node, self.axes)

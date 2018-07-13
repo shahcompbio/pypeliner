@@ -11,6 +11,7 @@ import collections
 import warnings
 import importlib
 import resource
+import uuid
 
 
 import pypeliner.helpers
@@ -103,6 +104,9 @@ class JobInstance(object):
         self.workflow = workflow
         self.db = db
         self.node = node
+        temps_dir = os.path.join(db.temps_dir, self.node.subdir, self.job_def.name)
+        self.store_dir = os.path.join(temps_dir, str(uuid.uuid1()))
+        pypeliner.helpers.makedirs(self.store_dir)
         self.arglist = list()
         self.inputs = list()
         self.outputs = list()

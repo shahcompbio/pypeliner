@@ -69,7 +69,7 @@ class Resource(Dependency):
 
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None, store_dir=None):
         self.name = name
         self.node = node
         # Note:
@@ -80,13 +80,13 @@ class UserResource(Resource):
             self.store = None
             self.filename = None
         else:
-            self.store = storage.create_store(filename, is_temp=False, direct_write=direct_write)
+            self.store = storage.create_store(filename, is_temp=False, direct_write=direct_write, store_dir=store_dir)
             self.filename = self.store.filename
 
         self.extra_stores = []
         if extensions is not None:
             for ext in extensions:
-                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write))
+                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
@@ -110,16 +110,16 @@ class UserResource(Resource):
 
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
-    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None, store_dir=None):
         self.name = name
         self.node = node
         self.is_temp = True
-        self.store = storage.create_store(filename, is_temp=True, direct_write=direct_write)
+        self.store = storage.create_store(filename, is_temp=True, direct_write=direct_write, store_dir=store_dir)
         self.filename = self.store.filename
         self.extra_stores = []
         if extensions is not None:
             for ext in extensions:
-                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write))
+                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
     @property
     def exists(self):
         return self.store.get_exists()

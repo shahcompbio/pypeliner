@@ -62,10 +62,15 @@ class AzureBlob(object):
         self.storage = storage
         if filename.startswith('/'):
             filename = filename[1:]
-        self.filename = filename
-        self.write_filename = filename
         self.blob_name = blob_name
         self.createtime_cache = storage.create_createtime_cache(blob_name)
+        store_dir = kwargs.get("store_dir")
+        if kwargs.get("direct_write") or not store_dir:
+            self.filename = filename
+            self.write_filename = filename
+        else:
+            self.filename = os.path.join(store_dir, filename)
+            self.write_filename = os.path.join(store_dir, filename)
     def allocate(self):
         pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
