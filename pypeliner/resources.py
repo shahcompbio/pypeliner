@@ -163,6 +163,7 @@ class TempObjResource(Resource):
     def pull(self):
         self.store.pull()
     def get_obj(self):
+        self.store.allocate()
         self.store.pull()
         with open(self.store.filename, 'rb') as f:
             return pickle.load(f)
