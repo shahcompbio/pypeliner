@@ -260,8 +260,7 @@ class JobInstance(object):
         for output in self.output_resources:
             output.touch()
     def create_callable(self):
-        timeout = self.ctx.get("timeout", None)
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, timeout)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, self.ctx)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -408,29 +407,23 @@ def resolve_arg(arg):
         return None, False
     return arg.resolve(), True
 
-def import_function(import_string):
-    module, funcname = import_string.rsplit('.', 1)
-
-    mod = importlib.import_module(module)
-    met = getattr(mod, funcname)
-
-    return met
-
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, arglist, storage, logs_dir, timeout):
+    def __init__(self, id, func, argset, arglist, storage, logs_dir, ctx):
         self.storage = storage
         self.id = id
         self.func = func
         self.argset = argset
         self.arglist = arglist
         self.finished = False
+        self.logs_dir = logs_dir
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
         self.stdout_storage = self.storage.create_store(self.stdout_filename)
         self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
         self.job_mem_tracker = JobMemoryTracker()
+        timeout = ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
         self.job_logger = JobLogger()
         self.hostname = None
@@ -462,8 +455,10 @@ class JobCallable(object):
             arg.push()
     def __call__(self):
         if isinstance(self.func, str):
-            self.func = import_function(self.func)
+            self.func = pypeliner.helpers.import_function(self.func)
         callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
+        if self.func == pypeliner.commandline.docker_python_execute:
+            callset.kwargs["tempdir"] = self.logs_dir
         if self.func == pypeliner.commandline.execute:
             self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
         else:
@@ -522,7 +517,7 @@ class SubWorkflowDefinition(JobDefinition):
         self.name = name
         self.axes = axes
         self.ctx = {}
-        self.func = import_function(func) if isinstance(func, str) else func
+        self.func = pypeliner.helpers.import_function(func) if isinstance(func, str) else func
         self.argset = argset
         self.origins = ()
     def create_job_instances(self, workflow, db):

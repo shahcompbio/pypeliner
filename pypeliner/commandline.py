@@ -1,5 +1,8 @@
 import subprocess
 import sys
+import os
+import dill as pickle
+import pypeliner
 
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
@@ -21,7 +24,7 @@ class CommandNotFoundException(Exception):
 
     :param args: full set of arguments in failed command line
     :param command: command that could not be found
-        
+
     """
     def __init__(self, args, command):
         self.args = args
@@ -30,10 +33,63 @@ class CommandNotFoundException(Exception):
         return "Command '%s' not found in command line `%s`" % (self.command, " ".join(self.args))
 
 
-def execute(*args):
+class Callable(object):
+    """callable functions and args for pypeliner_delegate
+    for running in docker containers
+
+    :param func: function to run in docker
+    :param args: arguments
+
+    """
+    def __init__(self, func, args):
+        self.func = func
+        self.args = args
+    def __call__(self):
+        self.retval = self.func(*self.args)
+
+
+def docker_python_execute(*args, **kwargs):
+    """ Run a python function in docker
+
+    :param args: executable and command line arguments
+    :param kwargs: function, tempdir and docker image
+
+    Execute python code inside a docker container. Pickles the code
+    as a callable and runs with pypeliner_delegate
+
+    """
+    args = _update_args_to_abspath(args)
+
+    func = kwargs["func"]
+    if isinstance(func, str):
+        func = pypeliner.helpers.import_function(func)
+    jobcallable = Callable(func, args)
+
+    tempdir = kwargs["tempdir"]
+    pypeliner.helpers.makedirs(tempdir)
+    before = os.path.join(tempdir, 'before.pickle')
+    after = os.path.join(tempdir, 'after.pickle')
+    docker_args = ["pypeliner_delegate", before, after]
+    if kwargs.get('dockerize'):
+        docker_args = _dockerize_args(
+            *docker_args, image=kwargs.get("image", None),
+            mounts=_get_mount_dirs(args))
+
+    with open(before, 'w') as beforepickle:
+        pickle.dump(jobcallable, beforepickle)
+
+    execute(*docker_args)
+
+    with open(after) as afterpickle:
+        data = pickle.load(afterpickle)
+        return data.retval
+
+
+def execute(*args, **kwargs):
     """ Execute a command line
 
     :param args: executable and command line arguments
+    :param kwargs: dockerize keyword argument
 
     Execute a command line, and handle pipes between processes and to files.
     The '|', '>' and '<' characters are interpretted as pipes between processes,
@@ -44,6 +100,8 @@ def execute(*args):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
+    if kwargs and kwargs.get("dockerize", None):
+        args = _dockerize_args(*args, **kwargs)
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -58,14 +116,14 @@ def execute(*args):
     # Determine input filename for redirect if any
     input = None
     if command_list[0].count("<") == 1:
-        input = _get_next(command_list[0],"<")
+        input = _get_next(command_list[0], "<")
         command_list[0].remove("<")
         command_list[0].remove(input)
 
     # Determine output filename for redirect if any
     output = None
     if command_list[-1].count(">") == 1:
-        output = _get_next(command_list[-1],">")
+        output = _get_next(command_list[-1], ">")
         command_list[-1].remove(">")
         command_list[-1].remove(output)
 
@@ -99,7 +157,7 @@ def _split_list(items, sep):
 
 
 def _get_next(items, identifier):
-    for elem, nextelem in zip(items,items[1:]):
+    for elem, nextelem in zip(items, items[1:]):
         if elem == identifier:
             return nextelem
 
@@ -144,4 +202,60 @@ def _call_process(command, stdin, stdout, stderr):
             raise CommandNotFoundException(command, command[0])
         else:
             raise
+
+def _update_args_to_abspath(args):
+
+    updated_args = []
+
+    for arg in args:
+        if isinstance(arg, str) and os.path.exists(os.path.dirname(arg)):
+            arg = os.path.abspath(arg)
+            updated_args.append(arg)
+        else:
+            updated_args.append(arg)
+
+    return updated_args
+
+
+def _get_mount_dirs(args):
+    mounts = set()
+
+    for arg in args:
+        if not isinstance(arg, str):
+            continue
+        if os.path.exists(os.path.dirname(arg)):
+            if not arg.startswith('/'):
+                arg = os.path.abspath(arg)
+            arg = arg.split('/')
+
+            mounts.add('/' + arg[1])
+
+    return sorted(mounts)
+
+def _dockerize_args(*args, **kwargs):
+    image = kwargs.get("image")
+    assert image, "docker image URL required."
+
+    args = _update_args_to_abspath(args)
+
+    mounts = _get_mount_dirs(args)
+
+    if kwargs.get('mounts', None):
+        mounts += kwargs.get('mounts')
+        mounts = sorted(set(mounts))
+
+    docker_args = ['docker', 'run']
+
+    for mount in mounts:
+        docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
+
+    # expose docker socket to enable starting
+    # new containers from the current container
+    docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
+    docker_args.extend(['-v', '/usr/bin/docker:/usr/bin/docker'])
+
+    docker_args.append(image)
+    args = docker_args + args
+
+    return args
 

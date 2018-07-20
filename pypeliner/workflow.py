@@ -27,6 +27,7 @@ class Workflow(object):
             'mem': 4,
             'num_retry': 3,
             'mem_retry_factor': 2,
+            'dockerize': False
         }
         if default_ctx is not None:
             self.default_ctx.update(default_ctx)
@@ -88,7 +89,7 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args)
+        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args)#, kwargs=kwargs)
 
     def transform(self, name='', axes=(), ctx=None, func=None, origins=(), ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
@@ -131,7 +132,13 @@ class Workflow(object):
         if not isinstance(origins, tuple) or not all([isinstance(o, tuple) for o in origins]):
             raise ValueError('origins is {} but should be tuple of tuples for job {}'.format(
                 origins, name))
-        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), origins)
+        if job_ctx.get("dockerize") and not func == pypeliner.commandline.execute:
+            kwargs = {} if not kwargs else kwargs
+            kwargs["func"] = func
+            kwargs["image"] = job_ctx.get("image")
+            kwargs["dockerize"] = job_ctx.get("dockerize")
+            func = pypeliner.commandline.docker_python_execute
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
     def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
