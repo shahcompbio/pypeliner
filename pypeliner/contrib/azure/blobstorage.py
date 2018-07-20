@@ -17,13 +17,13 @@ from azure.common import AzureHttpError
 
 
 
-def _get_blob_key(accountname):
-    blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
-                                                   secret=os.environ["SECRET_KEY"],
-                                                   tenant=os.environ["TENANT_ID"])
+def _get_blob_key(accountname, client_id, secret_key, tenant_id, subscription_id, resource_group):
+    blob_credentials = ServicePrincipalCredentials(client_id=client_id,
+                                                   secret=secret_key,
+                                                   tenant=tenant_id)
 
-    storage_client = StorageManagementClient(blob_credentials, os.environ["SUBSCRIPTION_ID"])
-    keys = storage_client.storage_accounts.list_keys(os.environ["RESOURCE_GROUP"],
+    storage_client = StorageManagementClient(blob_credentials, subscription_id)
+    keys = storage_client.storage_accounts.list_keys(resource_group,
                                                      accountname)
     keys = {v.key_name: v.value for v in keys.keys}
 
@@ -109,6 +109,11 @@ class AzureBlobStorage(object):
         self.rabbitmq_password = os.environ.get("RABBITMQ_PASSWORD", None)
         self.rabbitmq_ipaddress = os.environ.get("RABBITMQ_IP", None)
         self.rabbitmq_vhost = os.environ.get("RABBITMQ_VHOST", None)
+        self.client_id=os.environ["CLIENT_ID"]
+        self.secret_key=os.environ["SECRET_KEY"]
+        self.tenant_id=os.environ["TENANT_ID"]
+        self.subscription_id = os.environ["SUBSCRIPTION_ID"]
+        self.resource_group = os.environ["RESOURCE_GROUP"]
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.blob_client = None
     def connect(self, storage_account_name):
@@ -116,7 +121,9 @@ class AzureBlobStorage(object):
         client = getattr(self, "blob_client", None)
         if client and client.account_name == storage_account_name:
             return
-        storage_account_key = _get_blob_key(storage_account_name)
+        storage_account_key = _get_blob_key(storage_account_name, self.client_id,
+                                            self.secret_key, self.tenant_id,
+                                            self.subscription_id, self.resource_group)
         self.blob_client = azure.storage.blob.BlockBlobService(
             account_name=storage_account_name,
             account_key=storage_account_key)
@@ -129,10 +136,14 @@ class AzureBlobStorage(object):
         self.cached_createtimes.__exit__(exc_type, exc_value, traceback)
     def __getstate__(self):
         return (self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,
-                self.rabbitmq_ipaddress, self.rabbitmq_vhost)
+                self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
+                self.secret_key, self.tenant_id, self.subscription_id,
+                self.resource_group)
     def __setstate__(self, state):
         self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,\
-        self.rabbitmq_ipaddress, self.rabbitmq_vhost = state
+        self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,\
+        self.secret_key, self.tenant_id, self.subscription_id,\
+        self.resource_group = state
     def create_store(self, filename, extension=None, **kwargs):
         if extension is not None:
             filename = filename + extension

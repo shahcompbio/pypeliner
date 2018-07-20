@@ -784,15 +784,17 @@ class AzureJobQueue(object):
             self.job_blobname_prefix[name],
             run_script_file_path)
 
+        command = self.compute_run_command.format(
+            input_filename=job_before_file_path,
+            output_filename=job_after_file_path)
+        if ctx.get('dockerize', None):
+            command = self.config['dockerize_run_command'].format(command=command)
+
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')
             f.write('set -o pipefail\n\n')
             f.write(self.compute_start_commands + '\n')
-            f.write(
-                self.compute_run_command.format(
-                    input_filename=job_before_file_path,
-                    output_filename=job_after_file_path) +
-                '\n')
+            f.write(command + '\n')
             f.write(self.compute_finish_commands + '\n')
             f.write('wait')
 

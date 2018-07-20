@@ -28,6 +28,7 @@ class Workflow(object):
             'num_retry': 3,
             'mem_retry_factor': 2,
             'ncpus': 1,
+            'dockerize': None,
         }
         if default_ctx is not None:
             self.default_ctx.update(default_ctx)
@@ -127,6 +128,17 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
+
+        if job_ctx.get("dockerize"):
+            if func == pypeliner.commandline.execute:
+                assert kwargs is None
+                kwargs = job_ctx
+            else:
+                kwargs = {} if not kwargs else kwargs
+                args = [args, kwargs, job_ctx, func, None]
+                kwargs = {}
+                func = pypeliner.commandline._docker_python_execute
+
         self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
     def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
