@@ -1,17 +1,15 @@
 import sys
 import os
-import pypeliner
 import subprocess
-import dill as pickle
 from pypeliner.helpers import Backoff
 
 
 def which(file):
     for path in os.environ["PATH"].split(os.pathsep):
         if os.path.exists(os.path.join(path, file)):
-                return os.path.join(path, file)
-
+            return os.path.join(path, file)
     return None
+
 
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
@@ -21,12 +19,16 @@ class CommandLineException(Exception):
     :param returncode: exit code of failed command
 
     """
+
     def __init__(self, args, command, returncode):
         self.args = args
         self.command = command
         self.returncode = returncode
+
     def __str__(self):
-        return "Command '%s' with return code %d in command line `%s`" % (self.command, self.returncode, " ".join(self.args))
+        return "Command '%s' with return code %d in command line `%s`" % (
+            self.command, self.returncode, " ".join(self.args))
+
 
 class CommandNotFoundException(Exception):
     """ A command was not found on the path.
@@ -35,9 +37,11 @@ class CommandNotFoundException(Exception):
     :param command: command that could not be found
 
     """
+
     def __init__(self, args, command):
         self.args = args
         self.command = command
+
     def __str__(self):
         return "Command '%s' not found in command line `%s`" % (self.command, " ".join(self.args))
 
@@ -50,12 +54,15 @@ class Callable(object):
     :param args: arguments
 
     """
+
     def __init__(self, func, args, kwargs):
         self.func = func
         self.args = args
         self.kwargs = kwargs
+
     def __call__(self):
         self.retval = self.func(*self.args, **self.kwargs)
+
 
 def execute(*args, **docker_kwargs):
     """ Execute a command line
@@ -76,7 +83,7 @@ def execute(*args, **docker_kwargs):
         args = dockerize_args(*args, **docker_kwargs)
         _docker_login(docker_kwargs.get("server"),
                       docker_kwargs.get("username"),
-                      docker_kwargs.get("password"),)
+                      docker_kwargs.get("password"), )
         _docker_pull(docker_kwargs.get("image"))
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
@@ -137,8 +144,8 @@ def _get_next(items, identifier):
         if elem == identifier:
             return nextelem
 
-def _call_processes(args, command_list, infile, outfile):
 
+def _call_processes(args, command_list, infile, outfile):
     # List of processes created
     processes = []
 
@@ -154,7 +161,8 @@ def _call_processes(args, command_list, infile, outfile):
 
         # Create intermediate processes with pipes
         for command in command_list[1:-1]:
-            processes.append(_call_process(command, stdin=processes[-1].stdout, stdout=subprocess.PIPE, stderr=sys.stderr))
+            processes.append(
+                _call_process(command, stdin=processes[-1].stdout, stdout=subprocess.PIPE, stderr=sys.stderr))
             processes[-2].stdout.close()
 
         # Create final process with stdout as outfile
@@ -169,6 +177,7 @@ def _call_processes(args, command_list, infile, outfile):
     for idx, process in enumerate(processes):
         if process.returncode != 0:
             raise CommandLineException(args, command_list[idx][0], process.returncode)
+
 
 def _call_process(command, stdin, stdout, stderr):
     try:
@@ -224,14 +233,14 @@ def dockerize_args(*args, **kwargs):
 
 
 def _docker_pull(image):
-    cmd = ['docker','pull',image]
+    cmd = ['docker', 'pull', image]
     execute(*cmd)
 
 
 @Backoff(exception_type=EOFError, max_backoff=300, randomize=True)
 def _docker_login(server, username, password):
     if not username or not password:
-        #assume repo is public
+        # assume repo is public
         return
 
     cmd = ['echo', password, '|', 'docker', 'login',
