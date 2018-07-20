@@ -88,7 +88,7 @@ class scheduler_test(unittest.TestCase):
             runskip = pypeliner.runskip.BasicRunSkip()
 
         with exec_queue, storage:
-            scheduler.run(workflow, exec_queue, storage, runskip)
+            scheduler.run(workflow, exec_queue, storage, storage, runskip)
 
     def test_simple_chunks1(self):
 

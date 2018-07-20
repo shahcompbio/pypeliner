@@ -218,6 +218,10 @@ class Pypeline(object):
         self.file_storage = pypeliner.storage.create(
             self.config['storage'], workflow_dir=self.config['pipelinedir'])
 
+        self.local_storage = pypeliner.storage.create(
+            "local", workflow_dir=self.config['pipelinedir'])
+
+
         self.sch = pypeliner.scheduler.Scheduler()
 
         self.sch.temps_dir = self.config['tmpdir']
@@ -238,9 +242,9 @@ class Pypeline(object):
             self.runskip = pypeliner.runskip.InteractiveRunSkip(self.runskip)
 
     def run(self, workflow):
-        with self.exec_queue, self.file_storage:
+        with self.exec_queue, self.file_storage, self.local_storage:
             try:
-                self.sch.run(workflow, self.exec_queue, self.file_storage, self.runskip)
+                self.sch.run(workflow, self.exec_queue, self.file_storage, self.local_storage, self.runskip)
             finally:
                 self.runskip.close()
                 print 'log file:', self.pipeline_log_filename

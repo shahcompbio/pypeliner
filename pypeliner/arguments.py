@@ -17,6 +17,8 @@ class Arg(object):
         return []
     def resolve(self):
         return None
+    def get_mount_point(self):
+        return None
     def updatedb(self, db):
         pass
     def finalize(self, v):
@@ -27,6 +29,14 @@ class Arg(object):
         pass
     def push(self):
         pass
+
+
+def _get_mount_point(filename):
+    if not filename:
+        return
+    filename = os.path.abspath(filename)
+    mount = filename.split('/')[1]
+    return "/"+mount
 
 
 class SplitMergeArg(object):
@@ -57,6 +67,8 @@ class TemplateArg(Arg):
             self.filename = name.format(**dict(node))
     def resolve(self):
         return self.filename
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
 
 
 class TempSpaceArg(Arg):
@@ -90,6 +102,8 @@ class TempSpaceArg(Arg):
     def push(self):
         if self.cleanup in ('after', 'both'):
             pypeliner.helpers.removefiledir(self.filename)
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
 
 
 class MergeTemplateArg(Arg):
@@ -115,6 +129,8 @@ class MergeTemplateArg(Arg):
         return self.merge_inputs
     def resolve(self):
         return self.formatted
+    def get_mount_point(self):
+        return _get_mount_point(self.template)
 
 
 class InputFileArg(Arg):
@@ -126,7 +142,8 @@ class InputFileArg(Arg):
     """
     def __init__(self, db, name, node, fnames=None, template=None, **kwargs):
         filename = db.get_user_filename(name, node, fnames=fnames, template=template)
-        self.resource = pypeliner.resources.UserResource(db.file_storage, name, node, filename,
+        storage = db.local_storage if kwargs.get("uselocal") else db.file_storage
+        self.resource = pypeliner.resources.UserResource(storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir = kwargs.get('store_dir'),
             extensions=kwargs.get('extensions'))
@@ -138,6 +155,9 @@ class InputFileArg(Arg):
         self.resource.allocate()
     def pull(self):
         self.resource.pull()
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
+
 
 
 class MergeFileArg(Arg,SplitMergeArg):
@@ -179,6 +199,11 @@ class MergeFileArg(Arg,SplitMergeArg):
     def pull(self):
         for resource in self.resources:
             resource.pull()
+    def get_mount_point(self):
+        mounts = set()
+        for resource in self.resources:
+            mounts.add(_get_mount_point(resource.filename))
+        return sorted(mounts)
 
 
 class OutputFileArg(Arg):
@@ -202,6 +227,8 @@ class OutputFileArg(Arg):
         self.resource.allocate()
     def push(self):
         self.resource.push()
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
 
 
 class SplitFileArg(Arg,SplitMergeArg):
@@ -248,6 +275,8 @@ class SplitFileArg(Arg,SplitMergeArg):
     def push(self):
         for resource in self.filename_callback.resources.itervalues():
             resource.push()
+    def get_mount_point(self):
+        return _get_mount_point(self.template)
 
 
 class TempInputObjArg(Arg):
@@ -407,6 +436,8 @@ class TempInputFileArg(Arg):
         self.resource.allocate()
     def pull(self):
         self.resource.pull()
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
 
 
 class TempMergeFileArg(Arg,SplitMergeArg):
@@ -443,6 +474,11 @@ class TempMergeFileArg(Arg,SplitMergeArg):
     def pull(self):
         for resource in self.resources:
             resource.pull()
+    def get_mount_point(self):
+        mounts = set()
+        for resource in self.resources:
+            mounts.add(_get_mount_point(resource.filename))
+        return sorted(mounts)
 
 
 class TempOutputFileArg(Arg):
@@ -465,6 +501,8 @@ class TempOutputFileArg(Arg):
         self.resource.allocate()
     def push(self):
         self.resource.push()
+    def get_mount_point(self):
+        return _get_mount_point(self.resolve())
 
 
 class FilenameCallback(object):
@@ -567,6 +605,11 @@ class TempSplitFileArg(Arg,SplitMergeArg):
     def push(self):
         for resource in self.filename_callback.resources.itervalues():
             resource.push()
+    def get_mount_point(self):
+        mounts = set()
+        for resource in self.filename_callback.resources.itervalues():
+            mounts.add(_get_mount_point(resource.filename))
+        return sorted(mounts)
 
 
 class InputInstanceArg(Arg):

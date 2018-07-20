@@ -194,7 +194,6 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     # configuration.
     # For more information about the virtual machine configuration, see:
     # https://azure.microsoft.com/documentation/articles/batch-linux-nodes/
-
     start_vm_commands = None
     if config.get('create_vm_commands', None):
         start_vm_commands = _create_commands(config['create_vm_commands'])

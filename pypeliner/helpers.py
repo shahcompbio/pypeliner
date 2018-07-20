@@ -9,6 +9,7 @@ import json
 import time
 import random
 from functools import wraps
+import importlib
 
 class Backoff(object):
     """
@@ -106,6 +107,14 @@ class Backoff(object):
             self.backoff_time = self.max_backoff - self.elapsed_time
 
         self.elapsed_time += self.backoff_time
+
+def import_function(import_string):
+    module, funcname = import_string.rsplit('.', 1)
+
+    mod = importlib.import_module(module)
+    met = getattr(mod, funcname)
+
+    return met
 
 
 def pop_if(L, pred):
