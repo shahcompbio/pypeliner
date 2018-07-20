@@ -217,19 +217,17 @@ def _dockerize_args(*args, **kwargs):
     image = kwargs.get("image")
     assert image, "docker image URL required."
 
-    mounts = kwargs.get("mounts", [])
-
-    if kwargs.get('mounts', None):
-        mounts += kwargs.get('mounts')
-        mounts = sorted(set(mounts))
+    mounts = sorted(set(kwargs.get("mounts", [])))
 
     docker_args = ['docker', 'run']
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
 
-    #paths on azure are relative, so we need to set the working dir
+    # paths on azure are relative, so we need to set the working dir
     wdir = os.getcwd()
     docker_args.extend(['-w', wdir])
+    # remove container after it finishes running
+    docker_args.append('--rm')
     # expose docker socket to enable starting
     # new containers from the current container
     docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])

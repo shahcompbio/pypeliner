@@ -481,6 +481,7 @@ def verify_node_status(node_id, pool_id, batch_client, logger):
         status = batch_client.compute_node.get(pool_id, node_id).state.value
     except batchmodels.batch_error.BatchErrorException:
         logger.warning("Couldn't get status for node {} ".format(node_id))
+        return
 
     # dont send jobs to failed nodes
     if status not in healthy_states and not status == "offline":
