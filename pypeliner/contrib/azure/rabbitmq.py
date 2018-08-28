@@ -6,13 +6,14 @@ Created on Jun 15, 2018
 import pika
 import requests
 import warnings
-
+import threading
 
 class RabbitMqSemaphore(object):
 
     def __init__(self, username, password, ipaddress,
-                 queue_name, vhost, queue_length=20,
-                 port='5672', http_port='15672'):
+                 queue_name, vhost, func, args, kwargs,
+                 queue_length=20,
+                 port=5672, http_port=15672):
 
         self.username = username
         self.password = password
@@ -23,19 +24,36 @@ class RabbitMqSemaphore(object):
         self.http_port = http_port
         self.queue_length = queue_length
 
+        self.func = func
+        self.args = args
+        self.kwargs=kwargs
+
         self.initialize_connection()
 
         self.initialize_queue()
 
         self.declare_queue()
 
-    def __enter__(self):
-        self.delivery_tag = self.get_exclusive_access()
-        return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.release_exclusive_access(self.delivery_tag)
+    def run(self):
+        def run_wrapper(target, args, kwargs, retval):
+            retval.append(target(*args, **kwargs))
+
+        delivery_tag = self.get_exclusive_access()
+        ret = []
+        # do the work in a separate thread. while the function
+        # executes, keep the connection alive by sending heart beats
+        # to avoid connection issues
+        thread = threading.Thread(target=run_wrapper,
+                                  args=[self.func, self.args, self.kwargs, ret])
+        thread.start()
+        while thread.is_alive():
+            self.connection.sleep(10)
+            self.connection.process_data_events()
+        thread.join()
+        self.release_exclusive_access(delivery_tag)
         self.connection.close()
+        return ret[0]
 
     def get_queue_length(self):
 
@@ -89,7 +107,8 @@ class RabbitMqSemaphore(object):
             self.ipaddress,
             self.port,
             self.vhost,
-            credentials=credentials)
+            credentials=credentials
+        )
 
         self.connection = pika.BlockingConnection(connection_params)
 

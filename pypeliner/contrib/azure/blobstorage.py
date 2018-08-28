@@ -34,22 +34,29 @@ def _get_blob_name(filename):
     return filename.strip('/')
 
 
-@Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
+# @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
 def download_from_blob_to_path(blob_client, account_name, container_name, blob_name,
                                destination_file_path, username, password,
                                ipaddress, vhost):
+    blob=None
+
     if username:
         queue = "{}_pull".format(account_name)
-        with RabbitMqSemaphore(username, password,
-                               ipaddress, queue,
-                               vhost):
-            blob = blob_client.get_blob_to_path(container_name,
-                                                blob_name,
-                                                destination_file_path)
+
+        semaphore = RabbitMqSemaphore(
+            username, password, ipaddress, queue, vhost,
+            blob_client.get_blob_to_path,
+            [container_name, blob_name, destination_file_path],
+            {}
+        )
+
+        blob = semaphore.run()
+
     else:
         blob = blob_client.get_blob_to_path(container_name,
                                             blob_name,
                                             destination_file_path)
+
     return blob
 
 
