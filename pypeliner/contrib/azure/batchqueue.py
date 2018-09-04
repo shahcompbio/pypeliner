@@ -262,8 +262,8 @@ def create_job(batch_service_client, job_id, pool_id):
     """
 
     job = batch.models.JobAddParameter(
-        job_id,
-        batch.models.PoolInformation(pool_id=pool_id))
+        id=job_id,
+        pool_info=batch.models.PoolInformation(pool_id=pool_id))
 
     try:
         batch_service_client.job.add(job)
@@ -371,14 +371,14 @@ def add_task(batch_service_client, job_id, task_id, input_file,
 
     def create_output_file(filename, blobname):
         container = batchmodels.OutputFileBlobContainerDestination(
-            output_sas_url, path=blobname)
-        destination = batchmodels.OutputFileDestination(container)
-        upload_options = batchmodels.OutputFileUploadOptions('taskCompletion')
-        return batchmodels.OutputFile(filename, destination, upload_options)
+            container_url=output_sas_url, path=blobname)
+        destination = batchmodels.OutputFileDestination(container=container)
+        upload_options = batchmodels.OutputFileUploadOptions(upload_condition='taskCompletion')
+        return batchmodels.OutputFile(file_pattern=filename, destination=destination, upload_options=upload_options)
 
     task = batch.models.TaskAddParameter(
-        task_id,
-        wrap_commands_in_shell('linux', commands),
+        id=task_id,
+        command_line=wrap_commands_in_shell('linux', commands),
         resource_files=[
             input_file,
             job_script_file],
