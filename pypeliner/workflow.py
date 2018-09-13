@@ -79,7 +79,7 @@ class Workflow(object):
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
         self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
 
-    def commandline(self, name='', axes=(), ctx=None, args=None):
+    def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None):
         """ Add a command line based transform to the pipeline
 
         This call is equivalent to::
@@ -89,7 +89,7 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args)
+        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs)
 
     def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the

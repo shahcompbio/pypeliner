@@ -85,7 +85,7 @@ class UserResource(Resource):
             self.filename = self.store.filename
             if extensions is not None:
                 for ext in extensions:
-                    self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
+                    self.extra_stores.append(storage.create_store(filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
@@ -118,7 +118,7 @@ class TempFileResource(Resource):
         self.extra_stores = []
         if extensions is not None:
             for ext in extensions:
-                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
+                self.extra_stores.append(storage.create_store(filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
     @property
     def exists(self):
         return self.store.get_exists()

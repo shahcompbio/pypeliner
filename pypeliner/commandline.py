@@ -70,7 +70,7 @@ def _docker_python_execute(args, kwargs, ctx, func, tempdir):
     after = os.path.join(tempdir, 'after.pickle')
     docker_args = ["pypeliner_delegate", before, after]
     if ctx.get("dockerize"):
-        docker_args = _dockerize_args(
+        docker_args = dockerize_args(
             *docker_args, image=ctx.get("image"),
             mounts=mounts
             )
@@ -104,14 +104,12 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs and docker_kwargs.get("dockerize", None):
-        if not args[0] == 'docker':
-            args = _dockerize_args(*args, **docker_kwargs)
+    if docker_kwargs and docker_kwargs.get("container_type", None) == 'docker':
+        args = dockerize_args(*args, **docker_kwargs)
         _docker_login(docker_kwargs.get("server"),
                       docker_kwargs.get("username"),
                       docker_kwargs.get("password"),)
         _docker_pull(docker_kwargs.get("image"))
-
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -215,8 +213,8 @@ def _call_process(command, stdin, stdout, stderr):
 
 
 def singularity_args(*args, **kwargs):
-    image = kwargs.get("singularity_image")
-    assert image, "singularity image URL required."
+    image = kwargs.get("image")
+    assert image, "singularity image path required."
     mounts = sorted(set(kwargs.get("mounts", [])))
     docker_args = ['singularity', 'run']
     for mount in mounts:
@@ -229,8 +227,7 @@ def singularity_args(*args, **kwargs):
     return args
 
 
-
-def _dockerize_args(*args, **kwargs):
+def dockerize_args(*args, **kwargs):
     image = kwargs.get("image")
     assert image, "docker image URL required."
 

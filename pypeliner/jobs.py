@@ -387,6 +387,13 @@ class JobCallable(object):
             arg.push()
     def __call__(self):
         ret_value = None
+        if isinstance(self.func, str):
+            self.func = pypeliner.helpers.import_function(self.func)
+        callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
+        if self.func == pypeliner.commandline.execute:
+            self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
+        else:
+            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
