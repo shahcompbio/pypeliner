@@ -22,6 +22,30 @@ from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
 
 
+def get_run_command(ctx):
+    command = ['pypeliner_delegate',
+               '$AZ_BATCH_TASK_WORKING_DIR/{input_filename}',
+               '$AZ_BATCH_TASK_WORKING_DIR/{output_filename}',
+               ]
+    command = ' '.join(command)
+
+    if ctx.get("dockerize"):
+        mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts")]
+        mount_string += ['-v /mnt:/mnt']
+        mount_string = ' '.join(mount_string)
+        command = ['docker run -w $PWD',
+                   mount_string,
+                   '-v /var/run/docker.sock:/var/run/docker.sock',
+                   '-v /usr/bin/docker:/usr/bin/docker',
+                   'singlecellcontainers.azurecr.io/scp/single_cell_pipeline',
+                    command]
+        command = ' '.join(command)
+        # wrap it up as docker group command
+        command = 'sg docker -c "{}"'.format(command)
+
+    return command
+
+
 def get_task_id(name, azure_task_name_max_len=64):
     """
     generate uniq string, fill in the leftover space
@@ -619,7 +643,7 @@ class AzureJobQueue(object):
         self.blob_client.create_container(self.container_name)
 
         self.compute_start_commands = self.config['compute_start_commands']
-        self.compute_run_command = self.config['compute_run_command']
+        # self.compute_run_command = self.config['compute_run_command']
         self.compute_finish_commands = self.config['compute_finish_commands']
 
         self.no_delete_pool = self.config.get('no_delete_pool', False)
@@ -785,11 +809,10 @@ class AzureJobQueue(object):
             self.job_blobname_prefix[name],
             run_script_file_path)
 
-        command = self.compute_run_command.format(
+        command = get_run_command(ctx)
+        command = command.format(
             input_filename=job_before_file_path,
             output_filename=job_after_file_path)
-        if ctx.get('dockerize', None):
-            command = self.config['dockerize_run_command'].format(command=command)
 
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')

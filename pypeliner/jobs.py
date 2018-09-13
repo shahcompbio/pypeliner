@@ -329,6 +329,7 @@ class JobCallable(object):
     def __init__(self, id, func, argset, arglist, storage, logs_dir, ctx):
         self.storage = storage
         self.id = id
+        self.ctx = ctx
         self.func = func
         self.argset = argset
         self.arglist = arglist
@@ -340,7 +341,7 @@ class JobCallable(object):
         self.stderr_storage = self.storage.create_store(self.stderr_filename)
         self.job_timer = JobTimer()
         self.job_mem_tracker = JobMemoryTracker()
-        timeout = ctx.get("timeout", None) if ctx else None
+        timeout = self.ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
         self.job_logger = JobLogger()
         self.hostname = None
@@ -375,8 +376,6 @@ class JobCallable(object):
         if isinstance(self.func, str):
             self.func = pypeliner.helpers.import_function(self.func)
         callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-        if self.func == pypeliner.commandline._docker_python_execute:
-            callset.args[-1] = self.logs_dir
         if self.func == pypeliner.commandline.execute:
             self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
         else:

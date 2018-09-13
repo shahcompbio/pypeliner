@@ -105,7 +105,8 @@ def execute(*args, **docker_kwargs):
 
     """
     if docker_kwargs and docker_kwargs.get("dockerize", None):
-        args = _dockerize_args(*args, **docker_kwargs)
+        if not args[0] == 'docker':
+            args = _dockerize_args(*args, **docker_kwargs)
         _docker_login(docker_kwargs.get("server"),
                       docker_kwargs.get("username"),
                       docker_kwargs.get("password"),)
@@ -211,6 +212,22 @@ def _call_process(command, stdin, stdout, stderr):
             raise CommandNotFoundException(command, command[0])
         else:
             raise
+
+
+def singularity_args(*args, **kwargs):
+    image = kwargs.get("singularity_image")
+    assert image, "singularity image URL required."
+    mounts = sorted(set(kwargs.get("mounts", [])))
+    docker_args = ['singularity', 'run']
+    for mount in mounts:
+        docker_args.extend(['-B', '{}:{}'.format(mount, mount)])
+    # paths on azure are relative, so we need to set the working dir
+    wdir = os.getcwd()
+    docker_args.extend(['--pwd', wdir])
+    docker_args.append(image)
+    args = docker_args + list(args)
+    return args
+
 
 
 def _dockerize_args(*args, **kwargs):
