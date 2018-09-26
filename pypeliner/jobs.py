@@ -387,19 +387,19 @@ class JobCallable(object):
             arg.push()
     def __call__(self):
         ret_value = None
-        if isinstance(self.func, str):
-            self.func = pypeliner.helpers.import_function(self.func)
-        callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-        if self.func == pypeliner.commandline.execute:
-            self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
-        else:
-            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
+                if isinstance(self.func, str):
+                    self.func = pypeliner.helpers.import_function(self.func)
+                callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
+                if self.func == pypeliner.commandline.execute:
+                    self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
+                else:
+                    self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
                 self.hostname = socket.gethostname()
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
