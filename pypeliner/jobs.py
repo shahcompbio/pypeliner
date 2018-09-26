@@ -16,6 +16,7 @@ import pypeliner.arguments
 import pypeliner.commandline
 import pypeliner.managed
 import pypeliner.resources
+import pypeliner.storage
 import pypeliner.identifiers
 import pypeliner.deep
 
@@ -235,12 +236,13 @@ class JobTimer(object):
     @property
     def duration(self):
         if self._finish is None or self._start is None:
-            return None
+            return '?'
         return int(self._finish - self._start)
 
 class JobLogger(object):
     def __init__(self):
         self.trap = warnings.catch_warnings(record=True)
+        self.trapped_warnings = None
     def __enter__(self):
         self.trapped_warnings = self.trap.__enter__()
     def __exit__(self, exc_type, exc_value, traceback):
@@ -251,8 +253,12 @@ class JobLogger(object):
         only keep the user warnings, filter all other warnings. This should get rid of
         most deprecation warnings and other runtime warnings from numpy, scipy etc.
         """
+        if self.trapped_warnings is None:
+            return []
         warnings = filter(lambda i: issubclass(i.category, UserWarning), self.trapped_warnings)
+        warnings = [warning.message for warning in warnings]
         return warnings
+
 
 class TimeOutError(Exception):
     """Exception Type for throwing timeout errors"""
@@ -315,7 +321,7 @@ class JobMemoryTracker(object):
     @property
     def memoryused(self):
         if self._finish is None or self._start is None:
-            return None
+            return '?'
         return self._finish
 
 
@@ -323,6 +329,7 @@ def resolve_arg(arg):
     if not isinstance(arg, pypeliner.arguments.Arg):
         return None, False
     return arg.resolve(), True
+
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
@@ -334,6 +341,7 @@ class JobCallable(object):
         self.argset = argset
         self.arglist = arglist
         self.finished = False
+        self.displaycommand = '?'
         self.logs_dir = logs_dir
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -344,7 +352,7 @@ class JobCallable(object):
         timeout = self.ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
         self.job_logger = JobLogger()
-        self.hostname = None
+        self.hostname = '?'
     @property
     def duration(self):
         return self.job_timer.duration
@@ -356,11 +364,17 @@ class JobCallable(object):
         return self.job_logger.warnings
     def log_text(self):
         text = '--- stdout ---\n'
-        with open(self.stdout_filename, 'r') as job_stdout:
-            text += job_stdout.read()
+        try:
+            with open(self.stdout_filename, 'r') as job_stdout:
+                text += job_stdout.read()
+        except IOError:
+            text += 'missing file ' + self.stdout_filename + '\n'
         text += '--- stderr ---\n'
-        with open(self.stderr_filename, 'r') as job_stderr:
-            text += job_stderr.read()
+        try:
+            with open(self.stderr_filename, 'r') as job_stderr:
+                text += job_stderr.read()
+        except IOError:
+            text += 'missing file ' + self.stderr_filename + '\n'
         return text
     def allocate(self):
         for arg in self.arglist:
@@ -405,8 +419,14 @@ class JobCallable(object):
     def collect_logs(self):
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
-        self.stdout_storage.pull()
-        self.stderr_storage.pull()
+        try:
+            self.stdout_storage.pull()
+        except pypeliner.storage.InputMissingException:
+            pass
+        try:
+            self.stderr_storage.pull()
+        except pypeliner.storage.InputMissingException:
+            pass
     def updatedb(self, db):
         for arg in self.arglist:
             arg.updatedb(db)
