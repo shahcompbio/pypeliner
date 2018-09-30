@@ -76,17 +76,16 @@ class UserResource(Resource):
         # filenames may be none if they are not yet defined
         # for example for a job that creates axis chunks that
         # are used by the same job's outputs
+        self.extra_stores = []
         if filename is None:
             self.store = None
             self.filename = None
         else:
             self.store = storage.create_store(filename, is_temp=False, direct_write=direct_write, store_dir=store_dir)
             self.filename = self.store.filename
-
-        self.extra_stores = []
-        if extensions is not None:
-            for ext in extensions:
-                self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
+            if extensions is not None:
+                for ext in extensions:
+                    self.extra_stores.append(storage.create_store(self.filename, extension=ext, is_temp=False, direct_write=direct_write, store_dir=store_dir))
     def build_displayname(self, base_node=pypeliner.identifiers.Node()):
         return self.filename
     @property
