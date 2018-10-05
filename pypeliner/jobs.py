@@ -255,8 +255,11 @@ class JobLogger(object):
         """
         if self.trapped_warnings is None:
             return []
+
         warnings = filter(lambda i: issubclass(i.category, UserWarning), self.trapped_warnings)
-        warnings = [warning.message for warning in warnings]
+        # remove duplicate warnings
+        warnings = list(set([warning.message.message for warning in warnings]))
+
         return warnings
 
 
