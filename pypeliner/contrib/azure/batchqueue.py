@@ -651,7 +651,6 @@ class AzureJobQueue(object):
         self.blob_client.create_container(self.container_name)
 
         self.compute_start_commands = self.config['compute_start_commands']
-        # self.compute_run_command = self.config['compute_run_command']
         self.compute_finish_commands = self.config['compute_finish_commands']
 
         self.no_delete_pool = self.config.get('no_delete_pool', False)

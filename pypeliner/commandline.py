@@ -1,8 +1,9 @@
-import subprocess
 import sys
 import os
-import dill as pickle
 import pypeliner
+import subprocess
+import dill as pickle
+from pypeliner.helpers import Backoff
 
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
@@ -257,9 +258,13 @@ def _docker_pull(image):
     cmd = ['docker','pull',image]
     execute(*cmd)
 
+
+@Backoff(exception_type=EOFError, max_backoff=300, randomize=True)
 def _docker_login(server, username, password):
     if not username or not password:
         #assume repo is public
         return
-    cmd = ['docker', 'login', server, '-u', username, '-p', password]
+
+    cmd = ['echo', password, '|', 'docker', 'login',
+           server, '-u', username, '--password-stdin']
     execute(*cmd)

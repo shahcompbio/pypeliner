@@ -34,7 +34,7 @@ def _get_blob_name(filename):
     return filename.strip('/')
 
 
-# @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
+@Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
 def download_from_blob_to_path(blob_client, account_name, container_name, blob_name,
                                destination_file_path, username, password,
                                ipaddress, vhost):
