@@ -50,51 +50,11 @@ class Callable(object):
         self.retval = self.func(*self.args, **self.kwargs)
 
 
-def _docker_python_execute(args, kwargs, ctx, func, tempdir):
-    """ Run a python function in docker
-
-    :param args: executable and command line arguments
-    :param kwargs: function, tempdir and docker image
-
-    Execute python code inside a docker container. Pickles the code
-    as a callable and runs with pypeliner_delegate
-
-    """
-    mounts = ctx.get('mounts')
-
-    if isinstance(func, str):
-        func = pypeliner.helpers.import_function(func)
-    jobcallable = Callable(func, args, kwargs)
-
-    pypeliner.helpers.makedirs(tempdir)
-    before = os.path.join(tempdir, 'before.pickle')
-    after = os.path.join(tempdir, 'after.pickle')
-    docker_args = ["pypeliner_delegate", before, after]
-    if ctx.get("dockerize"):
-        docker_args = dockerize_args(
-            *docker_args, image=ctx.get("image"),
-            mounts=mounts
-            )
-
-    with open(before, 'w') as beforepickle:
-        pickle.dump(jobcallable, beforepickle)
-
-    _docker_login(ctx.get('server'),
-                  ctx.get("username"),
-                  ctx.get("password"),)
-    _docker_pull(ctx.get("image"))
-    execute(*docker_args)
-
-    with open(after) as afterpickle:
-        data = pickle.load(afterpickle)
-        return data.retval
-
-
 def execute(*args, **docker_kwargs):
     """ Execute a command line
 
     :param args: executable and command line arguments
-    :param kwargs: dockerize keyword argument
+    :param kwargs: container keyword arguments
 
     Execute a command line, and handle pipes between processes and to files.
     The '|', '>' and '<' characters are interpretted as pipes between processes,
@@ -237,6 +197,10 @@ def dockerize_args(*args, **kwargs):
     docker_args = ['docker', 'run']
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
+
+    # set user to avoid permission issues
+    uid = os.getuid()
+    docker_args.extend(['--user','{}:{}'.format(uid, uid)])
 
     # paths on azure are relative, so we need to set the working dir
     wdir = os.getcwd()
