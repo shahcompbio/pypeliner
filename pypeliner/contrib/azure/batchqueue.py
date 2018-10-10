@@ -20,7 +20,10 @@ from azure.common import AzureHttpError
 
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
+from azure.profiles import KnownProfiles
 
+
+KnownProfiles.default.use(KnownProfiles.latest)
 
 def get_run_command(ctx):
     command = ['pypeliner_delegate',
