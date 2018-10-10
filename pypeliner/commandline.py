@@ -49,7 +49,6 @@ class Callable(object):
     def __call__(self):
         self.retval = self.func(*self.args, **self.kwargs)
 
-
 def execute(*args, **docker_kwargs):
     """ Execute a command line
 
@@ -197,10 +196,6 @@ def dockerize_args(*args, **kwargs):
     docker_args = ['docker', 'run']
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
-
-    # set user to avoid permission issues
-    uid = os.getuid()
-    docker_args.extend(['--user','{}:{}'.format(uid, uid)])
 
     # paths on azure are relative, so we need to set the working dir
     wdir = os.getcwd()
