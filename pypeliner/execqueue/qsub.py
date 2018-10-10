@@ -2,12 +2,23 @@ import os
 import logging
 import subprocess
 import time
+from string import Formatter
 
 import pypeliner.helpers
 import pypeliner.execqueue.local
 import pypeliner.execqueue.qcmd
 import pypeliner.execqueue.utils
 import pypeliner.delegator
+
+
+class NativespecFormatter(dict):
+    def __missing__(self, key):
+        if '=' in key:
+            assert len(key.split('=')) == 2
+            key, default = key.split('=')
+            return self.get(key, default)
+        else:
+            raise KeyError('Key {} missing in job context'.format(key))
 
 
 class QsubJob(object):
@@ -51,7 +62,7 @@ class QsubJob(object):
     def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += ['-sync', 'y', '-b', 'y']
-        qsub += native_spec.format(**ctx).split()
+        qsub += Formatter().vformat(native_spec, (), NativespecFormatter(**ctx))
         qsub += ['-N', pypeliner.execqueue.utils.qsub_format_name(name)]
         qsub += ['-o', stdout_filename]
         qsub += ['-e', stderr_filename]
