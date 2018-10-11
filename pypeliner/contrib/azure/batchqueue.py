@@ -223,7 +223,9 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
                 config['node_os_sku'])
 
     account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-    account_key = get_storage_account_key(account_name)
+    account_key = os.environ.get('AZURE_STORAGE_KEY')
+    if not account_key:
+        account_key = get_storage_account_key(account_name)
 
     # Get the node agent SKU and image reference for the virtual machine
     # configuration.
