@@ -22,8 +22,8 @@ from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.storage import StorageManagementClient
 from azure.profiles import KnownProfiles
 
-
 KnownProfiles.default.use(KnownProfiles.latest)
+
 
 def get_run_command(ctx):
     command = ['pypeliner_delegate',
@@ -222,11 +222,6 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
                 config['node_os_offer'],
                 config['node_os_sku'])
 
-    account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-    account_key = os.environ.get('AZURE_STORAGE_KEY')
-    if not account_key:
-        account_key = get_storage_account_key(account_name)
-
     # Get the node agent SKU and image reference for the virtual machine
     # configuration.
     # For more information about the virtual machine configuration, see:
@@ -235,8 +230,6 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     start_vm_commands = None
     if config.get('create_vm_commands', None):
         start_vm_commands = _create_commands(config['create_vm_commands'])
-        start_vm_commands = [command.format(accountname=account_name, accountkey=account_key)
-                             for command in start_vm_commands]
 
     data_disks = None
     if config['data_disk_sizes']:
