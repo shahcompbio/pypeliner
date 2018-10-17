@@ -11,25 +11,23 @@ from rabbitmq import RabbitMqSemaphore
 
 import azure.storage.blob
 import azure.common
+from azure.common.credentials import ServicePrincipalCredentials
+from azure.mgmt.storage import StorageManagementClient
 from azure.common import AzureHttpError
 
-import adal
-from msrestazure.azure_cloud import AZURE_PUBLIC_CLOUD
-import azure.storage.common
 
 
-def _get_access_token(tenant, client, key):
-    LOGIN_ENDPOINT = AZURE_PUBLIC_CLOUD.endpoints.active_directory
+def _get_blob_key(accountname, client_id, secret_key, tenant_id, subscription_id, resource_group):
+    blob_credentials = ServicePrincipalCredentials(client_id=client_id,
+                                                   secret=secret_key,
+                                                   tenant=tenant_id)
 
-    RESOURCE = "https://storage.azure.com"
+    storage_client = StorageManagementClient(blob_credentials, subscription_id)
+    keys = storage_client.storage_accounts.list_keys(resource_group,
+                                                     accountname)
+    keys = {v.key_name: v.value for v in keys.keys}
 
-    context = adal.AuthenticationContext(LOGIN_ENDPOINT + '/' + tenant,
-                                         api_version=None, validate_authority=True)
-    mgmt_token = context.acquire_token_with_client_credentials(RESOURCE, client, key)
-
-    token = azure.storage.common.TokenCredential(mgmt_token['accessToken'])
-
-    return token
+    return keys["key1"]
 
 
 def _get_blob_name(filename):
@@ -126,12 +124,16 @@ class AzureBlobStorage(object):
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.blob_client = None
     def connect(self, storage_account_name):
-        # tokens expire after one hour, so always regenerate token and client
-        access_token = _get_access_token(self.tenant_id, self.client_id,
-                                         self.secret_key)
+        #dont need to regenerate client if already exists
+        client = getattr(self, "blob_client", None)
+        if client and client.account_name == storage_account_name:
+            return
+        storage_account_key = _get_blob_key(storage_account_name, self.client_id,
+                                            self.secret_key, self.tenant_id,
+                                            self.subscription_id, self.resource_group)
         self.blob_client = azure.storage.blob.BlockBlobService(
             account_name=storage_account_name,
-            token_credential=access_token)
+            account_key=storage_account_key)
     def create_createtime_cache(self, blob_name):
         return self.cached_createtimes.create_flyweight(blob_name)
     def __enter__(self):
