@@ -8,27 +8,30 @@ import pypeliner.flyweight
 from pypeliner.helpers import Backoff
 
 from rabbitmq import RabbitMqSemaphore
-
 import azure.storage.blob
 import azure.common
-from azure.common.credentials import ServicePrincipalCredentials
-from azure.mgmt.storage import StorageManagementClient
 from azure.common import AzureHttpError
 
+from azure.keyvault import KeyVaultClient, KeyVaultAuthentication
+from azure.common.credentials import ServicePrincipalCredentials
 
 
-def _get_blob_key(accountname, client_id, secret_key, tenant_id, subscription_id, resource_group):
-    blob_credentials = ServicePrincipalCredentials(client_id=client_id,
-                                                   secret=secret_key,
-                                                   tenant=tenant_id)
+def _get_blob_key(accountname, client_id, secret_key, tenant_id, keyvault_account):
+    def auth_callback(server, resource, scope):
+        credentials = ServicePrincipalCredentials(
+            client_id=client_id,
+            secret=secret_key,
+            tenant=tenant_id,
+            resource="https://vault.azure.net"
+        )
+        token = credentials.token
+        return token['token_type'], token['access_token']
 
-    storage_client = StorageManagementClient(blob_credentials, subscription_id)
-    keys = storage_client.storage_accounts.list_keys(resource_group,
-                                                     accountname)
-    keys = {v.key_name: v.value for v in keys.keys}
-
-    return keys["key1"]
-
+    client = KeyVaultClient(KeyVaultAuthentication(auth_callback))
+    keyvault = "https://{}.vault.azure.net/".format(keyvault_account)
+    # passing in empty string for version returns latest key
+    secret_bundle = client.get_secret(keyvault, accountname, "")
+    return secret_bundle.value
 
 def _get_blob_name(filename):
     return filename.strip('/')
@@ -121,6 +124,7 @@ class AzureBlobStorage(object):
         self.tenant_id=os.environ["TENANT_ID"]
         self.subscription_id = os.environ["SUBSCRIPTION_ID"]
         self.resource_group = os.environ["RESOURCE_GROUP"]
+        self.keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.blob_client = None
     def connect(self, storage_account_name):
@@ -130,7 +134,7 @@ class AzureBlobStorage(object):
             return
         storage_account_key = _get_blob_key(storage_account_name, self.client_id,
                                             self.secret_key, self.tenant_id,
-                                            self.subscription_id, self.resource_group)
+                                            self.keyvault_account)
         self.blob_client = azure.storage.blob.BlockBlobService(
             account_name=storage_account_name,
             account_key=storage_account_key)
@@ -145,12 +149,12 @@ class AzureBlobStorage(object):
         return (self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,
                 self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
                 self.secret_key, self.tenant_id, self.subscription_id,
-                self.resource_group)
+                self.resource_group, self.keyvault_account)
     def __setstate__(self, state):
         self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,\
         self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,\
         self.secret_key, self.tenant_id, self.subscription_id,\
-        self.resource_group = state
+        self.resource_group, self.keyvault_account = state
     def create_store(self, filename, extension=None, **kwargs):
         if extension is not None:
             filename = filename + extension

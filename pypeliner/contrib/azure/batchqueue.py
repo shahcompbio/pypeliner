@@ -18,10 +18,11 @@ import azure.batch.batch_service_client as batch
 import azure.batch.models as batchmodels
 from azure.common import AzureHttpError
 
-from azure.common.credentials import ServicePrincipalCredentials
-from azure.mgmt.storage import StorageManagementClient
 from azure.profiles import KnownProfiles
 
+
+from azure.keyvault import KeyVaultClient, KeyVaultAuthentication
+from azure.common.credentials import ServicePrincipalCredentials
 
 KnownProfiles.default.use(KnownProfiles.latest)
 
@@ -96,20 +97,21 @@ def get_storage_account_key(accountname):
     account from azure
     :param str accountname: storage account name
     """
-    blob_credentials = ServicePrincipalCredentials(client_id=os.environ["CLIENT_ID"],
-                                                   secret=os.environ[
-                                                       "SECRET_KEY"],
-                                                   tenant=os.environ["TENANT_ID"])
+    def auth_callback(server, resource, scope):
+        credentials = ServicePrincipalCredentials(
+            client_id=os.environ['CLIENT_ID'],
+            secret=os.environ['SECRET_KEY'],
+            tenant=os.environ['TENANT_ID'],
+            resource="https://vault.azure.net"
+        )
+        token = credentials.token
+        return token['token_type'], token['access_token']
 
-    storage_client = StorageManagementClient(
-        blob_credentials,
-        os.environ["SUBSCRIPTION_ID"])
-    keys = storage_client.storage_accounts.list_keys(os.environ["RESOURCE_GROUP"],
-                                                     accountname)
-    keys = {v.key_name: v.value for v in keys.keys}
-
-    return keys["key1"]
-
+    client = KeyVaultClient(KeyVaultAuthentication(auth_callback))
+    keyvault = "https://{}.vault.azure.net/".format(os.environ['AZURE_KEYVAULT_ACCOUNT'])
+    # passing in empty string for version returns latest key
+    secret_bundle = client.get_secret(keyvault, accountname, "")
+    return secret_bundle.value
 
 def get_container_and_blob_path(filepath):
     """
