@@ -22,16 +22,20 @@ class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
     """
-    def __init__(self, default_ctx=None):
-        self.default_ctx = {
+    def __init__(self, ctx=None, default_ctx=None):
+        self.ctx = {
             'mem': 4,
             'num_retry': 3,
             'mem_retry_factor': 2,
             'ncpus': 1,
             'dockerize': None,
         }
+        if ctx is not None:
+            self.ctx.update(ctx)
+        ##TODO: remove default_ctx at some point?
         if default_ctx is not None:
-            self.default_ctx.update(default_ctx)
+            DeprecationWarning("default_ctx will be replaced by ctx starting with v0.6")
+            self.ctx.update(default_ctx)
         self.job_definitions = dict()
         self.path_info = dict()
 
@@ -123,14 +127,14 @@ class Workflow(object):
         derived class.
 
         """
-        job_ctx = self.default_ctx.copy()
+        job_ctx = self.ctx.copy()
         if ctx is not None:
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
         self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
-    def subworkflow(self, name='', axes=(), func=None, args=None, kwargs=None):
+    def subworkflow(self, name='', axes=(), func=None, ctx={}, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
         takes the input dependencies and creates/updates output dependents.  The python 
         function ``func`` should return a workflow object containing the set of jobs.
@@ -152,7 +156,7 @@ class Workflow(object):
         """
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, func, pypeliner.jobs.CallSet(args=args, kwargs=kwargs))
+        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, func, ctx, pypeliner.jobs.CallSet(args=args, kwargs=kwargs))
 
     def _create_job_instances(self, graph, db):
         """ Create job instances from job definitions given resource and node managers,
@@ -161,4 +165,3 @@ class Workflow(object):
         for job_def in self.job_definitions.itervalues():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst
-

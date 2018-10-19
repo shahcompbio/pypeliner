@@ -243,7 +243,7 @@ class DependencyGraph:
 
 
 class WorkflowInstance(object):
-    def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), cleanup=False):
+    def __init__(self, workflow_def, db_factory, runskip, node=pypeliner.identifiers.Node(), ctx={}, cleanup=False):
         self._logger = logging.getLogger('pypeliner.workflowgraph')
         self.workflow_def = workflow_def
         self.db_factory = db_factory
@@ -254,7 +254,9 @@ class WorkflowInstance(object):
         self.subworkflows = list()
         self.cleanup = cleanup
         self.regenerate()
-
+        self.ctx = workflow_def.ctx
+        if ctx:
+            self.ctx.update(ctx)
     def regenerate(self):
         """ Regenerate dependency graph based on job instances.
         """
@@ -310,6 +312,8 @@ class WorkflowInstance(object):
                     self._logger.info('creating subworkflow ' + job.displayname,
                                       extra={"id": job.displayname, "type":"subworkflow", 'task_name': job.id[1]})
                     workflow_def = job_callable()
+                    for name, defn in workflow_def.job_definitions.iteritems():
+                        defn.ctx.update(job_callable.ctx)
                     if not job_callable.finished:
                         self._logger.error('subworkflow ' + job.displayname + ' failed to complete\n' + job_callable.log_text(),
                                            extra={"id": job.displayname, "type":"subworkflow", "status": "fail", 'task_name': job.id[1]})
@@ -324,7 +328,7 @@ class WorkflowInstance(object):
                     self._logger.info('subworkflow ' + job.displayname + ' -> ' + job_callable.displaycommand,
                                       extra={"id": job.displayname, "type":"subworkflow", "cmd":job_callable.displaycommand, 'task_name': job.id[1]})
                     node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
-                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, cleanup=self.cleanup)
+                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, ctx=job.ctx, cleanup=self.cleanup)
                     self.subworkflows.append((job, job_callable, workflow))
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped',

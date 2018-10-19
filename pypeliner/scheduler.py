@@ -68,7 +68,7 @@ class Scheduler(object):
         self._active_jobs = dict()
         self._job_exc_dirs = set()
         with pypeliner.database.WorkflowDatabaseFactory(self.temps_dir, self.workflow_dir, self.logs_dir, file_storage) as db_factory:
-            workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, cleanup=self.cleanup)
+            workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, ctx=workflow_def.ctx, cleanup=self.cleanup)
             failing = False
             try:
                 try:

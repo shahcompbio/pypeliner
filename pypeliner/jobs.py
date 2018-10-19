@@ -462,10 +462,10 @@ class SetObjInstance(JobInstance):
         self.obj_displayname = obj_res.build_displayname(workflow.node)
 
 class SubWorkflowDefinition(JobDefinition):
-    def __init__(self, name, axes, func, argset):
+    def __init__(self, name, axes, func, ctx, argset):
         self.name = name
         self.axes = axes
-        self.ctx = {}
+        self.ctx = ctx
         self.func = pypeliner.helpers.import_function(func) if isinstance(func, str) else func
         self.argset = argset
     def create_job_instances(self, workflow, db):
@@ -478,8 +478,8 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
     def create_callable(self):
-        timeout = self.job_def.ctx.get("timeout", None)
-        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, timeout)
+        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist,
+                                self.db.file_storage, self.logs_dir, self.job_def.ctx)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):
