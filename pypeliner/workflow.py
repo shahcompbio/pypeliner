@@ -27,6 +27,7 @@ class Workflow(object):
             'mem': 4,
             'num_retry': 3,
             'mem_retry_factor': 2,
+            'ncpus': 1,
         }
         if default_ctx is not None:
             self.default_ctx.update(default_ctx)
