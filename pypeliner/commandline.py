@@ -5,6 +5,14 @@ import subprocess
 import dill as pickle
 from pypeliner.helpers import Backoff
 
+
+def which(file):
+    for path in os.environ["PATH"].split(os.pathsep):
+        if os.path.exists(os.path.join(path, file)):
+                return os.path.join(path, file)
+
+    return None
+
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
 
@@ -202,10 +210,12 @@ def dockerize_args(*args, **kwargs):
     docker_args.extend(['-w', wdir])
     # remove container after it finishes running
     docker_args.append('--rm')
+
+    docker_path = which('docker')
     # expose docker socket to enable starting
     # new containers from the current container
     docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
-    docker_args.extend(['-v', '/usr/bin/docker:/usr/bin/docker'])
+    docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
     docker_args.append(image)
 
     args = docker_args + list(args)
