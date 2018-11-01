@@ -10,6 +10,7 @@ import signal
 import warnings
 import resource
 import uuid
+from datetime import timedelta
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -23,7 +24,6 @@ import pypeliner.deep
 
 class IncompleteWorkflowException(Exception):
     pass
-
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -213,6 +213,30 @@ class JobInstance(object):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
+    def update_ctx_value(self, retry_val, val, by_factor=False):
+        if isinstance(val, (int, long, float, complex)):
+            if by_factor:
+                return val * retry_val
+            else:
+                return val + retry_val
+        elif isinstance(val, str) and ':' in val:
+            assert val.count(':') == 1, "time ctx values only support hours and minutes"
+            # Juno and Luna only accept Hours and Mins, no seconds
+            val = datetime.datetime.strptime(val, "%H:%M")
+            val = timedelta(hours=val.hour, minutes=val.minute, seconds=val.second)
+            if by_factor:
+                assert isinstance(retry_val, (int, long, float)),\
+                    "retry_factor for time should be an integer or float"
+                val *= retry_val
+            else:
+                retry_val = datetime.datetime.strptime(retry_val, "%H:%M")
+                retry_val = timedelta(hours=retry_val.hour, minutes=retry_val.minute, seconds=retry_val.second)
+                val += retry_val
+            hours = str(val.seconds/3600).zfill(2)
+            mins = str((val.seconds/60) % 60).zfill(2)
+            return '{}:{}'.format(hours, mins)
+        else:
+            raise Exception('unknown_format')
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):
             return False
@@ -220,10 +244,12 @@ class JobInstance(object):
         updated = False
         for key, value in self.ctx.iteritems():
             if key.endswith('_retry_factor'):
-                self.ctx[key[:-len('_retry_factor')]] *= value
+                self.ctx[key[:-len('_retry_factor')]] = self.update_ctx_value(
+                    value, self.ctx[key[:-len('_retry_factor')]], by_factor=True)
                 updated = True
             elif key.endswith('_retry_increment'):
-                self.ctx[key[:-len('_retry_increment')]] += value
+                self.ctx[key[:-len('_retry_increment')]] = self.update_ctx_value(
+                    value, self.ctx[key[:-len('_retry_increment')]])
                 updated = True
         return updated
 
