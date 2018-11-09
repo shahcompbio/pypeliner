@@ -210,12 +210,7 @@ class JobInstance(object):
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
     def finalize(self, callable):
-        callable.updatedb(self.db)
-        if self.check_require_regenerate():
-            self.workflow.regenerate()
-    def complete(self):
-        self.db.job_shelf[self.displayname] = True
-        self.workflow.notify_completed(self.id)
+        self.workflow.finalize_job(self, callable)
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):
             return False

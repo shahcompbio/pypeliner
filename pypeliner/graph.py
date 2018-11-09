@@ -281,9 +281,18 @@ class WorkflowInstance(object):
             except IndexError:
                 return
 
-            # Finalize the workflow
-            job.finalize(received)
-            job.complete()
+            # Complete the workflow
+            self.complete_job(job)
+
+    def finalize_job(self, job, callable):
+        callable.updatedb(self.db)
+        if job.check_require_regenerate():
+            self.regenerate()
+        self.complete_job(job)
+
+    def complete_job(self, job):
+        self.db.job_shelf[job.displayname] = True
+        self.notify_completed(job.id)
 
     def pop_next_job(self):
         """ Pop the next job from the top of this or a subgraph.
@@ -333,7 +342,7 @@ class WorkflowInstance(object):
                 else:
                     self._logger.info('subworkflow ' + job.displayname + ' skipped',
                                       extra={"id": job.displayname, "type":"subworkflow", "status":"skipped", 'task_name': job.id[1]})
-                    job.complete()
+                    self.complete_job(job)
                 continue
             elif isinstance(job, pypeliner.jobs.SetObjInstance):
                 self._logger.info('setting object ' + job.obj_displayname,
@@ -344,10 +353,19 @@ class WorkflowInstance(object):
                     self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + job_callable.log_text(),
                                   extra={"id": job.obj_displayname, "type":"object", "status":"fail", 'task_name': job.id[1]})
                     raise IncompleteJobException()
-                job.finalize(job_callable)
-                job.complete()
+                self.finalize_job(job, received)
             else:
-                return job
+                is_run_required, explaination = self.runskip(job)
+                self._logger.info(
+                    'job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
+                    extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
+                if is_run_required:
+                    return job
+                else:
+                    self.complete_job(job)
+                    self._logger.info(
+                        'job ' + job.displayname + ' skipped',
+                        extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
 
     def notify_completed(self, job_id):
         self.graph.notify_completed(job_id)

@@ -75,7 +75,7 @@ class Scheduler(object):
             try:
                 try:
                     while True:
-                        self._add_jobs(exec_queue, workflow, runskip)
+                        self._add_jobs(exec_queue, workflow)
                         if exec_queue.empty:
                             break
                         self._wait_next_job(exec_queue, workflow)
@@ -141,21 +141,13 @@ class Scheduler(object):
         self._add_job(exec_queue, job)
         return True
 
-    def _add_jobs(self, exec_queue, workflow, runskip):
+    def _add_jobs(self, exec_queue, workflow):
         while exec_queue.length < self.max_jobs:
             try:
                 job = workflow.pop_next_job()
             except pypeliner.graph.NoJobs:
                 return
-            is_run_required, explaination = runskip(job)
-            self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                              extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
-            if is_run_required:
-                self._add_job(exec_queue, job)
-            else:
-                job.complete()
-                self._logger.info('job ' + job.displayname + ' skipped',
-                                  extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
+            self._add_job(exec_queue, job)
 
     def _wait_next_job(self, exec_queue, workflow):
         name = exec_queue.wait()
@@ -209,6 +201,5 @@ class Scheduler(object):
                 raise pypeliner.graph.IncompleteJobException()
 
         job.finalize(received)
-        job.complete()
 
 
