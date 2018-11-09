@@ -17,7 +17,7 @@ class Arg(object):
         return []
     def resolve(self):
         return None
-    def updatedb(self, db):
+    def update(self, job):
         pass
     def finalize(self, v):
         pass
@@ -242,9 +242,9 @@ class SplitFileArg(Arg,SplitMergeArg):
         return self.split_outputs
     def resolve(self):
         return self.filename_callback
-    def updatedb(self, db):
+    def update(self, job):
         if self.is_split:
-            db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
+            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
     def push(self):
         for resource in self.filename_callback.resources.itervalues():
             resource.push()
@@ -383,8 +383,8 @@ class TempSplitObjArg(Arg,SplitMergeArg):
     def push(self):
         for resource in self.resources:
             resource.push()
-    def updatedb(self, db):
-        db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
+    def update(self, job):
+        job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
 
 
 class TempInputFileArg(Arg):
@@ -561,9 +561,9 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         return self.split_outputs
     def resolve(self):
         return self.filename_callback
-    def updatedb(self, db):
+    def update(self, job):
         if self.is_split:
-            db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
+            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
     def push(self):
         for resource in self.filename_callback.resources.itervalues():
             resource.push()
@@ -621,5 +621,32 @@ class OutputChunksArg(Arg,SplitMergeArg):
         return self
     def finalize(self, value):
         self.chunks_list = value
-    def updatedb(self, db):
-        db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
+    def update(self, job):
+        job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
+
+
+class OutputWorkflowArg(Arg):
+    """ Output workflow object argument
+
+    Stores a workflow object created by a job.
+
+    """
+    def __init__(self, db, name, node, **kwargs):
+        filename = db.get_temp_filename(name, node)
+        self.resource = pypeliner.resources.TempObjManager(db.file_storage, name, node, filename)
+    def get_outputs(self):
+        yield self.resource.output
+    def resolve(self):
+        return self
+    def finalize(self, value):
+        self.resource.finalize(value)
+    def allocate(self):
+        self.resource.allocate()
+    def push(self):
+        self.resource.push()
+    def pull(self):
+        self.resource.pull()
+    def get_obj(self):
+        return self.resource.get_obj()
+    
+

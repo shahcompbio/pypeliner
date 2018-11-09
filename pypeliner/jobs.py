@@ -21,6 +21,10 @@ import pypeliner.identifiers
 import pypeliner.deep
 
 
+class IncompleteWorkflowException(Exception):
+    pass
+
+
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
     def __init__(self, ret=None, args=None, kwargs=None):
@@ -209,8 +213,6 @@ class JobInstance(object):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
-    def finalize(self, callable):
-        self.workflow.finalize_job(self, callable)
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):
             return False
@@ -438,9 +440,12 @@ class JobCallable(object):
             self.stderr_storage.pull()
         except pypeliner.storage.InputMissingException:
             pass
-    def updatedb(self, db):
+    def finalize(self, job):
         for arg in self.arglist:
-            arg.updatedb(db)
+            arg.update(job)
+        if job.check_require_regenerate():
+            job.workflow.regenerate()
+        job.workflow.complete_job(job)
 
 def _setobj_helper(value):
     return value
@@ -463,12 +468,6 @@ class SetObjInstance(JobInstance):
         self.obj_displayname = obj_res.build_displayname(workflow.node)
 
 class SubWorkflowDefinition(JobDefinition):
-    def __init__(self, name, axes, func, ctx, argset):
-        self.name = name
-        self.axes = axes
-        self.ctx = ctx
-        self.func = pypeliner.helpers.import_function(func) if isinstance(func, str) else func
-        self.argset = argset
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield SubWorkflowInstance(self, workflow, db, node)
@@ -479,13 +478,30 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
     def create_callable(self):
-        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist,
-                                self.db.file_storage, self.logs_dir, self.job_def.ctx)
+        return WorkflowCallable(
+            self.id, self.job_def.func, self.argset, self.arglist,
+            self.db.file_storage, self.logs_dir, self.job_def.ctx)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):
-        pass
+        self.argset.ret.allocate()
     def push(self):
-        pass
+        self.argset.ret.push()
     def pull(self):
         pass
+    def finalize(self, job):
+        self.argset.ret.allocate()
+        self.argset.ret.pull()
+        workflow_def = self.argset.ret.get_obj()
+        if not isinstance(workflow_def, pypeliner.workflow.Workflow):
+            job.workflow._logger.error(
+                'subworkflow ' + job.displayname + ' did not return a workflow\n' + self.log_text(),
+                extra={"id": job.displayname, "type":"subworkflow", "status": "error", 'task_name': job.id[1]})
+            raise IncompleteWorkflowException()
+        if workflow_def.empty:
+            job.workflow._logger.error(
+                'subworkflow ' + job.displayname + ' returned an empty workflow\n' + self.log_text(),
+                extra={"id": job.displayname, "type":"subworkflow", "status":"empty", 'task_name': job.id[1]})
+            raise IncompleteWorkflowException()
+        job.workflow.add_subworkflow(job, workflow_def)
+

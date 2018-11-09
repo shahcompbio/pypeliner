@@ -277,18 +277,17 @@ class WorkflowInstance(object):
 
             # Pop the next finished workflow if it exists
             try:
-                job, received, workflow = pypeliner.helpers.pop_if(self.subworkflows, lambda (j, r, w): w.finished)
+                job, workflow = pypeliner.helpers.pop_if(self.subworkflows, lambda (j, w): w.finished)
             except IndexError:
                 return
 
             # Complete the workflow
             self.complete_job(job)
 
-    def finalize_job(self, job, callable):
-        callable.updatedb(self.db)
-        if job.check_require_regenerate():
-            self.regenerate()
-        self.complete_job(job)
+    def add_subworkflow(self, job, workflow_def):
+        node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
+        workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, cleanup=self.cleanup)
+        self.subworkflows.append((job, workflow))
 
     def complete_job(self, job):
         self.db.job_shelf[job.displayname] = True
@@ -300,7 +299,7 @@ class WorkflowInstance(object):
         
         while True:
             # Return any ready jobs from sub workflows
-            for job, received, workflow in self.subworkflows:
+            for job, workflow in self.subworkflows:
                 try:
                     return workflow.pop_next_job()
                 except NoJobs:
@@ -312,39 +311,7 @@ class WorkflowInstance(object):
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
-            if isinstance(job, pypeliner.jobs.SubWorkflowInstance):
-                is_run_required, explaination = self.runskip(job)
-                self._logger.info('subworkflow ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                                  extra={"id": job.displayname, "type":"subworkflow", "explanation":explaination, 'task_name': job.id[1]})
-                if is_run_required:
-                    job_callable = job.create_callable()
-                    self._logger.info('creating subworkflow ' + job.displayname,
-                                      extra={"id": job.displayname, "type":"subworkflow", 'task_name': job.id[1]})
-                    workflow_def = job_callable()
-                    for name, defn in workflow_def.job_definitions.iteritems():
-                        defn.ctx.update(job_callable.ctx)
-                    if not job_callable.finished:
-                        self._logger.error('subworkflow ' + job.displayname + ' failed to complete\n' + job_callable.log_text(),
-                                           extra={"id": job.displayname, "type":"subworkflow", "status": "fail", 'task_name': job.id[1]})
-                        raise IncompleteWorkflowException()
-                    if not isinstance(workflow_def, pypeliner.workflow.Workflow):
-                        self._logger.error('subworkflow ' + job.displayname + ' did not return a workflow\n' + job_callable.log_text(),
-                                           extra={"id": job.displayname, "type":"subworkflow", "status": "error", 'task_name': job.id[1]})
-                        raise IncompleteWorkflowException()
-                    if workflow_def.empty:
-                        self._logger.warning('subworkflow ' + job.displayname + ' returned an empty workflow\n' + job_callable.log_text(),
-                                             extra={"id": job.displayname, "type":"subworkflow", "status":"empty", 'task_name': job.id[1]})
-                    self._logger.info('subworkflow ' + job.displayname + ' -> ' + job_callable.displaycommand,
-                                      extra={"id": job.displayname, "type":"subworkflow", "cmd":job_callable.displaycommand, 'task_name': job.id[1]})
-                    node = self.node + job.node + pypeliner.identifiers.Namespace(job.job_def.name)
-                    workflow = WorkflowInstance(workflow_def, self.db_factory, self.runskip, node=node, ctx=job.ctx, cleanup=self.cleanup)
-                    self.subworkflows.append((job, job_callable, workflow))
-                else:
-                    self._logger.info('subworkflow ' + job.displayname + ' skipped',
-                                      extra={"id": job.displayname, "type":"subworkflow", "status":"skipped", 'task_name': job.id[1]})
-                    self.complete_job(job)
-                continue
-            elif isinstance(job, pypeliner.jobs.SetObjInstance):
+            if isinstance(job, pypeliner.jobs.SetObjInstance):
                 self._logger.info('setting object ' + job.obj_displayname,
                                   extra={"id": job.obj_displayname, "type":"object", 'task_name': job.id[1]})
                 job_callable = job.create_callable()
@@ -353,7 +320,7 @@ class WorkflowInstance(object):
                     self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + job_callable.log_text(),
                                   extra={"id": job.obj_displayname, "type":"object", "status":"fail", 'task_name': job.id[1]})
                     raise IncompleteJobException()
-                self.finalize_job(job, received)
+                job_callable.finalize(job)
             else:
                 is_run_required, explaination = self.runskip(job)
                 self._logger.info(

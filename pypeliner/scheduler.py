@@ -200,6 +200,6 @@ class Scheduler(object):
             else:
                 raise pypeliner.graph.IncompleteJobException()
 
-        job.finalize(received)
+        received.finalize(job)
 
 

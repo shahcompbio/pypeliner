@@ -201,7 +201,12 @@ class scheduler_test(unittest.TestCase):
 
         workflow.transform(
             name='read',
-            func=do_file_stuff,
+            func='pypeliner.tests.tasks.do_file_stuff',
+            ctx={
+                'container_type': 'docker',
+                'image': 'amcpherson/pypeliner:latest',
+                'mounts': ['/Users/amcphers/Projects/pypeliner'],
+            },
             args=(
                 mgd.InputFile(self.input_filename),
                 mgd.OutputFile(self.output_filename),
@@ -275,7 +280,12 @@ class scheduler_test(unittest.TestCase):
         workflow.transform(
             name='append_to_lines',
             axes=('byfile',),
-            func=append_to_lines,
+            ctx={
+                'container_type': 'docker',
+                'image': 'amcpherson/pypeliner:latest',
+                'mounts': ['/Users/amcphers/Projects/pypeliner'],
+            },
+            func='pypeliner.tests.tasks.append_to_lines',
             args=(
                 mgd.InputFile(self.input_n_filename, 'byfile'),
                 '#',
@@ -284,14 +294,24 @@ class scheduler_test(unittest.TestCase):
         workflow.subworkflow(
             name='sub_workflow_1',
             axes=('byfile',),
-            func=create_workflow_1,
+            ctx={
+                'container_type': 'docker',
+                'image': 'amcpherson/pypeliner:latest',
+                'mounts': ['/Users/amcphers/Projects/pypeliner'],
+            },
+            func='pypeliner.tests.tasks.create_workflow_1',
             args=(
                 mgd.TempInputFile('intermediate1', 'byfile'),
                 mgd.TempOutputFile('intermediate2', 'byfile')))
 
         workflow.transform(
             name='merge_files',
-            func=merge_file_byline,
+            ctx={
+                'container_type': 'docker',
+                'image': 'amcpherson/pypeliner:latest',
+                'mounts': ['/Users/amcphers/Projects/pypeliner'],
+            },
+            func='pypeliner.tests.tasks.merge_file_byline',
             args=(
                 mgd.TempInputFile('intermediate2', 'byfile'),
                 mgd.OutputFile(self.output_filename)))
