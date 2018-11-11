@@ -115,7 +115,7 @@ class DrmaaJob(object):
         
         self.received = self.delegated.finalize()
                     
-        if self.received is None:
+        if self.received is None or not self.received.started:
             raise pypeliner.execqueue.base.ReceiveError(self._create_error_text('receive error'))
     
     def _create_error_text(self, desc):

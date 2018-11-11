@@ -11,9 +11,6 @@ import pypeliner.workflow
 class IncompleteJobException(Exception):
     pass
 
-class IncompleteWorkflowException(Exception):
-    pass
-
 class AmbiguousInputException(Exception):
     def __init__(self, id):
         self.id = id

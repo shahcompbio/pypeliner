@@ -40,7 +40,7 @@ class LocalJob(object):
     def finalize(self, returncode):
         self.close_debug_files()
         self.received = self.delegated.finalize()
-        if returncode != 0 or self.received is None:
+        if returncode != 0 or self.received is None or not self.received.started:
             error_text = self.name + ' failed to complete\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'

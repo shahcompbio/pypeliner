@@ -346,6 +346,7 @@ class JobCallable(object):
         self.func = func
         self.argset = argset
         self.arglist = arglist
+        self.started = False
         self.finished = False
         self.displaycommand = '?'
         self.logs_dir = logs_dir
@@ -392,14 +393,6 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
-        ret_value = None
-        if isinstance(self.func, str):
-            self.func = pypeliner.helpers.import_function(self.func)
-        callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-        if self.func == pypeliner.commandline.execute:
-            self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
-        else:
-            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
@@ -413,6 +406,7 @@ class JobCallable(object):
                     self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
                 else:
                     self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
+                self.started = True
                 self.hostname = socket.gethostname()
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
@@ -428,7 +422,6 @@ class JobCallable(object):
                 sys.stdout, sys.stderr = old_stdout, old_stderr
         self.stdout_storage.push()
         self.stderr_storage.push()
-        return ret_value
     def collect_logs(self):
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
