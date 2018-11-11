@@ -308,28 +308,17 @@ class WorkflowInstance(object):
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
 
-            if isinstance(job, pypeliner.jobs.SetObjInstance):
-                self._logger.info('setting object ' + job.obj_displayname,
-                                  extra={"id": job.obj_displayname, "type":"object", 'task_name': job.id[1]})
-                job_callable = job.create_callable()
-                job_callable()
-                if not job_callable.finished:
-                    self._logger.error('setting object ' + job.obj_displayname + ' failed to complete\n' + job_callable.log_text(),
-                                  extra={"id": job.obj_displayname, "type":"object", "status":"fail", 'task_name': job.id[1]})
-                    raise IncompleteJobException()
-                job_callable.finalize(job)
+            is_run_required, explaination = self.runskip(job)
+            self._logger.info(
+                'job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
+                extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
+            if is_run_required:
+                return job
             else:
-                is_run_required, explaination = self.runskip(job)
+                self.complete_job(job)
                 self._logger.info(
-                    'job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                    extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
-                if is_run_required:
-                    return job
-                else:
-                    self.complete_job(job)
-                    self._logger.info(
-                        'job ' + job.displayname + ' skipped',
-                        extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
+                    'job ' + job.displayname + ' skipped',
+                    extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
 
     def notify_completed(self, job_id):
         self.graph.notify_completed(job_id)

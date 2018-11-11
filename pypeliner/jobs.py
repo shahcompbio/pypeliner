@@ -444,9 +444,9 @@ def _setobj_helper(value):
     return value
 
 class SetObjDefinition(JobDefinition):
-    def __init__(self, name, axes, obj, value):
+    def __init__(self, name, axes, ctx, obj, value):
         super(SetObjDefinition, self).__init__(
-            name, axes, {}, _setobj_helper,
+            name, axes, ctx, _setobj_helper,
             CallSet(ret=obj, args=(value,)))
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):

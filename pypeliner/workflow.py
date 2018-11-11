@@ -81,10 +81,14 @@ class Workflow(object):
         value of the object has changed in a subsequent run.
 
         """
+        job_ctx = {
+            'local': True,
+            'mem': 1,
+        }
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
-        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
+        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, job_ctx, obj, value)
 
     def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None, sandbox=None):
         """ Add a command line based transform to the pipeline
