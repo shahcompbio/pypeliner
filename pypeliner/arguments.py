@@ -264,10 +264,10 @@ class TempInputObjArg(Arg):
     def get_inputs(self):
         yield self.resource.input
     def resolve(self):
-        self.obj = self.resource.get_obj()
+        obj = self.resource.get_obj()
         if self.func is not None:
-            self.obj = self.func(self.obj)
-        return self.obj
+            obj = self.func(obj)
+        return obj
     def allocate(self):
         self.resource.allocate()
     def pull(self):
@@ -297,13 +297,13 @@ class TempMergeObjArg(Arg,SplitMergeArg):
     def get_merge_inputs(self):
         return self.merge_inputs
     def resolve(self):
-        self.resolved = dict()
+        resolved = dict()
         for resource in self.resources:
             obj = resource.get_obj()
             if self.func is not None:
                 obj = self.func(obj)
-            self.resolved[self.get_node_chunks(resource.node)] = obj
-        return self.resolved
+            resolved[self.get_node_chunks(resource.node)] = obj
+        return resolved
     def allocate(self):
         for resource in self.resources:
             resource.allocate()

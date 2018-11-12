@@ -35,10 +35,12 @@ class Delegator(object):
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        if self.job.ctx.get("container_type", None) == 'singularity':
-            command = pypeliner.commandline.singularity_args(*command, **self.job.ctx)
-        elif self.job.ctx.get('container_type', None) == 'docker':
-            command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
+        if 'image' in self.job.ctx:
+            container_type = self.job.ctx.get('container_type', 'docker')
+            if container_type == 'singularity':
+                command = pypeliner.commandline.singularity_args(*command, **self.job.ctx)
+            elif container_type == 'docker':
+                command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
         return command
     def finalize(self):
         self._waitfile(self.after_filename)
