@@ -86,10 +86,8 @@ class Workflow(object):
         value of the object has changed in a subsequent run.
 
         """
-        job_ctx = {
-            'local': True,
-            'mem': 1,
-        }
+        job_ctx = self.ctx.copy()
+        job_ctx['local'] = True
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
@@ -175,6 +173,7 @@ class Workflow(object):
 
         """
         job_ctx = self.ctx.copy()
+        job_ctx['local'] = True
         if ctx is not None:
             job_ctx.update(ctx)
         if name in self.job_definitions:
