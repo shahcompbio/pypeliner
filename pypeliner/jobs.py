@@ -399,19 +399,20 @@ class JobCallable(object):
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
-                if isinstance(self.func, str):
-                    self.func = pypeliner.helpers.import_function(self.func)
+                self.started = True
+                func = self.func
+                if isinstance(func, str):
+                    func = pypeliner.helpers.import_function(func)
                 callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-                if self.func == pypeliner.commandline.execute:
+                if func == pypeliner.commandline.execute:
                     self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
                 else:
-                    self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
-                self.started = True
+                    self.displaycommand = func.__module__ + '.' + func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
                 self.hostname = socket.gethostname()
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
-                    ret_value = self.func(*callset.args, **callset.kwargs)
+                    ret_value = func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
                     self.push()
@@ -482,6 +483,10 @@ class WorkflowCallable(JobCallable):
         self.argset.ret.push()
     def pull(self):
         pass
+    def __call__(self):
+        pypeliner.workflow.parent_ctx = self.ctx
+        super(WorkflowCallable, self).__call__()
+        pypeliner.workflow.parent_ctx = None
     def finalize(self, job):
         self.argset.ret.allocate()
         self.argset.ret.pull()

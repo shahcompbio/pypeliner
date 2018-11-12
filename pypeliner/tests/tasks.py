@@ -131,11 +131,11 @@ def check_temp(output_filename, temp_filename):
         output_file.write(temp_filename)
 
 def create_workflow_2(input_filename, output_filename):
-    workflow = pypeliner.workflow.Workflow(default_ctx={'mem':1})
+    workflow = pypeliner.workflow.Workflow()
 
     workflow.transform(
         name='dofilestuff1',
-        func=do_file_stuff,
+        func='pypeliner.tests.tasks.do_file_stuff',
         args=(
             mgd.InputFile(input_filename),
             mgd.TempOutputFile('intermediate1'),
@@ -143,7 +143,7 @@ def create_workflow_2(input_filename, output_filename):
 
     workflow.transform(
         name='dofilestuff2',
-        func=do_file_stuff,
+        func='pypeliner.tests.tasks.do_file_stuff',
         args=(
             mgd.TempInputFile('intermediate1'),
             mgd.OutputFile(output_filename),
@@ -152,12 +152,12 @@ def create_workflow_2(input_filename, output_filename):
     return workflow
 
 def create_workflow_1(input_filename, output_filename):
-    workflow = pypeliner.workflow.Workflow(default_ctx={'mem':1})
+    workflow = pypeliner.workflow.Workflow()
 
     # Read data into a managed object
     workflow.transform(
         name='read',
-        func=read_stuff,
+        func='pypeliner.tests.tasks.read_stuff',
         ret=mgd.TempOutputObj('input_data'),
         args=(mgd.InputFile(input_filename),))
 
@@ -165,14 +165,14 @@ def create_workflow_1(input_filename, output_filename):
     # and store the result in another managed object
     workflow.transform(
         name='do',
-        func=do_stuff,
+        func='pypeliner.tests.tasks.do_stuff',
         ret=mgd.TempOutputObj('output_data'),
         args=(mgd.TempInputObj('input_data').prop('some_string'),))
 
     # Write the object to an output file
     workflow.transform(
         name='write',
-        func=write_stuff,
+        func='pypeliner.tests.tasks.write_stuff',
         args=(
             mgd.TempInputObj('output_data'),
             mgd.TempOutputFile('output_file')))
@@ -180,7 +180,7 @@ def create_workflow_1(input_filename, output_filename):
     # Recursive workflow
     workflow.subworkflow(
         name='sub_workflow_2',
-        func=create_workflow_2,
+        func='pypeliner.tests.tasks.create_workflow_2',
         args=(
             mgd.TempInputFile('output_file'),
             mgd.OutputFile(output_filename)))

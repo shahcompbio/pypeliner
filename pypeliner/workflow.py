@@ -20,6 +20,9 @@ class UserPathInfo(object):
             repr(self.fnames))
 
 
+parent_ctx = None
+
+
 class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
@@ -32,9 +35,11 @@ class Workflow(object):
             'ncpus': 1,
             'dockerize': None,
         }
+        if parent_ctx is not None:
+            self.ctx.update(parent_ctx)
         if ctx is not None:
             self.ctx.update(ctx)
-        ##TODO: remove default_ctx at some point?
+        ## TODO: remove default_ctx at some point?
         if default_ctx is not None:
             DeprecationWarning("default_ctx will be replaced by ctx starting with v0.6")
             self.ctx.update(default_ctx)

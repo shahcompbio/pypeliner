@@ -273,18 +273,21 @@ class scheduler_test(unittest.TestCase):
 
     def test_simple_sub_workflow(self):
 
-        workflow = pypeliner.workflow.Workflow(default_ctx=self.ctx)
+        ctx = self.ctx
+        ctx.update({
+            'dockerize': True,
+            'container_type': 'docker',
+            'image': 'amcpherson/pypeliner:latest',
+            'mounts': ['/Users/amcphers/Projects/pypeliner'],
+        })
+
+        workflow = pypeliner.workflow.Workflow(ctx=ctx)
 
         workflow.setobj(obj=mgd.OutputChunks('byfile'), value=(1, 2))
 
         workflow.transform(
             name='append_to_lines',
             axes=('byfile',),
-            ctx={
-                'container_type': 'docker',
-                'image': 'amcpherson/pypeliner:latest',
-                'mounts': ['/Users/amcphers/Projects/pypeliner'],
-            },
             func='pypeliner.tests.tasks.append_to_lines',
             args=(
                 mgd.InputFile(self.input_n_filename, 'byfile'),
@@ -294,11 +297,6 @@ class scheduler_test(unittest.TestCase):
         workflow.subworkflow(
             name='sub_workflow_1',
             axes=('byfile',),
-            ctx={
-                'container_type': 'docker',
-                'image': 'amcpherson/pypeliner:latest',
-                'mounts': ['/Users/amcphers/Projects/pypeliner'],
-            },
             func='pypeliner.tests.tasks.create_workflow_1',
             args=(
                 mgd.TempInputFile('intermediate1', 'byfile'),
@@ -306,11 +304,6 @@ class scheduler_test(unittest.TestCase):
 
         workflow.transform(
             name='merge_files',
-            ctx={
-                'container_type': 'docker',
-                'image': 'amcpherson/pypeliner:latest',
-                'mounts': ['/Users/amcphers/Projects/pypeliner'],
-            },
             func='pypeliner.tests.tasks.merge_file_byline',
             args=(
                 mgd.TempInputFile('intermediate2', 'byfile'),
