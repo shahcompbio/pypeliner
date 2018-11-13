@@ -35,8 +35,8 @@ class Delegator(object):
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        if 'image' in self.job.ctx:
-            container_type = self.job.ctx.get('container_type', 'docker')
+        container_type = self.job.ctx.get('container_type', None)
+        if container_type is not None:
             if container_type == 'singularity':
                 command = pypeliner.commandline.singularity_args(*command, **self.job.ctx)
             elif container_type == 'docker':
