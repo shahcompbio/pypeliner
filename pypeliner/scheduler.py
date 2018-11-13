@@ -25,7 +25,7 @@ class Scheduler(object):
         self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
         self.cleanup = True
-        self.cleanup_nodes = False
+        self.container_type = None
         self.temps_dir = './tmp'
         self.workflow_dir = './'
         self.logs_dir = './log'
@@ -147,6 +147,7 @@ class Scheduler(object):
                 job = workflow.pop_next_job()
             except pypeliner.graph.NoJobs:
                 return
+            job.ctx['container_type'] = self.container_type
             self._add_job(exec_queue, job)
 
     def _wait_next_job(self, exec_queue, workflow):
