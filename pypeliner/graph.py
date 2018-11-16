@@ -4,6 +4,7 @@ import itertools
 import logging
 import collections
 
+
 import pypeliner.helpers
 import pypeliner.identifiers
 import pypeliner.workflow
@@ -72,18 +73,25 @@ class DependencyGraph:
         # Create the graph
         G = networkx.DiGraph()
         for job in self.jobs.itervalues():
-            #only track job names, ignore the axes value.
-            #this will keep DAG smaller and speed up cycle testing
-            job_node = ('job', job.id[1])
+            # only track job names, ignore the axes value.
+            # this will keep DAG smaller and speed up cycle testing
+            job_node = ('job', job.jobname)
             if G.has_node(job_node):
                 continue
             G.add_node(job_node, job=job)
+            chunks = [v.chunk for v in job.node]
             for input in job.inputs:
+                input_chunks = [v.chunk for v in input.node]
+                if not input_chunks == chunks:
+                    continue
                 resource_node = ('resource', input.id)
                 if resource_node not in G:
                     G.add_node(resource_node, resource=input)
                 G.add_edge(resource_node, job_node)
             for output in job.outputs:
+                output_chunks = [v.chunk for v in output.node]
+                if not output_chunks == chunks:
+                    continue
                 resource_node = ('resource', output.id)
                 if resource_node not in G:
                     G.add_node(resource_node, resource=output)

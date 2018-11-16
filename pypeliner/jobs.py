@@ -124,6 +124,9 @@ class JobInstance(object):
     def id(self):
         return (self.node, self.job_def.name)
     @property
+    def jobname(self):
+        return self.job_def.name
+    @property
     def displayname(self):
         name = '/' + self.job_def.name
         if self.node.displayname != '':
