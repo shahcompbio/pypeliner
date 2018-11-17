@@ -59,7 +59,7 @@ class LocalJobQueue(pypeliner.execqueue.subproc.SubProcessJobQueue):
 class LocalRemoteQueue(pypeliner.execqueue.base.JobQueue):
     """ Class for a combined remote and local queue.
     """
-    def __init__(self, remote_queue):
+    def __init__(self, remote_queue, modules=None):
         self.name_islocal = dict()
         self.local_queue = pypeliner.execqueue.local.LocalJobQueue(modules)
         self.remote_queue = remote_queue
@@ -74,10 +74,10 @@ class LocalRemoteQueue(pypeliner.execqueue.base.JobQueue):
         self.remote_queue.__exit__(exc_type, exc_value, traceback)
 
     def send(self, ctx, name, sent, temps_dir):
-        if ctx.get('local', False):
-            self.local_queue.send(ctx, name, sent, temps_dir)
-        else:
+        if not ctx.get('local', False):
             self.remote_queue.send(ctx, name, sent, temps_dir)
+        else:
+            self.local_queue.send(ctx, name, sent, temps_dir)
 
     def wait(self):
         while True:
@@ -89,10 +89,10 @@ class LocalRemoteQueue(pypeliner.execqueue.base.JobQueue):
             return self.remote_queue.wait()
 
     def receive(self, name):
-        if self.name_islocal.pop(name, False):
-            return self.local_queue.receive(name)
-        else:
+        if not self.name_islocal.pop(name, False):
             return self.remote_queue.receive(name)
+        else:
+            return self.local_queue.receive(name)
 
     @property
     def length(self):
