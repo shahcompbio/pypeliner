@@ -29,6 +29,6 @@ def create(requested_queue, modules=None, native_spec=None, config_filename=None
     exec_queue = exec_queue_class(modules=modules, native_spec=native_spec, config_filename=config_filename)
 
     if requested_queue != 'local':
-        exec_queue = pypeliner.execqueue.local.LocalRemoteQueue(exec_queue)
+        exec_queue = pypeliner.execqueue.local.LocalRemoteQueue(exec_queue, modules=modules)
 
     return exec_queue
