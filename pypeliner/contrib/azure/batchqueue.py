@@ -26,6 +26,37 @@ from azure.common.credentials import ServicePrincipalCredentials
 
 KnownProfiles.default.use(KnownProfiles.latest)
 
+
+def find_pool(poolinfos,  ctx):
+    if ctx.get('pool_id', None):
+        return ctx['pool_id']
+    memory_req = ctx.get('mem', None)
+    cpus_req = ctx.get('ncpus', None)
+    dedicated_req = ctx.get('dedicated', None)
+
+    pools = []
+
+    for poolid, poolinfo in poolinfos.iteritems():
+        memory = poolinfo['mem']
+        cpus = poolinfo['cpus']
+        dedicated = poolinfo.get('dedicated', None)
+
+        if dedicated_req and not dedicated:
+            continue
+
+        if memory_req <= memory and cpus_req <= cpus:
+            # giving a bigger weight to cpu since cpu number is always smaller
+            distance = (memory - memory_req) + ((cpus - cpus_req)*5)
+            pools.append((distance, poolid))
+
+    if not pools:
+        raise Exception("Could not find a pool to satisfy job requirements")
+
+    # choose best fit
+    pools = sorted(pools, key=lambda tup: tup[0])
+    return pools[0][1]
+
+
 def get_run_command(ctx):
     command = ['pypeliner_delegate',
                '$AZ_BATCH_TASK_WORKING_DIR/{input_filename}',
@@ -578,38 +609,6 @@ def wait_for_job_deletion(batch_client, job_id, logger):
         time.sleep(30)
 
 
-def get_pool_and_job_info(config, run_id, logger):
-    """
-    reads the pool information from the config, generates jobids
-    :param: dict config: yaml submit config data
-    :param str run_id: run identifier string.
-    :param logger: logging object for issuing warnings
-    """
-
-    pool_info = {}
-    job_info = {}
-
-    primary_pool = None
-
-    for pool_id, pool_params in config["pools"].iteritems():
-
-        job_id = 'pypeliner_{}_{}'.format(pool_id, run_id)
-
-        if pool_params.get("primary", None):
-            primary_pool = pool_id
-
-        pool_info[pool_id] = pool_params
-        job_info[pool_id] = job_id
-
-    if not primary_pool:
-        primary_pool = pool_info.keys()[0]
-        logger.warn(
-            "Couldn't detect primary pool, using {} as primary".format(
-                primary_pool))
-
-    return pool_info, job_info, primary_pool
-
-
 class AzureJobQueue(object):
     """ Azure batch job queue.
     """
@@ -674,11 +673,6 @@ class AzureJobQueue(object):
         self.completed_task_ids = set()
         self.running_task_ids = set()
 
-        self.pool_info, self.job_info, self.primary_pool_id = get_pool_and_job_info(
-            self.config,
-            self.run_id,
-            self.logger)
-
         self.active_pools = set()
         self.active_jobs = set()
 
@@ -717,6 +711,9 @@ class AzureJobQueue(object):
             if not self.no_delete_job:
                 wait_for_job_deletion(self.batch_client, job_id, self.logger)
 
+    def get_jobid(self, pool_id):
+        return 'pypeliner_{}_{}'.format(pool_id, self.run_id)
+
     def prep_pools_and_jobs(self, pool_id, job_id):
         """
         start a pool and job for the task if it hasnt been initialized already
@@ -726,7 +723,7 @@ class AzureJobQueue(object):
 
         if pool_id not in self.active_pools and \
                 not self.batch_client.pool.exists(pool_id):
-            pool_params = self.pool_info[pool_id]
+            pool_params = self.config['pools'][pool_id]
             self.logger.info("creating pool {}".format(pool_id))
             create_pool(
                 self.batch_client,
@@ -759,13 +756,9 @@ class AzureJobQueue(object):
             temps_dir (str): unique path for strong job temps
 
         """
+        pool_id = find_pool(self.config['pools'], ctx)
 
-        pool_id = ctx.get('pool_id', None)
-
-        if not pool_id:
-            pool_id = self.primary_pool_id
-
-        job_id = self.job_info[pool_id]
+        job_id = self.get_jobid(pool_id)
 
         self.prep_pools_and_jobs(pool_id, job_id)
 
