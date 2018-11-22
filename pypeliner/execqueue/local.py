@@ -6,7 +6,7 @@ import pypeliner.delegator
 import pypeliner.execqueue.base
 import pypeliner.execqueue.subproc
 import pypeliner.execqueue.utils
-
+import pypeliner
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """

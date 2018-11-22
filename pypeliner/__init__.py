@@ -1,4 +1,6 @@
 __all__ = ['helpers', 'scheduler', 'commandline', 'execqueue', 'delegator', 'app']
+_pypeliner_internal_global_state = {}
+
 import helpers
 import scheduler
 import execqueue

@@ -2,11 +2,11 @@ import sys
 import os
 import subprocess
 from pypeliner.helpers import Backoff
-
+import pypeliner
 
 def which(file):
     for path in os.environ["PATH"].split(os.pathsep):
-        if os.path.exists(os.path.join(path, file)):
+        if os.path.exists(os.path.join(path, file)) and os.path.isfile(os.path.join(path, file)):
             return os.path.join(path, file)
     return None
 
@@ -79,12 +79,9 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs and docker_kwargs.get("container_type", None) == 'docker':
+
+    if docker_kwargs.get('docker_image'):
         args = dockerize_args(*args, **docker_kwargs)
-        _docker_login(docker_kwargs.get("server"),
-                      docker_kwargs.get("username"),
-                      docker_kwargs.get("password"), )
-        _docker_pull(docker_kwargs.get("image"))
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -190,7 +187,7 @@ def _call_process(command, stdin, stdout, stderr):
 
 
 def singularity_args(*args, **kwargs):
-    image = kwargs.get("image")
+    image = kwargs.get("docker_image")
     assert image, "singularity image path required."
     mounts = sorted(set(kwargs.get("mounts", [])))
     docker_args = ['singularity', 'run']
@@ -205,8 +202,21 @@ def singularity_args(*args, **kwargs):
 
 
 def dockerize_args(*args, **kwargs):
-    image = kwargs.get("image")
+    image = kwargs.get("docker_image")
     assert image, "docker image URL required."
+
+    if kwargs.get("container_config"):
+        kwargs = kwargs['container_config']
+    else:
+        kwargs = pypeliner.helpers.GlobalState.get("container_config")
+
+    if not kwargs:
+        return args
+
+    server = kwargs['docker']['server']
+    image = server + '/' + image
+
+    kwargs = kwargs.get('docker', None)
 
     mounts = sorted(set(kwargs.get("mounts", [])))
 
@@ -221,6 +231,9 @@ def dockerize_args(*args, **kwargs):
     docker_args.append('--rm')
 
     docker_path = which('docker')
+    if not docker_path:
+        raise Exception("Couldn't find docker in system")
+
     # expose docker socket to enable starting
     # new containers from the current container
     docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
@@ -229,11 +242,15 @@ def dockerize_args(*args, **kwargs):
 
     args = docker_args + list(args)
 
+    _docker_login(server, kwargs['username'],
+                  kwargs['password'])
+    _docker_pull(image)
+
     return args
 
 
 def _docker_pull(image):
-    cmd = ['docker', 'pull', image]
+    cmd = ['docker', 'pull', image, '>', '/dev/null']
     execute(*cmd)
 
 
@@ -244,5 +261,7 @@ def _docker_login(server, username, password):
         return
 
     cmd = ['echo', password, '|', 'docker', 'login',
-           server, '-u', username, '--password-stdin']
+           server, '-u', username, '--password-stdin',
+           '>', '/dev/null']
+
     execute(*cmd)

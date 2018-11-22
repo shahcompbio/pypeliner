@@ -87,9 +87,11 @@ class Workflow(object):
         """
         job_ctx = self.ctx.copy()
         job_ctx['local'] = True
+        job_ctx['no_container'] = True
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
+
         self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, job_ctx, obj, value)
 
     def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None, sandbox=None):
@@ -102,6 +104,7 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
+        ctx['no_container'] = False
         self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs, sandbox=None)
 
     def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None, sandbox=None):
@@ -141,6 +144,7 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
+        job_ctx['no_container'] = False
         if sandbox is None:
             sandbox = self.default_sandbox
         self.job_definitions[name] = pypeliner.jobs.JobDefinition(
@@ -173,6 +177,7 @@ class Workflow(object):
         """
         job_ctx = self.ctx.copy()
         job_ctx['local'] = False
+        job_ctx['no_container'] = False
         if ctx is not None:
             job_ctx.update(ctx)
         if name in self.job_definitions:

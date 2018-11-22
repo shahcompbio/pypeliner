@@ -10,6 +10,30 @@ import time
 import random
 from functools import wraps
 import importlib
+from pypeliner import _pypeliner_internal_global_state
+
+class GlobalState(object):
+    """
+    add the specified variable and value to a pypeliner wide
+    key value store
+    :param variablename: key name
+    :param value: key value
+    """
+    def __init__(self, variablename, value):
+        self.variablename = variablename
+        self.value = value
+
+    def __enter__(self):
+        _pypeliner_internal_global_state[self.variablename] = self.value
+        return self
+
+    def __exit__(self, typ, value, traceback):
+        _pypeliner_internal_global_state.pop(self.variablename)
+
+    @staticmethod
+    def get(variablename):
+        return _pypeliner_internal_global_state[variablename]
+
 
 class Backoff(object):
     """

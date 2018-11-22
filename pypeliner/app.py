@@ -83,12 +83,14 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         of date status of jobs, rerun jobs based on whether they have already been
         run.
 
-    container_type
+    container_config
         Run jobs within a specific type of container, either docker or singularity.
+        config contains credentials for docker or path to dir with singularity containers
 
 """
 
 import logging
+import yaml
 import os
 import argparse
 import datetime
@@ -126,7 +128,7 @@ config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
 config_infos.append(ConfigInfo('sentinal_only', bool, False, 'no timestamp checks, sentinal only'))
-config_infos.append(ConfigInfo('container_type', str, None, 'type of container, docker or singularity'))
+config_infos.append(ConfigInfo('container_config', str, None, 'type of container, docker or singularity'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -164,6 +166,12 @@ def add_arguments(argparser):
     for config_info in config_infos:
         _add_argument(group, config_info)
 
+
+def load_config(configfile):
+    if not configfile:
+        return
+    with open(configfile) as configyaml:
+        return yaml.load(configyaml)
 
 class Pypeline(object):
     """ Pipeline application helper class
@@ -229,7 +237,7 @@ class Pypeline(object):
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
-        self.sch.container_type = self.config['container_type']
+        self.sch.container_config = load_config(self.config['container_config'])
 
         if self.config['sentinal_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(

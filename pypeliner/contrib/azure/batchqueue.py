@@ -64,28 +64,36 @@ def get_run_command(ctx):
                ]
     command = ' '.join(command)
 
-    if ctx.get("container_type") == "docker":
+    if ctx.get("container_config", None) and "docker" in ctx["container_config"]:
+        image = ctx.get("docker_image")
+        ctx = ctx["container_config"]["docker"]
         mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts")]
         mount_string += ['-v /mnt:/mnt']
         mount_string = ' '.join(mount_string)
+        image = ctx.get("server") + '/' + image
         command = ['docker run -w $PWD',
                    mount_string,
                    '-v /var/run/docker.sock:/var/run/docker.sock',
                    '-v /usr/bin/docker:/usr/bin/docker',
-                   ctx.get("image"),
+                   image,
                     command]
         command = ' '.join(command)
         # wrap it up as docker group command
         command = 'sg docker -c "{}"'.format(command)
 
-        login_command = 'docker login {} -u {} -p {}'.format(
-            ctx.get('server'), ctx.get('username'), ctx.get('password'))
+        login_command = [
+            'echo', ctx.get('password'), '|', 'docker', 'login',
+            ctx.get('server'), '-u', ctx.get('username'),
+            '--password-stdin', '>', '/dev/null'
+        ]
+        login_command = ' '.join(login_command)
         login_command = 'sg docker -c "{}"'.format(login_command)
 
-        pull_command = 'docker pull {}'.format(ctx.get('image'))
+        pull_command = 'docker pull {} > /dev/null'.format(image)
         pull_command = 'sg docker -c "{}"'.format(pull_command)
 
         command = '\n'.join([login_command, pull_command, command])
+
     return command
 
 

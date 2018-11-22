@@ -209,7 +209,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.store_dir, self.logs_dir, self.ctx)
+        return JobCallable(self.id, self.job_def.wrapped_func, self.argset, self.arglist, self.db.file_storage, self.store_dir, self.logs_dir, self.ctx)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -442,12 +442,13 @@ class JobCallable(object):
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
-                    ret_value = func(*callset.args, **callset.kwargs)
+                    with pypeliner.helpers.GlobalState('container_config', self.ctx.get('container_config', None)):
+                        ret_value = func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
                     self.push()
                 self.finished = True
-            except:
+            except Exception:
                 sys.stderr.write(traceback.format_exc())
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr

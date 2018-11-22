@@ -25,7 +25,7 @@ class Scheduler(object):
         self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
         self.cleanup = True
-        self.container_type = None
+        self.container_config = None
         self.temps_dir = './tmp'
         self.workflow_dir = './'
         self.logs_dir = './log'
@@ -147,7 +147,9 @@ class Scheduler(object):
                 job = workflow.pop_next_job()
             except pypeliner.graph.NoJobs:
                 return
-            job.ctx['container_type'] = self.container_type
+            if not job.ctx['no_container']:
+                job.ctx['container_config'] = self.container_config
+
             self._add_job(exec_queue, job)
 
     def _wait_next_job(self, exec_queue, workflow):
@@ -180,9 +182,9 @@ class Scheduler(object):
             else:
                 self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
                                    extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
-            if job.ctx.get('image'):
-                self._logger.info('job ' + job.displayname + ' image ' + str(job.ctx['image']),
-                                  extra={"id": job.displayname, "type":"job", "image": job.ctx['image'], 'task_name': job.id[1]})
+            if job.ctx.get('docker_image') and not job.ctx.get("container_config"):
+                self._logger.info('job ' + job.displayname + ' image ' + str(job.ctx['docker_image']),
+                                  extra={"id": job.displayname, "type":"job", "image": job.ctx['docker_image'], 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' -> ' + received.displaycommand,
                               extra={"id": job.displayname, "type":"job", "cmd": received.displaycommand, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
