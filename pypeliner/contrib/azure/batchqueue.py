@@ -46,7 +46,7 @@ def find_pool(poolinfos,  ctx):
 
         if memory_req <= memory and cpus_req <= cpus:
             # giving a bigger weight to cpu since cpu number is always smaller
-            distance = (memory - memory_req) + ((cpus - cpus_req)*5)
+            distance = abs(memory_req - memory) + abs((cpus_req - cpus)*5)
             pools.append((distance, poolid))
 
     if not pools:
