@@ -167,6 +167,7 @@ class TempObjResource(Resource):
         with open(self.store.filename, 'rb') as f:
             return pickle.load(f)
     def put_obj(self, obj):
+        pypeliner.helpers.makedirs(os.path.dirname(self.store.write_filename))
         with open(self.store.write_filename, 'wb') as f:
             pickle.dump(obj, f)
 
