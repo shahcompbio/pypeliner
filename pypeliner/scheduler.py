@@ -123,12 +123,12 @@ class Scheduler(object):
                           extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
         self._logger.info('job ' + job.displayname + ' executing',
                           extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
+        self._logger.info('job ' + job.displayname + ' context ' + str(job.ctx))
 
         dirs = [self.temps_dir, self.logs_dir]
         #need these to track the output file and the inputs
         dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
         dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
-
         sent.dirs = dirs
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
