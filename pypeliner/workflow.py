@@ -172,7 +172,7 @@ class Workflow(object):
 
         """
         job_ctx = self.ctx.copy()
-        job_ctx['local'] = True
+        job_ctx['local'] = False
         if ctx is not None:
             job_ctx.update(ctx)
         if name in self.job_definitions:
