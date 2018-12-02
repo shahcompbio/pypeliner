@@ -78,7 +78,6 @@ class JobInstance(object):
         self.node = node
         temps_dir = os.path.join(db.temps_dir, self.node.subdir, self.job_def.name)
         self.store_dir = os.path.join(temps_dir, str(uuid.uuid1()))
-        pypeliner.helpers.makedirs(self.store_dir)
         self.arglist = list()
         try:
             self.argset = pypeliner.deep.deeptransform(
@@ -88,7 +87,6 @@ class JobInstance(object):
             e.job_name = self.displayname
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
-        pypeliner.helpers.makedirs(self.logs_dir)
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
@@ -211,7 +209,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.wrapped_func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, self.ctx)
+        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.store_dir, self.logs_dir, self.ctx)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
@@ -368,7 +366,7 @@ def resolve_arg(arg):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, arglist, storage, logs_dir, ctx):
+    def __init__(self, id, func, argset, arglist, storage, store_dir, logs_dir, ctx):
         self.storage = storage
         self.id = id
         self.ctx = ctx
@@ -378,6 +376,7 @@ class JobCallable(object):
         self.started = False
         self.finished = False
         self.displaycommand = '?'
+        self.store_dir = store_dir
         self.logs_dir = logs_dir
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -428,6 +427,8 @@ class JobCallable(object):
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
+                pypeliner.helpers.makedirs(self.logs_dir)
+                pypeliner.helpers.makedirs(self.store_dir)
                 self.started = True
                 func = self.func
                 if isinstance(func, str):
@@ -503,7 +504,8 @@ class SubWorkflowInstance(JobInstance):
     def create_callable(self):
         return WorkflowCallable(
             self.id, self.job_def.func, self.argset, self.arglist,
-            self.db.file_storage, self.logs_dir, self.job_def.ctx)
+            self.db.file_storage, self.store_dir, self.logs_dir,
+            self.job_def.ctx)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):
@@ -513,7 +515,11 @@ class WorkflowCallable(JobCallable):
     def pull(self):
         pass
     def __call__(self):
-        pypeliner.workflow.parent_ctx = self.ctx
+        pypeliner.workflow.parent_ctx = self.ctx.copy()
+        # TODO: local shouldnt be inherited by workflows
+        # find a better solution to this
+        if 'local' in pypeliner.workflow.parent_ctx:
+            del pypeliner.workflow.parent_ctx['local']
         super(WorkflowCallable, self).__call__()
         pypeliner.workflow.parent_ctx = None
     def finalize(self, job):
