@@ -9,6 +9,7 @@ import pypeliner.helpers
 class BasicJob():
     def __init__(self):
         self.success = False
+        self.ctx = {}
     def __call__(self):
         self.success = True
 
