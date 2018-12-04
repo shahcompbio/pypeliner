@@ -3,7 +3,7 @@ import networkx
 import itertools
 import logging
 import collections
-
+import fnmatch
 
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -298,6 +298,25 @@ class WorkflowInstance(object):
         self.db.job_shelf[job.displayname] = True
         self.notify_completed(job.id)
 
+    def update_ctx(self, job):
+        context_config = pypeliner.helpers.GlobalState.get("context_config")
+        runskip = None
+        job_displayname = job.displayname
+        job_ctx = job.ctx
+        if not context_config:
+            return job
+
+        contexts = context_config.get('context', {})
+        for _,inpctx in contexts.iteritems():
+            if fnmatch.fnmatch(job_displayname, inpctx["name_match"]):
+                job_ctx.update(inpctx["ctx"])
+                runskip = inpctx.get("runskip")
+
+        job.ctx = job_ctx
+        job.runskip_request = runskip
+        return job
+
+
     def pop_next_job(self):
         """ Pop the next job from the top of this or a subgraph.
         """
@@ -315,6 +334,7 @@ class WorkflowInstance(object):
 
             # Remove from self graph if no subgraph jobs
             job = self.graph.pop_next_job()
+            job = self.update_ctx(job)
 
             is_run_required, explaination = self.runskip(job)
             self._logger.info(

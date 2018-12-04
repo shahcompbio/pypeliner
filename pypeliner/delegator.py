@@ -35,12 +35,13 @@ class Delegator(object):
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        container_config = self.job.ctx.get('container_config', None)
+        command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
 
-        if container_config is not None:
-            if 'docker' in container_config:
+        context_config = pypeliner.helpers.GlobalState.get("context_config")
+        if context_config is not None:
+            if 'docker' in context_config:
                 command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
-            elif 'singularity' in container_config:
+            elif 'singularity' in context_config:
                 command = pypeliner.commandline.singularity_args(*command, **self.job.ctx)
         return command
     def finalize(self):

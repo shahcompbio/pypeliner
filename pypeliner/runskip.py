@@ -9,6 +9,8 @@ class BasicRunSkip(object):
         self.rerun = rerun
 
     def __call__(self, job):
+        if job.runskip_request == "skip":
+            return False, 'skip requested'
         if self.rerun:
             return True, 'rerun requested\n' + job.explain_out_of_date()
         if job.out_of_date():
@@ -28,6 +30,8 @@ class SentinalRunSkip(object):
         self.rerun = rerun
 
     def __call__(self, job):
+        if job.runskip_request == "skip":
+            return False, 'skip requested'
         if self.rerun:
             return True, 'rerun requested\n' + job.explain_out_of_date()
         if job.already_run():

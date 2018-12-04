@@ -83,7 +83,7 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         of date status of jobs, rerun jobs based on whether they have already been
         run.
 
-    container_config
+    context_config
         Run jobs within a specific type of container, either docker or singularity.
         config contains credentials for docker or path to dir with singularity containers
 
@@ -128,7 +128,7 @@ config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
 config_infos.append(ConfigInfo('sentinal_only', bool, False, 'no timestamp checks, sentinal only'))
-config_infos.append(ConfigInfo('container_config', str, None, 'type of container, docker or singularity'))
+config_infos.append(ConfigInfo('context_config', str, None, 'container registry credentials and job context overrides'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -237,7 +237,7 @@ class Pypeline(object):
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
-        self.sch.container_config = load_config(self.config['container_config'])
+        pypeliner.helpers.GlobalState('context_config', load_config(self.config['context_config']))
 
         if self.config['sentinal_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(

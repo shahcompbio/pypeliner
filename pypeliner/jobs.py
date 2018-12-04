@@ -91,6 +91,7 @@ class JobInstance(object):
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
         self.init_inputs_outputs()
+        self.runskip_request = None
 
     def _create_arg(self, mg):
         if not isinstance(mg, pypeliner.managed.Managed):
@@ -388,6 +389,7 @@ class JobCallable(object):
         self.job_time_out = JobTimeOut(timeout)
         self.job_logger = JobLogger()
         self.hostname = '?'
+        self.context_config = pypeliner.helpers.GlobalState.get("context_config")
     @property
     def duration(self):
         return self.job_timer.duration
@@ -421,6 +423,7 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
+        pypeliner.helpers.GlobalState("context_config", self.context_config)
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
@@ -442,8 +445,7 @@ class JobCallable(object):
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()
                     self.pull()
-                    with pypeliner.helpers.GlobalState('container_config', self.ctx.get('container_config', None)):
-                        ret_value = func(*callset.args, **callset.kwargs)
+                    ret_value = func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
                     self.push()

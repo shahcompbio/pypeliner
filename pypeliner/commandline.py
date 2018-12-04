@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 import subprocess
 from pypeliner.helpers import Backoff
 import pypeliner
@@ -79,7 +80,6 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-
     if docker_kwargs.get('docker_image'):
         args = dockerize_args(*args, **docker_kwargs)
 
@@ -202,15 +202,17 @@ def singularity_args(*args, **kwargs):
 
 
 def dockerize_args(*args, **kwargs):
+    if kwargs.get("no_container"):
+        return args
     image = kwargs.get("docker_image")
-    assert image, "docker image URL required."
 
-    if kwargs.get("container_config"):
-        kwargs = kwargs['container_config']
-    else:
-        kwargs = pypeliner.helpers.GlobalState.get("container_config")
+    kwargs = pypeliner.helpers.GlobalState.get("context_config")
 
-    if not kwargs:
+    if not kwargs or not kwargs.get("docker"):
+        return args
+
+    if not image:
+        logging.getLogger('pypeliner.commandline').warn('running locally, no docker image specified')
         return args
 
     server = kwargs['docker']['server']

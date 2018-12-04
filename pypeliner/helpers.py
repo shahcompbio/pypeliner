@@ -22,13 +22,7 @@ class GlobalState(object):
     def __init__(self, variablename, value):
         self.variablename = variablename
         self.value = value
-
-    def __enter__(self):
         _pypeliner_internal_global_state[self.variablename] = self.value
-        return self
-
-    def __exit__(self, typ, value, traceback):
-        _pypeliner_internal_global_state.pop(self.variablename)
 
     @staticmethod
     def get(variablename):

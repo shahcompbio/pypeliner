@@ -64,9 +64,11 @@ def get_run_command(ctx):
                ]
     command = ' '.join(command)
 
-    if ctx.get("container_config", None) and "docker" in ctx["container_config"]:
+    context_config = pypeliner.helpers.GlobalState.get("context_config")
+
+    if "docker" in context_config:
         image = ctx.get("docker_image")
-        ctx = ctx["container_config"]["docker"]
+        ctx = context_config["docker"]
         mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts")]
         mount_string += ['-v /mnt:/mnt']
         mount_string = ' '.join(mount_string)
