@@ -340,7 +340,7 @@ class WorkflowInstance(object):
             self._logger.info(
                 'job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
                 extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
-            if is_run_required or isinstance(job, pypeliner.jobs.SetObjInstance):
+            if is_run_required:
                 return job
             else:
                 self.complete_job(job)

@@ -268,10 +268,6 @@ class TempInputObjArg(Arg):
         if self.func is not None:
             obj = self.func(obj)
         return obj
-    def allocate(self):
-        self.resource.allocate()
-    def pull(self):
-        self.resource.pull()
 
 
 class TempMergeObjArg(Arg,SplitMergeArg):
@@ -304,12 +300,6 @@ class TempMergeObjArg(Arg,SplitMergeArg):
                 obj = self.func(obj)
             resolved[self.get_node_chunks(resource.node)] = obj
         return resolved
-    def allocate(self):
-        for resource in self.resources:
-            resource.allocate()
-    def pull(self):
-        for resource in self.resources:
-            resource.pull()
 
 
 class TempOutputObjArg(Arg):
@@ -327,10 +317,6 @@ class TempOutputObjArg(Arg):
         return self
     def finalize(self, value):
         self.resource.finalize(value)
-    def allocate(self):
-        self.resource.allocate()
-    def push(self):
-        self.resource.push()
 
 
 class TempSplitObjArg(Arg,SplitMergeArg):
@@ -377,12 +363,8 @@ class TempSplitObjArg(Arg,SplitMergeArg):
                 node += pypeliner.identifiers.AxisInstance(axis, chunk)
             filename = self.filename_creator(self.name, node)
             resource = pypeliner.resources.TempObjManager(self.storage, self.name, node, filename)
-            resource.allocate()
             resource.finalize(value)
             self.resources.append(resource)
-    def push(self):
-        for resource in self.resources:
-            resource.push()
     def update(self, job):
         job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.chunks_list, subset=self.axes_origin)
 
@@ -640,12 +622,6 @@ class OutputWorkflowArg(Arg):
         return self
     def finalize(self, value):
         self.resource.finalize(value)
-    def allocate(self):
-        self.resource.allocate()
-    def push(self):
-        self.resource.push()
-    def pull(self):
-        self.resource.pull()
     def get_obj(self):
         return self.resource.get_obj()
     
