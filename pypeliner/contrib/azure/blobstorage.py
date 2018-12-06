@@ -80,10 +80,14 @@ class AzureBlob(object):
             self.write_filename = filename
         else:
             self.filename = os.path.join(store_dir, filename)
-            self.write_filename = os.path.join(store_dir, filename)
+            self.write_filename = os.path.join(store_dir, filename) + '.tmp'
     def allocate(self):
         pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
+        try:
+            os.rename(self.write_filename, self.filename)
+        except OSError:
+            raise pypeliner.storage.OutputMissingException(self.write_filename)
         createtime = datetime.datetime.fromtimestamp(os.path.getmtime(self.filename)).strftime('%Y/%m/%d-%H:%M:%S')
         self.storage.push(self.blob_name, self.filename, createtime)
         self.createtime_cache.set(createtime)
