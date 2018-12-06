@@ -32,6 +32,7 @@ class Delegator(object):
             waittime *= 2
     def initialize(self):
         self.cleanup()
+        self.job.version = pypeliner.__version__
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
@@ -82,6 +83,10 @@ def main():
             job = pickle.load(before)
         if job is None:
             raise ValueError('no job data in ' + before_filename)
+        if not job.version == pypeliner.__version__:
+            logging.getLogger('pypeliner.delegator').warn(
+                'mismatching pypeliner versions, '
+                'running {} on head node and {} on compute node'.format(job.version, pypeliner.__version__))
         job()
     except:
         sys.stderr.write(traceback.format_exc())
