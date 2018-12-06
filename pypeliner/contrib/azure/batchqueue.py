@@ -68,6 +68,8 @@ def get_run_command(ctx):
 
     if "docker" in context_config:
         image = ctx.get("docker_image")
+        if not image:
+            return command
         ctx = context_config["docker"]
         mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts")]
         mount_string += ['-v /mnt:/mnt']
@@ -869,7 +871,7 @@ class AzureJobQueue(object):
 
         """
 
-        timeout = datetime.timedelta(minutes=10)
+        timeout = datetime.timedelta(minutes=60)
 
         while True:
             timeout_expiration = datetime.datetime.now() + timeout
@@ -881,6 +883,12 @@ class AzureJobQueue(object):
 
                 if not self._update_task_state():
                     time.sleep(20)
+
+            for task in self.running_task_ids:
+                name = self.job_names[task]
+                azurejob = self.mapping_from_tasks_to_job[task]
+                self.logger.debug(
+                    "waiting for task {} with name {} running under job {}".format(task,name, azurejob))
 
             self.logger.warn(
                 "Tasks did not reach 'Completed' state within timeout period of " +

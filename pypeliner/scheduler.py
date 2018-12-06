@@ -180,9 +180,6 @@ class Scheduler(object):
             else:
                 self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
                                    extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
-            if job.ctx.get('docker_image') and not job.ctx.get("container_config"):
-                self._logger.info('job ' + job.displayname + ' image ' + str(job.ctx['docker_image']),
-                                  extra={"id": job.displayname, "type":"job", "image": job.ctx['docker_image'], 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' -> ' + received.displaycommand,
                               extra={"id": job.displayname, "type":"job", "cmd": received.displaycommand, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
