@@ -211,7 +211,7 @@ class Pypeline(object):
         logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
-            handler.addFilter(logging.Filter('pypeliner'))
+            handler.addFilter(pypeliner.helpers.AzureLoggingFilter())
 
         #add json log file to the log_dir
         json_log_file = os.path.join(self.logs_dir, 'pipeline.json')

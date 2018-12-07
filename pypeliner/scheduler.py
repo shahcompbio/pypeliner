@@ -189,9 +189,6 @@ class Scheduler(object):
             self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
                               extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
 
-            for warning in received.warnings:
-                self._logger.warn('job ' + job.displayname + ' warning: ' + warning)
-
         if received is None or not received.finished:
             if self._retry_job(exec_queue, job):
                 return

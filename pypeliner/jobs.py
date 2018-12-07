@@ -7,7 +7,6 @@ import traceback
 import socket
 import datetime
 import signal
-import warnings
 import resource
 import uuid
 from datetime import timedelta
@@ -270,29 +269,6 @@ class JobTimer(object):
             return '?'
         return int(self._finish - self._start)
 
-class JobLogger(object):
-    def __init__(self):
-        self.trap = warnings.catch_warnings(record=True)
-        self.trapped_warnings = None
-    def __enter__(self):
-        self.trapped_warnings = self.trap.__enter__()
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.trap.__exit__()
-    @property
-    def warnings(self):
-        """
-        only keep the user warnings, filter all other warnings. This should get rid of
-        most deprecation warnings and other runtime warnings from numpy, scipy etc.
-        """
-        if self.trapped_warnings is None:
-            return []
-
-        warnings = filter(lambda i: issubclass(i.category, UserWarning), self.trapped_warnings)
-        # remove duplicate warnings
-        warnings = list(set([warning.message.message for warning in warnings]))
-
-        return warnings
-
 
 class TimeOutError(Exception):
     """Exception Type for throwing timeout errors"""
@@ -387,7 +363,6 @@ class JobCallable(object):
         self.job_mem_tracker = JobMemoryTracker()
         timeout = self.ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
-        self.job_logger = JobLogger()
         self.hostname = '?'
         self.context_config = pypeliner.helpers.GlobalState.get("context_config")
     @property
@@ -396,9 +371,6 @@ class JobCallable(object):
     @property
     def memoryused(self):
         return self.job_mem_tracker.memoryused
-    @property
-    def warnings(self):
-        return self.job_logger.warnings
     def log_text(self):
         text = '--- stdout ---\n'
         try:
@@ -442,7 +414,7 @@ class JobCallable(object):
                 else:
                     self.displaycommand = func.__module__ + '.' + func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
                 self.hostname = socket.gethostname()
-                with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
+                with self.job_timer, self.job_mem_tracker, self.job_time_out:
                     self.allocate()
                     self.pull()
                     ret_value = func(*callset.args, **callset.kwargs)

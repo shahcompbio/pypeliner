@@ -8,7 +8,6 @@ import tempfile
 import shutil
 import subprocess
 import traceback
-
 import pypeliner.helpers
 
 
@@ -53,6 +52,8 @@ class Delegator(object):
         with open(self.after_filename, 'rb') as after:
             self.job = pickle.load(after)
         self.cleanup()
+        for logrecord in self.job.log_records:
+            logging.getLogger().handle(logrecord)
         return self.job
 
 def call_external(obj):
@@ -87,10 +88,14 @@ def main():
             logging.getLogger('pypeliner.delegator').warn(
                 'mismatching pypeliner versions, '
                 'running {} on head node and {} on compute node'.format(job.version, pypeliner.__version__))
+
+        job_logger = pypeliner.helpers.RemoteLogger()
+        logging.getLogger().addHandler(job_logger.log_handler)
         job()
     except:
         sys.stderr.write(traceback.format_exc())
     finally:
+        job.log_records = job_logger.log_records
         with open(after_filename, 'wb') as after:
             pickle.dump(job, after)
 

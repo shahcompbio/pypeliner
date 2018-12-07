@@ -5,7 +5,7 @@ Created on Jun 15, 2018
 '''
 import pika
 import requests
-import warnings
+import logging
 import threading
 
 class RabbitMqSemaphore(object):
@@ -122,14 +122,16 @@ class RabbitMqSemaphore(object):
             if not get[0]:
                 total_waiting_time += 30
                 self.connection.sleep(30)
-                warnings.warn("waiting for slots to download from blob")
+                logging.getLogger("pypeliner.contrib.azure.rabbitmq").warn(
+                    "waiting for slots to download from blob")
                 continue
 
             delivery_tag = get[0].delivery_tag
 
             if total_waiting_time:
-                warnings.warn("total time spent waiting for "
-                              "access to blob: {}".format(total_waiting_time))
+                logging.getLogger("pypeliner.contrib.azure.rabbitmq").warn(
+                    "total time spent waiting for access to blob: {}".format(total_waiting_time)
+                )
             return delivery_tag
 
     def release_exclusive_access(self, delivery_tag):

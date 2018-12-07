@@ -3,7 +3,6 @@ import logging
 import stat
 import shutil
 import hashlib
-import warnings
 import errno
 import json
 import time
@@ -88,10 +87,10 @@ class Backoff(object):
                 result = self.func(*args, **kwargs)
             except self.exception_type as exc:
                 self._update_backoff_time()
-                warnings.warn(
+                logging.getLogger("pypeliner.helpers").warn(
                     "error {} caught, retrying after {} seconds".format(
-                        exc.message,
-                        self.backoff_time))
+                        exc.message, self.backoff_time)
+                )
                 retry_no += 1
                 time.sleep(self.backoff_time)
 
@@ -216,3 +215,39 @@ def touch(filename, times=None):
 def removefiledir(filename):
     saferemove(filename)
     shutil.rmtree(filename, ignore_errors=True)
+
+
+class AzureLoggingFilter(logging.Filter):
+    def __init__(self):
+        self.filter_keywords = [
+            'azure', 'adal-python', 'urllib3', 'msrest'
+        ]
+
+    def filter(self, rec):
+        logname = rec.name.split('.')[0]
+        if logname in self.filter_keywords:
+            return False
+        return True
+
+
+class RemoteLogHandler(logging.Handler):
+    def __init__(self, logs):
+        logging.Handler.__init__(self)
+        self.logs = logs
+
+    def emit(self, log_record):
+        self.logs.append(log_record)
+
+
+class RemoteLogger(object):
+    def __init__(self):
+        self._logs = []
+        self._handler = RemoteLogHandler(self._logs)
+
+    @property
+    def log_records(self):
+        return self._logs
+
+    @property
+    def log_handler(self):
+        return self._handler
