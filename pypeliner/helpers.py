@@ -217,19 +217,6 @@ def removefiledir(filename):
     shutil.rmtree(filename, ignore_errors=True)
 
 
-class AzureLoggingFilter(logging.Filter):
-    def __init__(self):
-        self.filter_keywords = [
-            'azure', 'adal-python', 'urllib3', 'msrest'
-        ]
-
-    def filter(self, rec):
-        logname = rec.name.split('.')[0]
-        if logname in self.filter_keywords:
-            return False
-        return True
-
-
 class RemoteLogHandler(logging.Handler):
     def __init__(self, logs):
         logging.Handler.__init__(self)

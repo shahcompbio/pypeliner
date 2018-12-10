@@ -101,7 +101,7 @@ import pypeliner.helpers
 import pypeliner.runskip
 import pypeliner.execqueue.factory
 import pypeliner.storage
-
+import pypeliner.contrib.azure.helpers
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -211,7 +211,7 @@ class Pypeline(object):
         logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
-            handler.addFilter(pypeliner.helpers.AzureLoggingFilter())
+            handler.addFilter(pypeliner.contrib.azure.helpers.AzureLoggingFilter())
 
         #add json log file to the log_dir
         json_log_file = os.path.join(self.logs_dir, 'pipeline.json')

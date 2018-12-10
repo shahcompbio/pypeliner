@@ -70,6 +70,8 @@ def call_external(obj):
                 raise
 
 def main():
+    job_logger=None
+
     try:
         before_filename = sys.argv[1]
         after_filename = sys.argv[2]
@@ -95,7 +97,8 @@ def main():
     except:
         sys.stderr.write(traceback.format_exc())
     finally:
-        job.log_records = job_logger.log_records
+        if job_logger:
+            job.log_records = job_logger.log_records
         with open(after_filename, 'wb') as after:
             pickle.dump(job, after)
 
