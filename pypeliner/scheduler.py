@@ -3,6 +3,7 @@ Job scheduling class
 
 """
 
+import os
 import logging
 import traceback
 
@@ -24,6 +25,7 @@ class Scheduler(object):
         self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
         self.cleanup = True
+        self.cleanup_nodes = False
         self.temps_dir = './tmp'
         self.workflow_dir = './'
         self.logs_dir = './log'
@@ -105,9 +107,29 @@ class Scheduler(object):
         if exc_dir in self._job_exc_dirs:
             raise ValueError('duplicate temps directory ' + exc_dir)
         self._job_exc_dirs.add(exc_dir)
-        
+
+        if hasattr(job.job_def, 'sandbox'):
+            if job.job_def.sandbox is not None:
+                sandbox_name = os.path.basename(job.job_def.sandbox.prefix)
+            else:
+                sandbox_name = 'root'
+
+            exec_log_str = 'job ' + job.displayname + ' executing in sandbox ' + sandbox_name
+
+        else:
+            exec_log_str = 'job ' + job.displayname + ' executing'
+
+        self._logger.info(exec_log_str,
+                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
         self._logger.info('job ' + job.displayname + ' executing',
-                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing", 'task_name': job.id[1]})
+                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
+
+        dirs = [self.temps_dir, self.logs_dir]
+        #need these to track the output file and the inputs
+        dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
+        dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
+
+        sent.dirs = dirs
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 

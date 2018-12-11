@@ -34,7 +34,8 @@ class RegularFile(object):
             self.filename = filename + extension
             self.write_filename = self.write_filename + extension
     def allocate(self):
-        pypeliner.helpers.makedirs(os.path.dirname(self.filename))
+        if not os.path.exists(self.filename):
+            pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
         try:
             os.rename(self.write_filename, self.filename)

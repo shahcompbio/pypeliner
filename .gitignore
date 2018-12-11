@@ -1,2 +1,6 @@
 build
 *.pyc
+/.project
+/.pydevproject
+/sandbox/
+*.egg-info

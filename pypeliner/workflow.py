@@ -1,3 +1,5 @@
+import os
+
 import pypeliner.commandline
 import pypeliner.jobs
 
@@ -22,7 +24,7 @@ class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
     """
-    def __init__(self, ctx=None, default_ctx=None):
+    def __init__(self, ctx=None, default_ctx=None, default_sandbox=None):
         self.ctx = {
             'mem': 4,
             'num_retry': 3,
@@ -36,6 +38,7 @@ class Workflow(object):
         if default_ctx is not None:
             DeprecationWarning("default_ctx will be replaced by ctx starting with v0.6")
             self.ctx.update(default_ctx)
+        self.default_sandbox = default_sandbox
         self.job_definitions = dict()
         self.path_info = dict()
 
@@ -44,7 +47,7 @@ class Workflow(object):
         return len(self.job_definitions) == 0
 
     def set_filenames(self, name, *axes, **kwargs):
-        """ Set the filename for a 
+        """ Set the filename for a
         """
         user_file_id = (name, axes)
         if user_file_id in self.path_info:
@@ -83,7 +86,7 @@ class Workflow(object):
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
         self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
 
-    def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None):
+    def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None, sandbox=None):
         """ Add a command line based transform to the pipeline
 
         This call is equivalent to::
@@ -93,11 +96,11 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs)
+        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs, sandbox=None)
 
-    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
+    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None, sandbox=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
-        provided python function ``func`` to take input dependencies and create/update 
+        provided python function ``func`` to take input dependencies and create/update
         output dependents.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -112,7 +115,7 @@ class Workflow(object):
                     ``ctx['local'] = True`` will result in the job being run locally on
                     the calling machine even when a cluster is being used.
         :param func: The function to call for this job.
-        :param ret: The return value 
+        :param ret: The return value
         :param args: The list of positional arguments to be used for the function call.
         :param kwargs: The list of keyword arguments to be used for the function call.
 
@@ -132,11 +135,14 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        if sandbox is None:
+            sandbox = self.default_sandbox
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(
+            name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), sandbox=sandbox)
 
     def subworkflow(self, name='', axes=(), func=None, ctx={}, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
-        takes the input dependencies and creates/updates output dependents.  The python 
+        takes the input dependencies and creates/updates output dependents.  The python
         function ``func`` should return a workflow object containing the set of jobs.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -162,6 +168,10 @@ class Workflow(object):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.
         """
+        for job_def in self.job_definitions.itervalues():
+            if hasattr(job_def, 'sandbox') and job_def.sandbox is not None:
+                job_def.sandbox.create_conda_env(db.envs_dir)
+
         for job_def in self.job_definitions.itervalues():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst

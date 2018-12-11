@@ -163,6 +163,7 @@ class WorkflowDatabase(object):
         self.job_shelf = job_shelf
         self.path_info = path_info
         self.instance_subdir = instance_subdir
+        self.envs_dir = os.path.join(workflow_dir, 'envs')
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         self.temps_dir = os.path.join(temps_dir, instance_subdir)
         pypeliner.helpers.makedirs(self.nodes_dir)

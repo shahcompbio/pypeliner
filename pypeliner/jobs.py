@@ -42,13 +42,19 @@ class CallSet(object):
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
-    def __init__(self, name, axes, ctx, func, argset):
+    def __init__(self, name, axes, ctx, func, argset, sandbox=None):
         self.name = name
         self.axes = axes
         self.ctx = ctx
         self.func = func
         self.argset = argset
-
+        self.sandbox = sandbox
+    @property
+    def wrapped_func(self):
+        if self.sandbox is not None:
+            return self.sandbox.wrap_function(self.func)
+        else:
+            return self.func
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield JobInstance(self, workflow, db, node)
@@ -198,7 +204,7 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, self.ctx)
+        return JobCallable(self.id, self.job_def.wrapped_func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, self.ctx)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)

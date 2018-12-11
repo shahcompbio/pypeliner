@@ -1,2 +1,4 @@
+dill
 networkx
+pyyaml
 python-json-logger
