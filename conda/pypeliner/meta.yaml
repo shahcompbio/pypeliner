@@ -12,14 +12,12 @@ requirements:
     - dill
     - networkx
     - pyyaml
-    - python-json-logger
 
   run:
     - python 2.7*
     - networkx >=1.11
     - dill
     - pyyaml
-    - python-json-logger
 
 build:
   script: python setup.py install --single-version-externally-managed --record=record.txt
