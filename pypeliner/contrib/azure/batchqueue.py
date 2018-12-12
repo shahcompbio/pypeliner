@@ -176,6 +176,10 @@ class AzureJobQueue(object):
 
         job_id = self.get_jobid(pool_id)
 
+        self.logger.debug(
+            'assigning job {} to pool {}'.format(name, pool_id)
+        )
+
         self.prep_pools_and_jobs(pool_id, job_id)
 
         task_id = helpers.get_task_id(name)
