@@ -10,6 +10,7 @@ import random
 from functools import wraps
 import importlib
 from pypeliner import _pypeliner_internal_global_state
+from collections import deque
 
 class GlobalState(object):
     """
@@ -228,7 +229,7 @@ class RemoteLogHandler(logging.Handler):
 
 class RemoteLogger(object):
     def __init__(self):
-        self._logs = []
+        self._logs = deque(maxlen=1000)
         self._handler = RemoteLogHandler(self._logs)
 
     @property
