@@ -52,8 +52,9 @@ class Delegator(object):
         with open(self.after_filename, 'rb') as after:
             self.job = pickle.load(after)
         self.cleanup()
-        for logrecord in self.job.log_records:
-            logging.getLogger().handle(logrecord)
+        if self.job:
+            for logrecord in self.job.log_records:
+                logging.getLogger().handle(logrecord)
         return self.job
 
 def call_external(obj):

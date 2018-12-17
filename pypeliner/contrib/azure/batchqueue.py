@@ -18,7 +18,7 @@ from azure.common.credentials import ServicePrincipalCredentials
 
 KnownProfiles.default.use(KnownProfiles.latest)
 
-import pypeliner.contrib.azure.helpers as helpers
+import pypeliner.contrib.azure.helpers as azure_helpers
 
 import pypeliner.tests.jobs
 import pypeliner.helpers
@@ -29,6 +29,7 @@ class AzureJobQueue(object):
     """
 
     def __init__(self, config_filename=None, **kwargs):
+        azure_helpers.set_azure_logging_filters()
         batch_account_url = os.environ['AZURE_BATCH_URL']
         client_id = os.environ['CLIENT_ID']
         tenant_id = os.environ['TENANT_ID']
@@ -48,7 +49,7 @@ class AzureJobQueue(object):
         if 'run_id' in self.config:
             self.run_id = self.config['run_id']
         else:
-            self.run_id = helpers.random_string(8)
+            self.run_id = azure_helpers.random_string(8)
 
         self.logger.info('creating blob client')
 
@@ -141,7 +142,7 @@ class AzureJobQueue(object):
                 not self.batch_client.pool.exists(pool_id):
             pool_params = self.config['pools'][pool_id]
             self.logger.info("creating pool {}".format(pool_id))
-            helpers.create_pool(
+            azure_helpers.create_pool(
                 self.batch_client,
                 self.blob_client,
                 pool_id,
@@ -151,7 +152,7 @@ class AzureJobQueue(object):
         job_ids = set([job.id for job in self.batch_client.job.list()])
         if job_id not in self.active_jobs and job_id not in job_ids:
             self.logger.info("creating job {}".format(job_id))
-            helpers.create_job(
+            azure_helpers.create_job(
                 self.batch_client,
                 job_id,
                 pool_id)
@@ -172,7 +173,7 @@ class AzureJobQueue(object):
             temps_dir (str): unique path for strong job temps
 
         """
-        pool_id = helpers.find_pool(self.config['pools'], ctx)
+        pool_id = azure_helpers.find_pool(self.config['pools'], ctx)
 
         job_id = self.get_jobid(pool_id)
 
@@ -182,7 +183,7 @@ class AzureJobQueue(object):
 
         self.prep_pools_and_jobs(pool_id, job_id)
 
-        task_id = helpers.get_task_id(name)
+        task_id = azure_helpers.get_task_id(name)
 
         self.logger.info(
             'assigning task_id {} to job {}'.format(
@@ -206,7 +207,7 @@ class AzureJobQueue(object):
         with open(job_before_filename, 'wb') as before:
             pickle.dump(sent, before)
 
-        job_before_file = helpers.create_blob_batch_resource(
+        job_before_file = azure_helpers.create_blob_batch_resource(
             self.blob_client, self.container_name, job_before_filename, job_before_blobname, job_before_file_path)
 
         job_after_file_path = 'job_result.pickle'
@@ -216,7 +217,7 @@ class AzureJobQueue(object):
             job_after_file_path)
 
         # Delete any previous job result file locally and in blob
-        helpers.delete_from_container(
+        azure_helpers.delete_from_container(
             self.blob_client, self.container_name, job_after_blobname)
         try:
             os.remove(job_after_filename)
@@ -238,7 +239,7 @@ class AzureJobQueue(object):
             self.job_blobname_prefix[name],
             run_script_file_path)
 
-        command = helpers.get_run_command(ctx)
+        command = azure_helpers.get_run_command(ctx)
         command = command.format(
             input_filename=job_before_file_path,
             output_filename=job_after_file_path)
@@ -311,7 +312,7 @@ class AzureJobQueue(object):
             list_options = batchmodels.TaskListOptions(filter=task_filter)
 
             for pool_id in self.active_pools:
-                helpers.check_pool_for_failed_nodes(
+                azure_helpers.check_pool_for_failed_nodes(
                     self.batch_client,
                     pool_id,
                     self.logger)
@@ -425,7 +426,7 @@ class AzureJobQueue(object):
             job_id,
             task_id).node_info.node_id
 
-        helpers.download_blobs_from_container(
+        azure_helpers.download_blobs_from_container(
             self.blob_client,
             self.container_name,
             temps_dir,
@@ -449,9 +450,9 @@ class AzureJobQueue(object):
         # batch keeps scheduling tasks on nodes in failed state, need to
         # explicitly disable failed nodes.
         if not received.finished:
-            pool_id = helpers.get_pool_id_from_job(self.batch_client, job_id)
+            pool_id = azure_helpers.get_pool_id_from_job(self.batch_client, job_id)
 
-            helpers.verify_node_status(
+            azure_helpers.verify_node_status(
                 hostname,
                 pool_id,
                 self.batch_client,

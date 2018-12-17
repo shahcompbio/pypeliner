@@ -31,6 +31,10 @@ class AzureLoggingFilter(logging.Filter):
             return False
         return True
 
+def set_azure_logging_filters():
+    for handler in logging.root.handlers:
+        handler.addFilter(AzureLoggingFilter())
+
 
 def random_string(length):
     return ''.join(random.choice(string.lowercase) for _ in range(length))

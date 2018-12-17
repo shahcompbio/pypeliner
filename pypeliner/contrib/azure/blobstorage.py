@@ -8,7 +8,7 @@ import pypeliner.flyweight
 import azure.storage.blob
 import azure.common
 
-import pypeliner.contrib.azure.helpers as helpers
+import pypeliner.contrib.azure.helpers as azure_helpers
 
 
 class BlobMissing(Exception):
@@ -83,6 +83,7 @@ class AzureBlob(object):
 
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
+        azure_helpers.set_azure_logging_filters()
         self.rabbitmq_username = os.environ.get("RABBITMQ_USERNAME", None)
         self.rabbitmq_password = os.environ.get("RABBITMQ_PASSWORD", None)
         self.rabbitmq_ipaddress = os.environ.get("RABBITMQ_IP", None)
@@ -101,7 +102,7 @@ class AzureBlobStorage(object):
         client = getattr(self, "blob_client", None)
         if client and client.account_name == storage_account_name:
             return
-        storage_account_key = helpers.get_storage_account_key(
+        storage_account_key = azure_helpers.get_storage_account_key(
             storage_account_name, self.client_id, self.secret_key,
             self.tenant_id, self.keyvault_account)
         self.blob_client = azure.storage.blob.BlockBlobService(
@@ -159,7 +160,7 @@ class AzureBlobStorage(object):
                 container_name,
                 blob_name)
             blob_size = blob.properties.content_length
-            blob = helpers.download_from_blob_to_path(
+            blob = azure_helpers.download_from_blob_to_path(
                 self.blob_client,
                 container_name,
                 blob_name,
