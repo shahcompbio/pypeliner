@@ -289,7 +289,7 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
 
     @property
     def qenv(self):
-        return pypeliner.execqueue.qcmd.Qenv()
+        return pypeliner.execqueue.qcmd.QEnv()
 
 class PbsQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
     """ Statuses of jobs on a pbs cluster """
