@@ -24,7 +24,7 @@ class AzureBlob(object):
         extension = kwargs.get("extension")
         direct_write = kwargs.get("direct_write", False)
 
-        self.blob_name = helpers.get_blob_name(filename)
+        self.blob_name = azure_helpers.get_blob_name(filename)
         if extension:
             self.blob_name += extension
         self.write_filename = filename + ('.tmp', '')[direct_write]

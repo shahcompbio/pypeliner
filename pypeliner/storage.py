@@ -118,6 +118,8 @@ def create(requested_storage, workflow_dir=None):
         storage_name = 'pypeliner.storage.FileStorage'
     elif requested_storage == 'azureblob':
         storage_name = 'pypeliner.contrib.azure.blobstorage.AzureBlobStorage'
+    elif requested_storage == 'awss3':
+        storage_name = 'pypeliner.contrib.aws.objectstorage.AwsStorage'
     else:
         storage_name = requested_storage
 

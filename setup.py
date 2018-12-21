@@ -14,6 +14,8 @@ setup(
     keywords=['scientific', 'framework'],
     classifiers=[],
     package_data={'pypeliner': ['tests/*.input']},
-    entry_points = {'console_scripts': ['pypeliner_delegate=pypeliner.delegator:main'],},
+    entry_points={'console_scripts': ['pypeliner_delegate=pypeliner.delegator:main',
+                                      'aws_fetch_run=pypeliner.contrib.aws.fetch_run:main'],
+                  },
 )
 

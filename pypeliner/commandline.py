@@ -189,7 +189,7 @@ def _call_process(command, stdin, stdout, stderr):
 def singularity_args(*args, **kwargs):
     image = kwargs.get("docker_image")
     assert image, "singularity image path required."
-    mounts = sorted(set(kwargs.get("mounts", [])))
+    mounts = sorted(set(kwargs.get("mounts", {}).values()))
     docker_args = ['singularity', 'run']
     for mount in mounts:
         docker_args.extend(['-B', '{}:{}'.format(mount, mount)])
@@ -220,7 +220,7 @@ def dockerize_args(*args, **kwargs):
 
     kwargs = kwargs.get('docker', None)
 
-    mounts = sorted(set(kwargs.get("mounts", [])))
+    mounts = sorted(set(kwargs.get("mounts", {}).values()))
 
     docker_args = ['docker', 'run']
     for mount in mounts:

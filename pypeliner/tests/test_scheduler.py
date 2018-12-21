@@ -207,7 +207,7 @@ class scheduler_test(unittest.TestCase):
             ctx={
                 'container_type': 'docker',
                 'image': 'amcpherson/pypeliner:latest',
-                'mounts': ['/Users/amcphers/Projects/pypeliner'],
+                'mounts': {'pypeliner':'/Users/amcphers/Projects/pypeliner'},
             },
             args=(
                 mgd.InputFile(self.input_filename),
