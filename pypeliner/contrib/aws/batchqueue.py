@@ -24,6 +24,8 @@ class AwsJobQueue(object):
     def __init__(self, config_filename=None, **kwargs):
         aws_helpers.set_aws_logging_filters()
 
+        self.run_id = aws_helpers.random_string(8)
+
         with open(config_filename) as f:
             self.config = yaml.load(f)
 
@@ -57,7 +59,7 @@ class AwsJobQueue(object):
         self.batch_client.create_compute_environments(self.config)
         # need to add a little bit of delay, to let AWS create env
         time.sleep(5)
-        self.batch_client.create_job_queues(self.config)
+        self.batch_client.create_job_queues(self.config, self.run_id)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -68,7 +70,7 @@ class AwsJobQueue(object):
         for job_id in self.running_job_ids:
             self.batch_client.terminate_job(job_id, reason)
 
-        self.batch_client.delete_job_queues(self.config)
+        self.batch_client.delete_job_queues(self.config, self.run_id)
         self.batch_client.delete_compute_environments(self.config)
 
     def _create_error_text(self, job_temp_dir, hostname=None):
@@ -121,9 +123,12 @@ class AwsJobQueue(object):
 
         self.job_temps_dir[name] = temps_dir
 
-        job_name = '_'.join([aws_helpers.random_string(8),
-                             self.batch_client.batch_compatible_format(name)]
-                            )
+        job_name = self.batch_client.batch_compatible_format(name)
+        # sanity check, remove this later
+        jobs = [job['jobName'] for job in self.batch_client.list_all_jobs(self.config, self.run_id)]
+        if job_name in jobs:
+            raise Exception()
+
         self.job_blobname_prefix[name] = 'output_' + job_name
 
         # create pickle
@@ -151,7 +156,7 @@ class AwsJobQueue(object):
 
         self.logger.debug('job {} submitted with job name: {}'.format(name, job_name))
 
-        job_id = self.batch_client.submit_job(job_name, defname, ctx, command, self.config)
+        job_id = self.batch_client.submit_job(job_name, defname, ctx, command, self.config, self.run_id)
 
         self.running_job_ids.add(job_id)
         self.job_names[job_id] = name
@@ -166,10 +171,9 @@ class AwsJobQueue(object):
         :rtype: str
         """
         while True:
-            jobs = self.batch_client.list_jobs(
-                [self.config['job_queues']['spot']['queue_name'],
-                 self.config['job_queues']['dedicated']['queue_name']],
-                status=["FAILED", "SUCCEEDED"])
+            jobs = self.batch_client.list_all_jobs(
+                self.config, self.run_id, status=["FAILED", "SUCCEEDED"]
+            )
 
             for jobsummary in jobs:
                 jobid = jobsummary['jobId']

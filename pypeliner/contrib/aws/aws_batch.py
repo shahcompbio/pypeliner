@@ -41,6 +41,9 @@ class AwsBatch(object):
         string = string.replace('/', '_')
         string = string.replace(':', '_')
         string = string.replace('.', '')
+
+        if string.startswith('_'):
+            string = string[1:]
         return string
 
     def _compare_dicts(self, ref1, ref2):
@@ -201,6 +204,25 @@ class AwsBatch(object):
             )
         return matching_job_def
 
+    def list_all_jobs(self, config, run_id, status=None):
+        """
+        lists all jobs for specified run id
+        :param config: pypeliner batch submit config
+        :type config: dict
+        :param run_id: pipeline run id
+        :type run_id: str
+        :return: summaries of all jobs
+        :rtype: list
+        """
+        queues = []
+        config = config.get("job_queues")
+        spot_queue = config["spot"]
+        queues.append('{}_{}'.format(spot_queue['queue_name_prefix'], run_id))
+        dedicated_queue = config["dedicated"]
+        queues.append('{}_{}'.format(dedicated_queue['queue_name_prefix'], run_id))
+        return self.list_jobs(queues, status=status)
+
+
     def list_jobs(self, job_queues, status=None):
         """
         list all jobs
@@ -211,12 +233,16 @@ class AwsBatch(object):
         :return: job summaries for matching jobs
         :rtype: generator
         """
+        valid_statuses = ['SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING',
+                          'RUNNING', 'SUCCEEDED', 'FAILED']
+        if not status:
+            status = valid_statuses
+
         for stat in status:
 
             for job_queue in job_queues:
 
-                assert stat in ['SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING',
-                                'RUNNING', 'SUCCEEDED', 'FAILED']
+                assert stat in valid_statuses
 
                 jobs = self._get_boto3_iterator(
                     self.batch_client.list_jobs,
@@ -363,10 +389,12 @@ class AwsBatch(object):
             ]
         )
 
-    def create_job_queues(self, config):
+    def create_job_queues(self, config, run_id):
         """
         create all job queues in submit config
         if required
+        :param run_id: pipeline run id
+        :type run_id: str
         :param config: aws batch submit configuration data
         :type config: dict
         """
@@ -374,12 +402,14 @@ class AwsBatch(object):
         existing_queues = self.list_job_queues()
 
         spot_queue = config["spot"]
-        if spot_queue['queue_name'] not in existing_queues:
-            self.create_job_queue(spot_queue['queue_name'], spot_queue)
+        queue_name = '{}_{}'.format(spot_queue['queue_name_prefix'], run_id)
+        if queue_name not in existing_queues:
+            self.create_job_queue(queue_name, spot_queue)
 
         dedicated_queue = config["dedicated"]
-        if dedicated_queue['queue_name'] not in existing_queues:
-            self.create_job_queue(dedicated_queue['queue_name'], dedicated_queue)
+        queue_name = '{}_{}'.format(dedicated_queue['queue_name_prefix'], run_id)
+        if queue_name not in existing_queues:
+            self.create_job_queue(queue_name, dedicated_queue)
 
     def get_log_stream_name(self, job_id):
         """
@@ -460,7 +490,7 @@ class AwsBatch(object):
         """
         self.batch_client.terminate_job(jobId=job_id, reason=reason)
 
-    def submit_job(self, job_name, defn_id, ctx, command, config):
+    def submit_job(self, job_name, defn_id, ctx, command, config, run_id):
         """
         submit a job
         :param job_name: unique job name
@@ -472,14 +502,17 @@ class AwsBatch(object):
         :param command: job command
         :type command:  list
         :param config: batch submit config
+        :param run_id: pipeline run id
+        :type run_id: str
         :type config: dict
         :return: job Id
         :rtype: str
         """
         if ctx.get("dedicated"):
-            jobqueue = config['job_queues']['dedicated']['queue_name']
+            jobqueue = config['job_queues']['dedicated']['queue_name_prefix']
         else:
-            jobqueue = config['job_queues']['spot']['queue_name']
+            jobqueue = config['job_queues']['spot']['queue_name_prefix']
+        jobqueue = "{}_{}".format(jobqueue, run_id)
         response = self.batch_client.submit_job(
             jobName=job_name,
             jobQueue=jobqueue,
@@ -556,11 +589,13 @@ class AwsBatch(object):
                 break
             time.sleep(10)
 
-    def delete_job_queues(self, config):
+    def delete_job_queues(self, config, run_id):
         """
         delete all job queues
         :param config: pypeliner submit config
         :type config: dict
+        :param run_id: pipeline run id
+        :type run_id: str
         """
         if not config.get('delete_job_queues'):
             return
@@ -568,12 +603,14 @@ class AwsBatch(object):
         config = config.get("job_queues")
 
         spot_queue = config["spot"]
-        self.disable_job_queue(spot_queue['queue_name'])
-        self.delete_job_queue(spot_queue['queue_name'])
+        queue_name = '{}_{}'.format(spot_queue['queue_name_prefix'], run_id)
+        self.disable_job_queue(queue_name)
+        self.delete_job_queue(queue_name)
 
         dedicated_queue = config["dedicated"]
-        self.disable_job_queue(dedicated_queue['queue_name'])
-        self.delete_job_queue(dedicated_queue['queue_name'])
+        queue_name = '{}_{}'.format(dedicated_queue['queue_name_prefix'], run_id)
+        self.disable_job_queue(queue_name)
+        self.delete_job_queue(queue_name)
 
     def delete_compute_environments(self, config):
         """
