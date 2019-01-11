@@ -37,7 +37,7 @@ class AzureJobQueue(object):
         keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
 
         storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
-        storage_account_key = helpers.get_storage_account_key(
+        storage_account_key = azure_helpers.get_storage_account_key(
             storage_account_name, client_id, secret_key,
             tenant_id, keyvault_account)
 
@@ -126,7 +126,7 @@ class AzureJobQueue(object):
 
         for job_id in self.active_jobs:
             if not self.no_delete_job:
-                helpers.wait_for_job_deletion(self.batch_client, job_id, self.logger)
+                azure_helpers.wait_for_job_deletion(self.batch_client, job_id, self.logger)
 
     def get_jobid(self, pool_id):
         return 'pypeliner_{}_{}'.format(pool_id, self.run_id)
@@ -252,18 +252,18 @@ class AzureJobQueue(object):
             f.write(self.compute_finish_commands + '\n')
             f.write('wait')
 
-        run_script_file = helpers.create_blob_batch_resource(
+        run_script_file = azure_helpers.create_blob_batch_resource(
             self.blob_client, self.container_name, run_script_filename, run_script_blobname, run_script_file_path)
 
         # Obtain a shared access signature that provides write access to the output
         # container to which the tasks will upload their output.
-        container_sas_token = helpers.get_container_sas_token(
+        container_sas_token = azure_helpers.get_container_sas_token(
             self.blob_client,
             self.container_name,
             azureblob.BlobPermissions.CREATE | azureblob.BlobPermissions.WRITE)
 
         # Add the task to the job
-        helpers.add_task(
+        azure_helpers.add_task(
             self.batch_client, job_id, task_id,
             job_before_file, run_script_file,
             self.container_name, container_sas_token,
