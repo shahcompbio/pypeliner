@@ -12,6 +12,16 @@ import importlib
 from pypeliner import _pypeliner_internal_global_state
 from collections import deque
 
+
+def running_in_docker():
+    with open('/proc/self/cgroup', 'r') as procfile:
+        for line in procfile:
+            fields = line.strip().split('/')
+            if 'docker' in fields:
+                return True
+    return False
+
+
 class GlobalState(object):
     """
     add the specified variable and value to a pypeliner wide

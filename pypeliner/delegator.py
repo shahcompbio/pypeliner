@@ -76,6 +76,15 @@ def main():
     try:
         before_filename = sys.argv[1]
         after_filename = sys.argv[2]
+
+        delegator_dir = os.path.dirname(before_filename)
+        if not os.path.exists(delegator_dir) and pypeliner.helpers.running_in_docker():
+            raise Exception(
+                "Did you forget to add your working directory to docker mounts?"
+                " {} is not available inside docker, delegator will "
+                "fail.".format(delegator_dir)
+            )
+
         def not_pypeliner_path(a):
             if os.path.exists(a) and os.path.samefile(a, os.path.dirname(__file__)):
                 return False
