@@ -186,7 +186,7 @@ class Scheduler(object):
                               extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' memory ' + str(received.memoryused) + 'G',
                               extra={"id": job.displayname, "type":"job", "memory": received.memoryused, 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
+            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname),
                               extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
 
         if received is None or not received.finished:
