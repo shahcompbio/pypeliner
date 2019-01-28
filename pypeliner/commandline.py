@@ -242,7 +242,10 @@ def dockerize_args(*args, **kwargs):
     docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
     docker_args.append(image)
 
-    args = docker_args + list(args)
+    args = list(args)
+    args = ['bash', '-c'] + [' '.join(map(str, args))]
+
+    args = docker_args + args
 
     _docker_login(server, kwargs['username'],
                   kwargs['password'])
