@@ -449,7 +449,7 @@ class AzureJobQueue(object):
 
         # batch keeps scheduling tasks on nodes in failed state, need to
         # explicitly disable failed nodes.
-        if not received.finished:
+        if not received.finished or not received.started:
             pool_id = azure_helpers.get_pool_id_from_job(self.batch_client, job_id)
 
             azure_helpers.verify_node_status(
