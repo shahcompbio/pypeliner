@@ -66,7 +66,7 @@ class AzureJobQueue(object):
 
         self.batch_client = batch.BatchServiceClient(
             self.credentials,
-            base_url=batch_account_url
+            batch_account_url
         )
 
         self.logger.info('creating task container')

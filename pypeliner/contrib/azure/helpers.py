@@ -180,7 +180,7 @@ def get_run_command(ctx):
         if not image:
             return command
         ctx = context_config["docker"]
-        mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts")]
+        mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts").values()]
         mount_string += ['-v /mnt:/mnt']
         mount_string = ' '.join(mount_string)
         image = ctx.get("server") + '/' + image
@@ -415,7 +415,7 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
 
     try:
         batch_service_client.pool.add(new_pool)
-    except batchmodels.batch_error.BatchErrorException as err:
+    except batchmodels.BatchErrorException as err:
         print_batch_exception(err)
         raise
 
@@ -436,7 +436,7 @@ def create_job(batch_service_client, job_id, pool_id):
 
     try:
         batch_service_client.job.add(job)
-    except batchmodels.batch_error.BatchErrorException as err:
+    except batchmodels.BatchErrorException as err:
         print_batch_exception(err)
         raise
 
@@ -471,7 +471,7 @@ def create_blob_batch_resource(
                                               sas_token=sas_token)
 
     return batchmodels.ResourceFile(file_path=job_file_path,
-                                    blob_source=sas_url)
+                                    http_url=sas_url)
 
 
 def delete_from_container(block_blob_client, container_name, blob_name):
@@ -627,7 +627,7 @@ def verify_node_status(node_id, pool_id, batch_client, logger):
 
     try:
         status = batch_client.compute_node.get(pool_id, node_id).state.value
-    except batchmodels.batch_error.BatchErrorException:
+    except batchmodels.BatchErrorException:
         logger.warning("Couldn't get status for node {} ".format(node_id))
         return
 
@@ -656,7 +656,7 @@ def check_pool_for_failed_nodes(batch_client, pool_id, logger):
             status = batch_client.compute_node.get(
                 pool_id,
                 node.id).state.value
-        except batchmodels.batch_error.BatchErrorException:
+        except batchmodels.BatchErrorException:
             logger.warning("Couldn't get status for node {} ".format(node.id))
             continue
 
@@ -681,7 +681,7 @@ def wait_for_job_deletion(batch_client, job_id, logger):
     while True:
         try:
             batch_client.job.get(job_id)
-        except batchmodels.batch_error.BatchErrorException:
+        except batchmodels.BatchErrorException:
             break
 
         time.sleep(30)
