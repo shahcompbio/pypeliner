@@ -133,10 +133,14 @@ def find_pool(poolinfos,  ctx):
     pools = []
 
     for poolid, poolinfo in poolinfos.iteritems():
-        memory = poolinfo['mem']
-        cpus = poolinfo['cpus']
+        memory = poolinfo['mem_per_task']
+        cpus = poolinfo['cpus_per_task']
         dedicated = poolinfo.get('dedicated', None)
 
+        # total available mem (to submit jobs that require high mem but 1 core)
+        memory = memory * cpus
+
+        # dont submit dedicated jobs to low priority nodes
         if dedicated_req and not dedicated:
             continue
 
@@ -146,7 +150,9 @@ def find_pool(poolinfos,  ctx):
             pools.append((distance, poolid))
 
     if not pools:
-        raise Exception("Could not find a pool to satisfy job requirements")
+        error_str = "Could not find a pool to satisfy job requirements. " \
+                    "requested mem:{} cpus:{} dedicated: {}".format(memory_req, cpus_req, dedicated)
+        raise Exception(error_str)
 
     # choose best fit
     pools = sorted(pools, key=lambda tup: tup[0])
