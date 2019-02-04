@@ -55,10 +55,12 @@ class RegularFile(object):
             self.exists_cache.set(exists)
         return exists
     def get_createtime(self):
-        if not self.get_exists():
-            return None
-        createtime = self.createtime_cache.get()
+        createtime = self.createtime_save.get()
         if createtime is None:
+            createtime = self.createtime_cache.get()
+        if createtime is None:
+            if not self.get_exists():
+                return None
             createtime = os.path.getmtime(self.filename)
             self.createtime_cache.set(createtime)
             self.createtime_save.set(createtime)
