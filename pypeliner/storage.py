@@ -2,8 +2,8 @@ import os
 import datetime
 import time
 import shutil
-import shelve
 import importlib
+from sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.flyweight
@@ -84,12 +84,12 @@ class RegularTempFile(RegularFile):
 
 class FileStorage(object):
     def __init__(self, metadata_prefix=None, **kwargs):
-        createtime_shelf_filename = metadata_prefix + 'createtimes.shelf'
+        createtime_shelf_filename = metadata_prefix + 'createtimes.db'
         pypeliner.helpers.makedirs(os.path.dirname(createtime_shelf_filename))
         self.cached_exists = pypeliner.flyweight.FlyweightState()
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.saved_createtimes = pypeliner.flyweight.FlyweightState(
-            state_container=shelve.open(createtime_shelf_filename))
+            state_container=SqliteDb(createtime_shelf_filename))
     def __enter__(self):
         self.cached_exists.__enter__()
         self.cached_createtimes.__enter__()

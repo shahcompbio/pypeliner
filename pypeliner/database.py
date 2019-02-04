@@ -4,7 +4,7 @@ import itertools
 import os
 import logging
 import shutil
-import shelve
+from sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.resources
@@ -197,7 +197,7 @@ class WorkflowDatabaseFactory(object):
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
         self.file_storage = file_storage
-        self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
+        self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.db')
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
@@ -217,7 +217,7 @@ class WorkflowDatabaseFactory(object):
                 raise
         self.lock_directories.append(lock_directory)
     def __enter__(self):
-        self.job_shelf = shelve.open(self.job_shelf_filename)
+        self.job_shelf = SqliteDb(self.job_shelf_filename)
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         self.job_shelf.close()
