@@ -64,6 +64,8 @@ class RegularFile(object):
             createtime = os.path.getmtime(self.filename)
             self.createtime_cache.set(createtime)
             self.createtime_save.set(createtime)
+        if not isinstance(createtime, float):
+            createtime = float(createtime)
         return createtime
     def touch(self):
         pypeliner.helpers.touch(self.filename)
@@ -78,8 +80,11 @@ class RegularFile(object):
 class RegularTempFile(RegularFile):
     def get_createtime(self):
         if super(RegularTempFile, self).get_exists():
-            return super(RegularTempFile, self).get_createtime()
-        return self.createtime_save.get()
+            return float(super(RegularTempFile, self).get_createtime())
+        createtime = self.createtime_save.get()
+        if createtime and not isinstance(createtime, float):
+            createtime = float(createtime)
+        return createtime
     def delete(self):
         pypeliner.helpers.saferemove(self.filename)
 
