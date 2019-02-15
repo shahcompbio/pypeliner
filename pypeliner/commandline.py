@@ -80,8 +80,13 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs.get('docker_image'):
+    if docker_kwargs and docker_kwargs.get("container_type", None) == 'docker':
         args = dockerize_args(*args, **docker_kwargs)
+        _docker_pull(docker_kwargs.get("image"),
+                     docker_kwargs.get("server"),
+                     docker_kwargs.get("username"),
+                     docker_kwargs.get("password"),
+                     )
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -247,19 +252,25 @@ def dockerize_args(*args, **kwargs):
 
     args = docker_args + args
 
-    _docker_login(server, kwargs['username'],
-                  kwargs['password'])
-    _docker_pull(image)
+    _docker_pull(
+        image, server, kwargs['username'], kwargs['password']
+    )
 
     return args
 
 
-def _docker_pull(image):
-    cmd = ['docker', 'pull', image, '>', '/dev/null']
-    execute(*cmd)
+def _docker_pull(image, server, username, password):
+    cmd = ['docker','pull',image]
+
+    # log in if pull fails
+    try:
+        execute(*cmd)
+    except CommandLineException:
+        _docker_login(server, username, password)
+        execute(*cmd)
 
 
-@Backoff(exception_type=EOFError, max_backoff=300, randomize=True)
+@Backoff(max_backoff=300, randomize=True)
 def _docker_login(server, username, password):
     if not username or not password:
         # assume repo is public
