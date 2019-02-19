@@ -247,8 +247,9 @@ def dockerize_args(*args, **kwargs):
     docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
     docker_args.append(image)
 
-    args = list(args)
-    args = ['bash', '-e', '-c'] + [' '.join(map(str, args))]
+    if '|' in args or '>' in args or '<' in args:
+        args = list(args)
+        args = ['bash', '-e', '-c'] + [' '.join(map(str, args))]
 
     args = docker_args + args
 
