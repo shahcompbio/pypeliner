@@ -56,7 +56,7 @@ class PatternMatcher(object):
 
     def print_patterns(self):
         for key, match in self._patterns:
-            print key, match
+            print (key, match)
 
 
 class RunSkipCmd(cmd.Cmd):
@@ -79,31 +79,31 @@ class RunSkipCmd(cmd.Cmd):
         return self.do_command('run', line)
 
     def help_run(self):
-        print 'run the job'
+        print ('run the job')
 
     def do_skip(self, line):
         return self.do_command('skip', line)
-    
+
     def help_skip(self):
-        print 'skip the job'
+        print ('skip the job')
 
     def do_verify(self, line):
         return self.do_command('verify', line)
 
     def help_verify(self):
-        print 'skip the job it doesnt need to be run'
+        print ('skip the job it doesnt need to be run')
 
     def do_touch(self, line):
         return self.do_command('touch', line)
 
     def help_touch(self):
-        print 'touch outputs and skip the job'
+        print ('touch outputs and skip the job')
 
     def do_default(self, line):
         return self.do_command('default', line)
 
     def help_default(self):
-        print 'default behaviour'
+        print ('default behaviour')
 
 
 class InteractiveRunSkip(object):
@@ -143,7 +143,5 @@ class InteractiveRunSkip(object):
                 raise Exception('failed to obtain user input')
 
     def close(self):
-        print 'run skip commands:'
+        print ('run skip commands:')
         self.patterns.print_patterns()
-
-
