@@ -178,7 +178,8 @@ def _deeptransform_inst(x, f, memo):
     else:
         y.__dict__.update(state)
     return y
-d[types.InstanceType] = _deeptransform_inst
+if sys.version_info[0] < 3:
+    d[types.InstanceType] = _deeptransform_inst
 
 def _reconstruct(x, f, info, deep, memo=None):
     if isinstance(info, str):
