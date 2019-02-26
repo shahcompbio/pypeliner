@@ -295,6 +295,9 @@ class AzureJobQueue(object):
                 if not self._update_task_state():
                     time.sleep(20)
 
+            if not self.running_task_ids:
+                self.logger.debug('something is not right. please try restarting the pipeline again')
+
             for task in self.running_task_ids:
                 name = self.job_names[task]
                 azurejob = self.mapping_from_tasks_to_job[task]
