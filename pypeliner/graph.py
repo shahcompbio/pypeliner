@@ -121,7 +121,7 @@ class DependencyGraph:
         for resource_id in created_resources:
             for job_id in self.dependant_jobs[resource_id]:
                 adjacent_jobs.add(job_id)
-    
+
         while len(adjacent_jobs) > 0:
             for job_id in list(adjacent_jobs):
                 job = self.jobs[job_id]
@@ -235,7 +235,7 @@ class DependencyGraph:
     @property
     def finished(self):
         return all([output in self.created for output in self.outputs])
-        
+
     def cleanup_obsolete(self):
         for resource in self.obsolete:
             resource.cleanup()
@@ -277,7 +277,7 @@ class WorkflowInstance(object):
 
             # Pop the next finished workflow if it exists
             try:
-                job, received, workflow = pypeliner.helpers.pop_if(self.subworkflows, lambda (j, r, w): w.finished)
+                job, received, workflow = pypeliner.helpers.pop_if(self.subworkflows, lambda j, r, w: w.finished)
             except IndexError:
                 return
 
@@ -288,7 +288,7 @@ class WorkflowInstance(object):
     def pop_next_job(self):
         """ Pop the next job from the top of this or a subgraph.
         """
-        
+
         while True:
             # Return any ready jobs from sub workflows
             for job, received, workflow in self.subworkflows:
@@ -357,5 +357,3 @@ class WorkflowInstance(object):
     @property
     def finished(self):
         return self.graph.finished
-
-

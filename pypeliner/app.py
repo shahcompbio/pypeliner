@@ -31,7 +31,7 @@ Create a workflow and run::
 
     pyp.run(workflow)
 
-The following options are supported via the config dictionary argument to 
+The following options are supported via the config dictionary argument to
 :py:class:`pypeliner.app.Pypeline` or as command line arguments
 by calling :py:func:`pypeliner.app.add_arguments` on an
 ``argparse.ArgumentParser`` object and passing the argument dictionary to
@@ -67,7 +67,7 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
 
     repopulate
         Recreate all temporary files that may have been cleaned up during a previous
-        run in which garbage collection was enabled.  Files may be subsequently 
+        run in which garbage collection was enabled.  Files may be subsequently
         garbage collected after creation depending on the `nocleanup` option.
 
     nocleanup
@@ -145,12 +145,12 @@ def _add_argument(argparser, config_info):
 def add_arguments(argparser):
     """ Add pypeliner arguments to an argparser object
 
-    :param argparser: ``argparse.ArgumentParser`` object to which pypeliner specific 
+    :param argparser: ``argparse.ArgumentParser`` object to which pypeliner specific
                       arguments should be added.  See
                       :py:mod:`pypeliner.app` for available options.
 
     Add arguments to an ``argparse.ArgumentParser`` object to allow command line control
-    of pypeliner.  The options should be extracted after calling 
+    of pypeliner.  The options should be extracted after calling
     ``argparse.ArgumentParser.parse_args``, converted to a dictionary using `vars`
     and provided to the initializer of a :py:mod:`pypeliner.app.Pypeline`
     object.
@@ -243,5 +243,4 @@ class Pypeline(object):
                 self.sch.run(workflow, self.exec_queue, self.file_storage, self.runskip)
             finally:
                 self.runskip.close()
-                print 'log file:', self.pipeline_log_filename
-
+                print ('log file:', self.pipeline_log_filename)

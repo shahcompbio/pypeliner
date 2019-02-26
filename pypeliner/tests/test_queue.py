@@ -33,7 +33,7 @@ def run_basic(exec_queue, base_temps_dir):
 
     assert recieved.success == True
 
-    print 'success'
+    print ('success')
 
 
 if __name__ == '__main__':
@@ -62,5 +62,3 @@ if __name__ == '__main__':
 
     with exec_queue:
         run_basic(exec_queue, base_temps_dir)
-
-

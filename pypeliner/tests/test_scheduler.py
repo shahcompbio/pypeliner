@@ -134,7 +134,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.InputInstance('byfile'),
                 mgd.Template(self.output_n_template, 'byfile'),
                 mgd.Template('{byfile}_{axis2}', 'byfile', 'axis2')))
-        
+
         # Merge output files indexed by axis `byfile` into a single output file
         workflow.transform(
             name='merge',
@@ -185,7 +185,7 @@ class scheduler_test(unittest.TestCase):
             args=(
                 mgd.TempInputObj('output_data'),
                 mgd.OutputFile('output')))
-                
+
         workflow.set_filenames('output', filename=self.output_filename)
 
         self.run_workflow(workflow)
@@ -472,14 +472,14 @@ class scheduler_test(unittest.TestCase):
 
         time.sleep(1)
         os.utime(self.input_1_filename, None)
-        print 'restarting'
+        print ('restarting')
 
         self.run_workflow(workflow)
 
         time.sleep(1)
         os.utime(self.input_1_filename, None)
         os.remove(self.output_filename)
-        print 'restarting again'
+        print ('restarting again')
 
         self.run_workflow(workflow)
 
@@ -538,7 +538,7 @@ class scheduler_test(unittest.TestCase):
         self.assertEqual(output, expected_output)
 
     def test_missing_temporary3(self):
-        
+
         workflow = pypeliner.workflow.Workflow()
 
         workflow.transform(
@@ -580,7 +580,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempOutputFile('samples.align.true'),
             ),
         )
-        
+
         workflow.transform(
             name='job5',
             func=do_assert,
@@ -594,8 +594,8 @@ class scheduler_test(unittest.TestCase):
 
         time.sleep(1)
 
-        print 'restarting'
-        
+        print ('restarting')
+
         for name, job in workflow.job_definitions.iteritems():
             if name != 'job5':
                 job.func = do_assert
@@ -703,7 +703,7 @@ class scheduler_test(unittest.TestCase):
 
         # Read data into a managed object, which is a string
         workflow.transform(
-            name='read', 
+            name='read',
             func=read_stuff,
             ret=mgd.TempOutputObj('input_data'),
             args=(mgd.InputFile(self.input_filename),))
@@ -714,7 +714,7 @@ class scheduler_test(unittest.TestCase):
             func=split_stuff,
             ret=mgd.TempOutputObj('input_data', 'bychar'),
             args=(mgd.TempInputObj('input_data'),))
-        
+
         # Modify each single character string, appending `-`
         workflow.transform(
             name='do',
@@ -722,17 +722,17 @@ class scheduler_test(unittest.TestCase):
             func=do_stuff,
             ret=mgd.TempOutputObj('output_data', 'bychar'),
             args=(mgd.TempInputObj('input_data', 'bychar').prop('some_string'),))
-        
+
         # Merge the modified strings
         workflow.transform(
-            name='mergebychar', 
+            name='mergebychar',
             func=merge_stuff,
             ret=mgd.TempOutputObj('output_data'),
             args=(mgd.TempInputObj('output_data', 'bychar'),))
-        
+
         # Write the modified merged string to an output file
         workflow.transform(
-            name='write', 
+            name='write',
             func=write_stuff,
             args=(
                 mgd.TempInputObj('output_data'),
@@ -768,7 +768,7 @@ class scheduler_test(unittest.TestCase):
                 mgd.TempInputFile('input_filename', 'byline'),
                 mgd.InputInstance('byline'),
                 mgd.TempOutputFile('output_filename', 'byline')))
-        
+
         # Merge files and output
         workflow.transform(
             name='mergebyline',
@@ -818,7 +818,7 @@ class scheduler_test(unittest.TestCase):
 
         workflow = pypeliner.workflow.Workflow()
 
-        # Read input file and store in managed input object, which is 
+        # Read input file and store in managed input object, which is
         # a string of the file contents
         workflow.transform(
             name='read',
@@ -832,8 +832,8 @@ class scheduler_test(unittest.TestCase):
             func=split_by_line,
             ret=mgd.TempOutputObj('input_data', 'byline'),
             args=(mgd.TempInputObj('input_data'),))
-        
-        # Split each of the resulting strings by character and 
+
+        # Split each of the resulting strings by character and
         # output as single character strings
         workflow.transform(
             name='splitbychar',
@@ -1327,7 +1327,7 @@ class scheduler_test(unittest.TestCase):
 
         self.assertEqual(output, ['line1\n', 'line2\n', 'line3\n', 'line4\n', 'line5\n', 'line6\n', 'line7\n', 'line8-'])
 
-        print 'restarting'
+        print ('restarting')
         time.sleep(1)
 
         workflow = pypeliner.workflow.Workflow()
@@ -1440,12 +1440,11 @@ class scheduler_test(unittest.TestCase):
 
         time.sleep(1)
         os.utime(self.input_2_filename, None)
-        
-        print 'restarting'
+
+        print ('restarting')
 
         self.run_workflow(workflow)
 
 
 if __name__ == '__main__':
     unittest.main()
-

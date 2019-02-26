@@ -196,7 +196,7 @@ class AzureBlobStorage(object):
                 self.rabbitmq_ipaddress,
                 self.rabbitmq_vhost)
         except azure.common.AzureMissingResourceHttpError:
-            print blob_name, filename
+            print (blob_name, filename)
             raise pypeliner.storage.InputMissingException(blob_name)
         filesize = os.path.getsize(filename)
         assert blob_size == blob.properties.content_length
@@ -228,4 +228,3 @@ class AzureBlobStorage(object):
         self.blob_client.delete_blob(
             container_name,
             blob_name)
-
