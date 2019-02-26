@@ -4,6 +4,7 @@ arbitrary python objects.
 
 import types
 import weakref
+import sys
 if sys.version_info[0] < 3:
     from copy_reg import dispatch_table
 else:
