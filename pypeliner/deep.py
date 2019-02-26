@@ -4,7 +4,12 @@ arbitrary python objects.
 
 import types
 import weakref
-from copyreg import dispatch_table
+if sys.version_info[0] < 3:
+    from copy_reg import dispatch_table
+else:
+    from copyreg import dispatch_table
+    long = int
+    xrange = range
 
 class Error(Exception):
     pass
