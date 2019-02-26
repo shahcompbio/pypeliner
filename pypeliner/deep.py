@@ -4,7 +4,7 @@ arbitrary python objects.
 
 import types
 import weakref
-from copy_reg import dispatch_table
+from copyreg import dispatch_table
 
 class Error(Exception):
     pass
@@ -236,4 +236,3 @@ del types
 # Helper for instance creation without calling __init__
 class _EmptyClass:
     pass
-
