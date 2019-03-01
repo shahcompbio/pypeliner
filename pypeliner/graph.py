@@ -53,28 +53,28 @@ class DependencyGraph:
 
         """
         self.jobs = jobs
-        all_inputs = set((input.id for job in self.jobs.itervalues() for input in job.inputs))
-        all_outputs = set((output.id for job in self.jobs.itervalues() for output in job.outputs))
+        all_inputs = set((input.id for job in self.jobs.values() for input in job.inputs))
+        all_outputs = set((output.id for job in self.jobs.values() for output in job.outputs))
         self.inputs = all_inputs.difference(all_outputs)
         self.outputs = all_outputs.difference(all_inputs)
 
         self.dependant_jobs = collections.defaultdict(set)
         self.creating_job = dict()
-        for job in jobs.itervalues():
+        for job in jobs.values():
             for resource in job.inputs:
                 self.dependant_jobs[resource.id].add(job.id)
             for resource in job.outputs:
                 if resource.id in self.creating_job:
                     raise AmbiguousOutputException(resource.id, [job.id, self.creating_job[resource.id]])
                 self.creating_job[resource.id] = job.id
-        for job in jobs.itervalues():
+        for job in jobs.values():
             for resource in job.inputs:
                 if resource.id not in self.creating_job and resource.is_temp:
                     raise AmbiguousInputException(resource.id)
 
         # Create the graph
         G = networkx.DiGraph()
-        for job in self.jobs.itervalues():
+        for job in self.jobs.values():
             #only track job names, ignore the axes value.
             #this will keep DAG smaller and speed up cycle testing
             job_node = ('job', job.id[1])
@@ -114,7 +114,7 @@ class DependencyGraph:
 
         adjacent_jobs = set()
 
-        for job in self.jobs.itervalues():
+        for job in self.jobs.values():
             if len(list(job.inputs)) == 0:
                 adjacent_jobs.add(job.id)
 
@@ -143,7 +143,7 @@ class DependencyGraph:
         adjacent_resources = set()
         adjacent_jobs = set()
 
-        for job in self.jobs.itervalues():
+        for job in self.jobs.values():
             if len(list(job.outputs)) == 0:
                 adjacent_jobs.add(job.id)
 
@@ -172,7 +172,7 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        for job in self.jobs.itervalues():
+        for job in self.jobs.values():
             if len(job.inputs) == 0 and job.id not in self.running and job.id not in self.completed:
                 self.running.add(job.id)
                 return job

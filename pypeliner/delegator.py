@@ -65,15 +65,15 @@ def call_external(obj):
 
 def main():
     try:
+        job = None
         before_filename = sys.argv[1]
         after_filename = sys.argv[2]
         def not_pypeliner_path(a):
             if os.path.exists(a) and os.path.samefile(a, os.path.dirname(__file__)):
                 return False
             return True
-        sys.path = filter(not_pypeliner_path, sys.path)
+        sys.path = list(filter(not_pypeliner_path, sys.path))
         sys.path.extend(sys.argv[3:])
-        job = None
         with open(before_filename, 'rb') as before:
             job = pickle.load(before)
         if job is None:

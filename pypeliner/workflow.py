@@ -44,7 +44,7 @@ class Workflow(object):
         return len(self.job_definitions) == 0
 
     def set_filenames(self, name, *axes, **kwargs):
-        """ Set the filename for a 
+        """ Set the filename for a
         """
         user_file_id = (name, axes)
         if user_file_id in self.path_info:
@@ -97,7 +97,7 @@ class Workflow(object):
 
     def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
-        provided python function ``func`` to take input dependencies and create/update 
+        provided python function ``func`` to take input dependencies and create/update
         output dependents.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -112,7 +112,7 @@ class Workflow(object):
                     ``ctx['local'] = True`` will result in the job being run locally on
                     the calling machine even when a cluster is being used.
         :param func: The function to call for this job.
-        :param ret: The return value 
+        :param ret: The return value
         :param args: The list of positional arguments to be used for the function call.
         :param kwargs: The list of keyword arguments to be used for the function call.
 
@@ -136,7 +136,7 @@ class Workflow(object):
 
     def subworkflow(self, name='', axes=(), func=None, ctx={}, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
-        takes the input dependencies and creates/updates output dependents.  The python 
+        takes the input dependencies and creates/updates output dependents.  The python
         function ``func`` should return a workflow object containing the set of jobs.
 
         :param name: unique name of the job, used to identify the job in logs and when
@@ -162,6 +162,6 @@ class Workflow(object):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.
         """
-        for job_def in self.job_definitions.itervalues():
+        for job_def in self.job_definitions.values():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst

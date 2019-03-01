@@ -20,6 +20,11 @@ import pypeliner.storage
 import pypeliner.identifiers
 import pypeliner.deep
 
+try:
+    from future_builtins import filter
+except ImportError:
+    pass
+
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -123,10 +128,10 @@ class JobInstance(object):
         return name
     @property
     def input_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
+        return filter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
     @property
     def output_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
+        return filter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
     def already_run(self):
         return self.db.job_shelf.get(self.displayname, False)
     def out_of_date(self):
@@ -215,7 +220,7 @@ class JobInstance(object):
             return False
         self.retry_idx += 1
         updated = False
-        for key, value in self.ctx.iteritems():
+        for key, value in self.ctx.items():
             if key.endswith('_retry_factor'):
                 self.ctx[key[:-len('_retry_factor')]] *= value
                 updated = True
@@ -396,10 +401,10 @@ class JobCallable(object):
         if self.func == pypeliner.commandline.execute:
             self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
         else:
-            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
+            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
-        with open(self.stdout_storage.filename, 'w', 0) as stdout_file, open(self.stderr_storage.filename, 'w', 0) as stderr_file:
+        with open(self.stdout_storage.filename, 'w') as stdout_file, open(self.stderr_storage.filename, 'w') as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
@@ -409,7 +414,7 @@ class JobCallable(object):
                 if self.func == pypeliner.commandline.execute:
                     self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
                 else:
-                    self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
+                    self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
                 self.hostname = socket.gethostname()
                 with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
                     self.allocate()

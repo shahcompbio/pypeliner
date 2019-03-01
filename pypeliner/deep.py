@@ -97,7 +97,7 @@ except AttributeError:
     pass
 d[type] = _deeptransform_atomic
 d[xrange] = _deeptransform_atomic
-d[types.ClassType] = _deeptransform_atomic
+# d[types.ClassType] = _deeptransform_atomic
 d[types.BuiltinFunctionType] = _deeptransform_atomic
 d[types.FunctionType] = _deeptransform_atomic
 d[weakref.ref] = _deeptransform_atomic
@@ -132,13 +132,16 @@ d[tuple] = _deeptransform_tuple
 def _deeptransform_dict(x, f, memo):
     y = {}
     memo[id(x)] = y
-    for key, value in x.iteritems():
+    for key, value in x.items():
         y[deeptransform(key, f, memo)] = deeptransform(value, f, memo)
     return y
 d[dict] = _deeptransform_dict
 
 def _deeptransform_method(x, f, memo): # Copy instance methods
-    return type(x)(x.im_func, deeptransform(x.im_self, f, memo), x.im_class)
+    try:
+        return type(x)(x.__func__, deeptransform(x.__self__, f, memo),x.__class__)
+    except Exception as e:
+        return type(x)(x.__func__, deeptransform(x.__self__, f, memo))
 _deeptransform_dispatch[types.MethodType] = _deeptransform_method
 
 def _keep_alive(x, f, memo):
@@ -220,7 +223,7 @@ def _reconstruct(x, f, info, deep, memo=None):
             if state is not None:
                 y.__dict__.update(state)
             if slotstate is not None:
-                for key, value in slotstate.iteritems():
+                for key, value in slotstate.items():
                     setattr(y, key, value)
 
     if listiter is not None:
