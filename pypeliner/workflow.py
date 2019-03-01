@@ -191,10 +191,10 @@ class Workflow(object):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.
         """
-        for job_def in self.job_definitions.itervalues():
+        for job_def in self.job_definitions.values():
             if hasattr(job_def, 'sandbox') and job_def.sandbox is not None:
                 job_def.sandbox.create_conda_env(db.envs_dir)
 
-        for job_def in self.job_definitions.itervalues():
+        for job_def in self.job_definitions.values():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst

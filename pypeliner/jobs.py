@@ -20,6 +20,11 @@ import pypeliner.storage
 import pypeliner.identifiers
 import pypeliner.deep
 
+try:
+    from future_builtins import filter
+except ImportError:
+    pass
+
 
 class IncompleteWorkflowException(Exception):
     pass
@@ -134,10 +139,10 @@ class JobInstance(object):
         return name
     @property
     def input_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
+        return filter(lambda a: isinstance(a, pypeliner.resources.Resource), self.inputs)
     @property
     def output_resources(self):
-        return itertools.ifilter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
+        return filter(lambda a: isinstance(a, pypeliner.resources.Resource), self.outputs)
     def already_run(self):
         return self.db.job_shelf.get(self.displayname, False)
     def out_of_date(self):
@@ -243,7 +248,7 @@ class JobInstance(object):
             return False
         self.retry_idx += 1
         updated = False
-        for key, value in self.ctx.iteritems():
+        for key, value in self.ctx.items():
             if key.endswith('_retry_factor'):
                 self.ctx[key[:-len('_retry_factor')]] = self.update_ctx_value(
                     value, self.ctx[key[:-len('_retry_factor')]], by_factor=True)
