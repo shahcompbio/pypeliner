@@ -80,13 +80,9 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs and docker_kwargs.get("container_type", None) == 'docker':
+
+    if docker_kwargs and docker_kwargs.get("docker_image", None):
         args = dockerize_args(*args, **docker_kwargs)
-        _docker_pull(docker_kwargs.get("image"),
-                     docker_kwargs.get("server"),
-                     docker_kwargs.get("username"),
-                     docker_kwargs.get("password"),
-                     )
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -251,7 +247,7 @@ def dockerize_args(*args, **kwargs):
         args = list(args)
         args = ['bash', '-e', '-c'] + [' '.join(map(str, args))]
 
-    args = docker_args + args
+    args = docker_args + list(args)
 
     _docker_pull(
         image, server, kwargs['username'], kwargs['password']
