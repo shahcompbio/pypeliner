@@ -17,7 +17,10 @@ import azure.batch.models as batchmodels
 from azure.common import AzureHttpError
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.keyvault import KeyVaultClient, KeyVaultAuthentication
+from azure.keyvault.models import KeyVaultErrorException
 
+class UnconfiguredStorageAccountError(Exception):
+    pass
 
 class AzureLoggingFilter(logging.Filter):
     def __init__(self):
@@ -63,7 +66,13 @@ def get_storage_account_key(
     client = KeyVaultClient(KeyVaultAuthentication(auth_callback))
     keyvault = "https://{}.vault.azure.net/".format(keyvault_account)
     # passing in empty string for version returns latest key
-    secret_bundle = client.get_secret(keyvault, accountname, "")
+    try:
+        secret_bundle = client.get_secret(keyvault, accountname, "")
+    except KeyVaultErrorException:
+        err_str = "The pipeline is not setup to use the {} account".format(accountname)
+        err_str += "please add the storage key for the account to {}".format(keyvault_account)
+        err_str += "as a secret. All input/output paths should start with accountname"
+        raise UnconfiguredStorageAccountError(err_str)
     return secret_bundle.value
 
 
