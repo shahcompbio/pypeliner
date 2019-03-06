@@ -36,7 +36,7 @@ class GlobalState(object):
 
     @staticmethod
     def get(variablename):
-        return _pypeliner_internal_global_state[variablename]
+        return _pypeliner_internal_global_state.get(variablename)
 
 
 class Backoff(object):
