@@ -135,9 +135,9 @@ def find_pool(poolinfos,  ctx):
     """
     if ctx.get('pool_id', None):
         return ctx['pool_id']
-    memory_req = ctx.get('mem', None)
-    cpus_req = ctx.get('ncpus', None)
-    dedicated_req = ctx.get('dedicated', None)
+    memory_req = ctx.get('mem', 4)
+    cpus_req = ctx.get('ncpus', 1)
+    dedicated_req = ctx.get('dedicated', False)
 
     pools = []
 
