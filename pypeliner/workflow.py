@@ -104,6 +104,8 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
+        if ctx is None:
+            ctx = {}
         ctx['no_container'] = False
         self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs, sandbox=None)
 
