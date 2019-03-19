@@ -14,6 +14,15 @@ class QEnv(object):
         self.qdel_bin = pypeliner.helpers.which('qdel')
 
 
+class LsfEnv(object):
+    """ Paths to qsub, qstat, qdel in LSF"""
+    def __init__(self):
+        self.qsub_bin = pypeliner.helpers.which('bsub')
+        self.qstat_bin = pypeliner.helpers.which('bjobs')
+        self.qacct_bin = pypeliner.helpers.which('bhist')
+        self.qdel_bin = pypeliner.helpers.which('bkill')
+
+
 class QstatError(Exception):
     pass
 
@@ -93,7 +102,6 @@ class QstatJobStatus(object):
                 job_status[qsub_job_id] = status
             except IndexError:
                 continue
-
         return job_status
 
 
@@ -112,6 +120,20 @@ class QacctWrapper(object):
 
         self.results = None
 
+    def parse_qacct(self):
+        """parse job completion status report"""
+        qacct_results = dict()
+
+        with open(self.qacct_stdout_filename, 'r') as qacct_file:
+            for line in qacct_file:
+                try:
+                    key, value = line.split()
+                except ValueError:
+                    continue
+                qacct_results[key] = value
+        return qacct_results
+
+
     def check(self):
         """ Run qacct to obtain finished job info.
         """
@@ -125,16 +147,88 @@ class QacctWrapper(object):
             else:
                 return None
 
+        self.results = self.parse_qacct()
+
+
+class LsfacctWrapper(QacctWrapper):
+    """class to check job status after completion in LSF"""
+    def parse_qacct(self):
+        """parse job completion status report"""
         qacct_results = dict()
 
         with open(self.qacct_stdout_filename, 'r') as qacct_file:
             for line in qacct_file:
-                try:
-                    key, value = line.split()
-                except ValueError:
-                    continue
-                qacct_results[key] = value
+                line = line.strip()
+                if 'Done successfully' in line and 'Post job process' not in line:
+                    qacct_results['exit_code'] = 0
+                if 'Exited with exit code' in line:
+                    line = line[line.find('Exited with exit code'):].split('.')[0]
+                    line = line.replace('Exited with exit code', '')
+                    qacct_results['exit_code'] = line
+                if 'MAX MEM' in line:
+                    line = line.split(';')[0].split(':')
+                    assert line[0] == 'MAX MEM'
+                    qacct_results['maxvmem'] = line[1]
+        return qacct_results
 
-        self.results = qacct_results
+
+class QsubWrapper(object):
+    """class to submit jobs in SGE"""
+    def __init__(self, qenv, ctx, name, script_filename, native_spec, job_stdout_filename,
+                 job_stderr_filename, submit_stdout_filename, submit_stderr_filename,):
+        self.qsub_job_id = None
+        self.qenv = qenv
+        self.ctx = ctx
+        self.name = name
+        self.script_filename = script_filename
+        self.native_spec = native_spec
+        self.job_stdout_filename = job_stdout_filename
+        self.job_stderr_filename = job_stderr_filename
+        self.submit_stdout_filename = submit_stdout_filename
+        self.submit_stderr_filename = submit_stderr_filename
+        self.submit_command = self.create_submit_command()
+
+    def create_submit_command(self):
+        """generate the job submission command"""
+        qsub = [self.qenv.qsub_bin]
+        qsub += self.native_spec.format(**self.ctx).split()
+        qsub += ['-N', pypeliner.execqueue.utils.qsub_format_name(self.name)]
+        qsub += ['-o', self.job_stdout_filename]
+        qsub += ['-e', self.job_stderr_filename]
+        qsub += [self.script_filename]
+        return qsub
+
+    def extract_job_id(self):
+        """parse the job id from job submission command output"""
+        with open(self.submit_stdout_filename, 'r') as submit_stdout:
+            return submit_stdout.readline().rstrip().replace('Your job ', '').split(' ')[0]
+
+    def submit_job(self):
+        """submit job and return job id"""
+        try:
+            with open(self.submit_stdout_filename, 'w') as submit_stdout, open(self.submit_stderr_filename, 'w') as submit_stderr:
+                subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
+        except Exception as e:
+            raise pypeliner.execqueue.base.SubmitError('submit error ' + str(e))
+
+        return self.extract_job_id()
 
 
+
+class LsfsubWrapper(QsubWrapper):
+    """class to submit jobs in LSF"""
+
+    def create_submit_command(self):
+        """generate the job submission command"""
+        qsub = [self.qenv.qsub_bin]
+        qsub += self.native_spec.format(**self.ctx).split()
+        qsub += ['-J', pypeliner.execqueue.utils.qsub_format_name(self.name)]
+        qsub += ['-o', self.job_stdout_filename]
+        qsub += ['-eo', self.job_stderr_filename]
+        qsub += [self.script_filename]
+        return qsub
+
+    def extract_job_id(self):
+        """parse the job id from job submission command output"""
+        with open(self.submit_stdout_filename, 'r') as submit_stdout:
+            return submit_stdout.readline().rstrip().replace("<", "\t").replace(">", '\t').split('\t')[1]

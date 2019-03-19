@@ -8,18 +8,23 @@ source:
 
 requirements:
   build:
-    - python
-    - networkx >=1.11
+    - python 2.7*
+    - dill
+    - networkx
+    - pyyaml
 
   run:
-    - python
+    - python 2.7*
     - networkx >=1.11
     - dill
-    - python-json-logger
+    - pyyaml
 
+build:
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+  
 test:
-  requires:
-    - nose
+  imports:
+    - pypeliner
 
 about:
   home: http://bitbucket.org/dranew/pypeliner

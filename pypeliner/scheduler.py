@@ -3,8 +3,10 @@ Job scheduling class
 
 """
 
+import os
 import logging
 import traceback
+import fnmatch
 
 import pypeliner.graph
 import pypeliner.execqueue.base
@@ -73,7 +75,7 @@ class Scheduler(object):
             try:
                 try:
                     while True:
-                        self._add_jobs(exec_queue, workflow, runskip)
+                        self._add_jobs(exec_queue, workflow)
                         if exec_queue.empty:
                             break
                         self._wait_next_job(exec_queue, workflow)
@@ -105,9 +107,29 @@ class Scheduler(object):
         if exc_dir in self._job_exc_dirs:
             raise ValueError('duplicate temps directory ' + exc_dir)
         self._job_exc_dirs.add(exc_dir)
-        
+
+        if hasattr(job.job_def, 'sandbox'):
+            if job.job_def.sandbox is not None:
+                sandbox_name = os.path.basename(job.job_def.sandbox.prefix)
+            else:
+                sandbox_name = 'root'
+
+            exec_log_str = 'job ' + job.displayname + ' executing in sandbox ' + sandbox_name
+
+        else:
+            exec_log_str = 'job ' + job.displayname + ' executing'
+
+        self._logger.info(exec_log_str,
+                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
         self._logger.info('job ' + job.displayname + ' executing',
-                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing", 'task_name': job.id[1]})
+                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
+        self._logger.info('job ' + job.displayname + ' context ' + str(job.ctx))
+
+        dirs = [self.temps_dir, self.logs_dir]
+        #need these to track the output file and the inputs
+        dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
+        dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
+        sent.dirs = dirs
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
@@ -119,21 +141,14 @@ class Scheduler(object):
         self._add_job(exec_queue, job)
         return True
 
-    def _add_jobs(self, exec_queue, workflow, runskip):
+
+    def _add_jobs(self, exec_queue, workflow):
         while exec_queue.length < self.max_jobs:
             try:
                 job = workflow.pop_next_job()
             except pypeliner.graph.NoJobs:
                 return
-            is_run_required, explaination = runskip(job)
-            self._logger.info('job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                              extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
-            if is_run_required:
-                self._add_job(exec_queue, job)
-            else:
-                job.complete()
-                self._logger.info('job ' + job.displayname + ' skipped',
-                                  extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
+            self._add_job(exec_queue, job)
 
     def _wait_next_job(self, exec_queue, workflow):
         name = exec_queue.wait()
@@ -165,20 +180,14 @@ class Scheduler(object):
             else:
                 self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
                                    extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
-            if job.ctx.get('image'):
-                self._logger.info('job ' + job.displayname + ' image ' + str(job.ctx['image']),
-                                  extra={"id": job.displayname, "type":"job", "image": job.ctx['image'], 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' -> ' + received.displaycommand,
                               extra={"id": job.displayname, "type":"job", "cmd": received.displaycommand, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
                               extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
             self._logger.info('job ' + job.displayname + ' memory ' + str(received.memoryused) + 'G',
                               extra={"id": job.displayname, "type":"job", "memory": received.memoryused, 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname) + 's',
+            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname),
                               extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
-
-            for warning in received.warnings:
-                self._logger.warn('job ' + job.displayname + ' warning: ' + warning)
 
         if received is None or not received.finished:
             if self._retry_job(exec_queue, job):
@@ -186,7 +195,6 @@ class Scheduler(object):
             else:
                 raise pypeliner.graph.IncompleteJobException()
 
-        job.finalize(received)
-        job.complete()
+        received.finalize(job)
 
 

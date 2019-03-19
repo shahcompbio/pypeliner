@@ -1,12 +1,12 @@
 Metadata-Version: 1.1
 Name: pypeliner
-Version: 0.5.2+47.gcaf80c0.dirty
+Version: 0.5.2+53.gff6b86c.dirty
 Summary: A library for creating informatic workflows or pipelines.
 Home-page: http://bitbucket.org/dranew/pypeliner
 Author: Andrew McPherson
 Author-email: andrew.mcpherson@gmail.com
 License: UNKNOWN
-Download-URL: https://bitbucket.org/dranew/pypeliner/get/v0.5.2+47.gcaf80c0.dirty.tar.gz
+Download-URL: https://bitbucket.org/dranew/pypeliner/get/v0.5.2+53.gff6b86c.dirty.tar.gz
 Description: UNKNOWN
 Keywords: scientific,framework
 Platform: UNKNOWN

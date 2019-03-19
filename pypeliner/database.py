@@ -4,7 +4,7 @@ import itertools
 import os
 import logging
 import shutil
-import shelve
+from sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.resources
@@ -72,7 +72,6 @@ class NodeManager(object):
     def store_axis_chunks(self, axis, node, chunks):
         for chunk in chunks:
             new_node = node + pypeliner.identifiers.AxisInstance(axis, chunk)
-            pypeliner.helpers.makedirs(os.path.join(self.temps_dir, new_node.subdir))
         chunks = sorted(chunks)
         self.cached_chunks[(axis, node)] = chunks
         filename = self.db.get_temp_filename(axis, node)
@@ -163,10 +162,9 @@ class WorkflowDatabase(object):
         self.job_shelf = job_shelf
         self.path_info = path_info
         self.instance_subdir = instance_subdir
+        self.envs_dir = os.path.join(workflow_dir, 'envs')
         self.nodes_dir = os.path.join(workflow_dir, 'nodes', instance_subdir)
         self.temps_dir = os.path.join(temps_dir, instance_subdir)
-        pypeliner.helpers.makedirs(self.nodes_dir)
-        pypeliner.helpers.makedirs(self.temps_dir)
         self.nodemgr = NodeManager(self, self.nodes_dir, self.temps_dir)
         self.logs_dir = os.path.join(logs_dir, instance_subdir)
     def get_user_filename_creator(self, name, axes, fnames=None, template=None):
@@ -199,7 +197,7 @@ class WorkflowDatabaseFactory(object):
         self.logs_dir = logs_dir
         pypeliner.helpers.makedirs(self.workflow_dir)
         self.file_storage = file_storage
-        self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.shelf')
+        self.job_shelf_filename = os.path.join(self.workflow_dir, 'jobs.db')
         self.lock_directories = list()
     def create(self, path_info, instance_subdir):
         self._add_lock(instance_subdir)
@@ -219,7 +217,7 @@ class WorkflowDatabaseFactory(object):
                 raise
         self.lock_directories.append(lock_directory)
     def __enter__(self):
-        self.job_shelf = shelve.open(self.job_shelf_filename)
+        self.job_shelf = SqliteDb(self.job_shelf_filename)
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         self.job_shelf.close()

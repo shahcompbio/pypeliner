@@ -7,9 +7,9 @@ import traceback
 import socket
 import datetime
 import signal
-import warnings
 import resource
 import uuid
+from datetime import timedelta
 
 import pypeliner.helpers
 import pypeliner.arguments
@@ -25,6 +25,9 @@ try:
 except ImportError:
     pass
 
+
+class IncompleteWorkflowException(Exception):
+    pass
 
 class CallSet(object):
     """ Set of positional and keyword arguments, and a return value """
@@ -47,13 +50,19 @@ class CallSet(object):
 
 class JobDefinition(object):
     """ Represents an abstract job including function and arguments """
-    def __init__(self, name, axes, ctx, func, argset):
+    def __init__(self, name, axes, ctx, func, argset, sandbox=None):
         self.name = name
         self.axes = axes
         self.ctx = ctx
         self.func = func
         self.argset = argset
-
+        self.sandbox = sandbox
+    @property
+    def wrapped_func(self):
+        if self.sandbox is not None:
+            return self.sandbox.wrap_function(self.func)
+        else:
+            return self.func
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield JobInstance(self, workflow, db, node)
@@ -73,7 +82,6 @@ class JobInstance(object):
         self.node = node
         temps_dir = os.path.join(db.temps_dir, self.node.subdir, self.job_def.name)
         self.store_dir = os.path.join(temps_dir, str(uuid.uuid1()))
-        pypeliner.helpers.makedirs(self.store_dir)
         self.arglist = list()
         try:
             self.argset = pypeliner.deep.deeptransform(
@@ -83,11 +91,11 @@ class JobInstance(object):
             e.job_name = self.displayname
             raise
         self.logs_dir = os.path.join(db.logs_dir, self.node.subdir, self.job_def.name)
-        pypeliner.helpers.makedirs(self.logs_dir)
         self.retry_idx = 0
         self.ctx = job_def.ctx.copy()
         self.is_required_downstream = False
         self.init_inputs_outputs()
+        self.runskip_request = None
 
     def _create_arg(self, mg):
         if not isinstance(mg, pypeliner.managed.Managed):
@@ -118,6 +126,9 @@ class JobInstance(object):
     @property
     def id(self):
         return (self.node, self.job_def.name)
+    @property
+    def jobname(self):
+        return self.job_def.name
     @property
     def displayname(self):
         name = '/' + self.job_def.name
@@ -203,18 +214,35 @@ class JobInstance(object):
                     return True
         return False
     def create_callable(self):
-        return JobCallable(self.id, self.job_def.func, self.argset, self.arglist, self.db.file_storage, self.logs_dir, self.ctx)
+        return JobCallable(self.id, self.job_def.wrapped_func, self.argset, self.arglist, self.db.file_storage, self.store_dir, self.logs_dir, self.ctx)
     def create_exc_dir(self):
         exc_dir = os.path.join(self.logs_dir, 'exc{}'.format(self.retry_idx))
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
-    def finalize(self, callable):
-        callable.updatedb(self.db)
-        if self.check_require_regenerate():
-            self.workflow.regenerate()
-    def complete(self):
-        self.db.job_shelf[self.displayname] = True
-        self.workflow.notify_completed(self.id)
+    def update_ctx_value(self, retry_val, val, by_factor=False):
+        if isinstance(val, (int, long, float, complex)):
+            if by_factor:
+                return val * retry_val
+            else:
+                return val + retry_val
+        elif isinstance(val, str) and ':' in val:
+            assert val.count(':') == 1, "time ctx values only support hours and minutes"
+            # Juno and Luna only accept Hours and Mins, no seconds
+            val = datetime.datetime.strptime(val, "%H:%M")
+            val = timedelta(hours=val.hour, minutes=val.minute, seconds=val.second)
+            if by_factor:
+                assert isinstance(retry_val, (int, long, float)),\
+                    "retry_factor for time should be an integer or float"
+                val *= retry_val
+            else:
+                retry_val = datetime.datetime.strptime(retry_val, "%H:%M")
+                retry_val = timedelta(hours=retry_val.hour, minutes=retry_val.minute, seconds=retry_val.second)
+                val += retry_val
+            hours = str(val.seconds/3600).zfill(2)
+            mins = str((val.seconds/60) % 60).zfill(2)
+            return '{}:{}'.format(hours, mins)
+        else:
+            raise Exception('unknown_format')
     def retry(self):
         if self.retry_idx >= self.ctx.get('num_retry', 0):
             return False
@@ -222,10 +250,12 @@ class JobInstance(object):
         updated = False
         for key, value in self.ctx.items():
             if key.endswith('_retry_factor'):
-                self.ctx[key[:-len('_retry_factor')]] *= value
+                self.ctx[key[:-len('_retry_factor')]] = self.update_ctx_value(
+                    value, self.ctx[key[:-len('_retry_factor')]], by_factor=True)
                 updated = True
             elif key.endswith('_retry_increment'):
-                self.ctx[key[:-len('_retry_increment')]] += value
+                self.ctx[key[:-len('_retry_increment')]] = self.update_ctx_value(
+                    value, self.ctx[key[:-len('_retry_increment')]])
                 updated = True
         return updated
 
@@ -243,29 +273,6 @@ class JobTimer(object):
         if self._finish is None or self._start is None:
             return '?'
         return int(self._finish - self._start)
-
-class JobLogger(object):
-    def __init__(self):
-        self.trap = warnings.catch_warnings(record=True)
-        self.trapped_warnings = None
-    def __enter__(self):
-        self.trapped_warnings = self.trap.__enter__()
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.trap.__exit__()
-    @property
-    def warnings(self):
-        """
-        only keep the user warnings, filter all other warnings. This should get rid of
-        most deprecation warnings and other runtime warnings from numpy, scipy etc.
-        """
-        if self.trapped_warnings is None:
-            return []
-
-        warnings = filter(lambda i: issubclass(i.category, UserWarning), self.trapped_warnings)
-        # remove duplicate warnings
-        warnings = list(set([warning.message.message for warning in warnings]))
-
-        return warnings
 
 
 class TimeOutError(Exception):
@@ -341,15 +348,17 @@ def resolve_arg(arg):
 
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
-    def __init__(self, id, func, argset, arglist, storage, logs_dir, ctx):
+    def __init__(self, id, func, argset, arglist, storage, store_dir, logs_dir, ctx):
         self.storage = storage
         self.id = id
         self.ctx = ctx
         self.func = func
         self.argset = argset
         self.arglist = arglist
+        self.started = False
         self.finished = False
         self.displaycommand = '?'
+        self.store_dir = store_dir
         self.logs_dir = logs_dir
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
@@ -359,17 +368,14 @@ class JobCallable(object):
         self.job_mem_tracker = JobMemoryTracker()
         timeout = self.ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
-        self.job_logger = JobLogger()
         self.hostname = '?'
+        self.context_config = pypeliner.helpers.GlobalState.get("context_config")
     @property
     def duration(self):
         return self.job_timer.duration
     @property
     def memoryused(self):
         return self.job_mem_tracker.memoryused
-    @property
-    def warnings(self):
-        return self.job_logger.warnings
     def log_text(self):
         text = '--- stdout ---\n'
         try:
@@ -394,43 +400,39 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
-        ret_value = None
-        if isinstance(self.func, str):
-            self.func = pypeliner.helpers.import_function(self.func)
-        callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-        if self.func == pypeliner.commandline.execute:
-            self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
-        else:
-            self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
+        pypeliner.helpers.GlobalState("context_config", self.context_config)
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
-        with open(self.stdout_storage.filename, 'w') as stdout_file, open(self.stderr_storage.filename, 'w') as stderr_file:
+        with open(self.stdout_storage.write_filename, 'w') as stdout_file, open(self.stderr_storage.write_filename, 'w') as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
-                if isinstance(self.func, str):
-                    self.func = pypeliner.helpers.import_function(self.func)
+                pypeliner.helpers.makedirs(self.logs_dir)
+                pypeliner.helpers.makedirs(self.store_dir)
+                self.started = True
+                func = self.func
+                if isinstance(func, str):
+                    func = pypeliner.helpers.import_function(func)
                 callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
-                if self.func == pypeliner.commandline.execute:
+                if func == pypeliner.commandline.execute:
                     self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
                 else:
-                    self.displaycommand = self.func.__module__ + '.' + self.func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
+                    self.displaycommand = func.__module__ + '.' + func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
                 self.hostname = socket.gethostname()
-                with self.job_timer, self.job_mem_tracker, self.job_time_out, self.job_logger:
+                with self.job_timer, self.job_mem_tracker, self.job_time_out:
                     self.allocate()
                     self.pull()
-                    ret_value = self.func(*callset.args, **callset.kwargs)
+                    ret_value = func(*callset.args, **callset.kwargs)
                     if callset.ret is not None:
                         callset.ret.finalize(ret_value)
                     self.push()
                 self.finished = True
-            except:
+            except Exception:
                 sys.stderr.write(traceback.format_exc())
             finally:
                 sys.stdout, sys.stderr = old_stdout, old_stderr
         self.stdout_storage.push()
         self.stderr_storage.push()
-        return ret_value
     def collect_logs(self):
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
@@ -442,17 +444,20 @@ class JobCallable(object):
             self.stderr_storage.pull()
         except pypeliner.storage.InputMissingException:
             pass
-    def updatedb(self, db):
+    def finalize(self, job):
         for arg in self.arglist:
-            arg.updatedb(db)
+            arg.update(job)
+        if job.check_require_regenerate():
+            job.workflow.regenerate()
+        job.workflow.complete_job(job)
 
 def _setobj_helper(value):
     return value
 
 class SetObjDefinition(JobDefinition):
-    def __init__(self, name, axes, obj, value):
+    def __init__(self, name, axes, ctx, obj, value):
         super(SetObjDefinition, self).__init__(
-            name, axes, {}, _setobj_helper,
+            name, axes, ctx, _setobj_helper,
             CallSet(ret=obj, args=(value,)))
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
@@ -467,12 +472,6 @@ class SetObjInstance(JobInstance):
         self.obj_displayname = obj_res.build_displayname(workflow.node)
 
 class SubWorkflowDefinition(JobDefinition):
-    def __init__(self, name, axes, func, ctx, argset):
-        self.name = name
-        self.axes = axes
-        self.ctx = ctx
-        self.func = pypeliner.helpers.import_function(func) if isinstance(func, str) else func
-        self.argset = argset
     def create_job_instances(self, workflow, db):
         for node in db.nodemgr.retrieve_nodes(self.axes):
             yield SubWorkflowInstance(self, workflow, db, node)
@@ -483,13 +482,38 @@ class SubWorkflowInstance(JobInstance):
     def __init__(self, job_def, workflow, db, node):
         super(SubWorkflowInstance, self).__init__(job_def, workflow, db, node)
     def create_callable(self):
-        return WorkflowCallable(self.id, self.job_def.func, self.argset, self.arglist,
-                                self.db.file_storage, self.logs_dir, self.job_def.ctx)
+        return WorkflowCallable(
+            self.id, self.job_def.func, self.argset, self.arglist,
+            self.db.file_storage, self.store_dir, self.logs_dir,
+            self.job_def.ctx)
 
 class WorkflowCallable(JobCallable):
     def allocate(self):
-        pass
+        self.argset.ret.allocate()
     def push(self):
-        pass
+        self.argset.ret.push()
     def pull(self):
         pass
+    def __call__(self):
+        pypeliner.workflow.parent_ctx = self.ctx.copy()
+        # TODO: local shouldnt be inherited by workflows
+        # find a better solution to this
+        if 'local' in pypeliner.workflow.parent_ctx:
+            del pypeliner.workflow.parent_ctx['local']
+        super(WorkflowCallable, self).__call__()
+        pypeliner.workflow.parent_ctx = None
+    def finalize(self, job):
+        self.argset.ret.allocate()
+        self.argset.ret.pull()
+        workflow_def = self.argset.ret.get_obj()
+        if not isinstance(workflow_def, pypeliner.workflow.Workflow):
+            job.workflow._logger.error(
+                'subworkflow ' + job.displayname + ' did not return a workflow\n' + self.log_text(),
+                extra={"id": job.displayname, "type":"subworkflow", "status": "error", 'task_name': job.id[1]})
+            raise IncompleteWorkflowException()
+        if workflow_def.empty:
+            job.workflow._logger.error(
+                'subworkflow ' + job.displayname + ' returned an empty workflow\n' + self.log_text(),
+                extra={"id": job.displayname, "type":"subworkflow", "status":"empty", 'task_name': job.id[1]})
+            raise IncompleteWorkflowException()
+        job.workflow.add_subworkflow(job, workflow_def)

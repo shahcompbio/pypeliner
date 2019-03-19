@@ -362,3 +362,20 @@ class Chunks(Managed):
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
 
+class OutputWorkflow(Managed):
+    """ Interface class used to represent a workflow output
+
+    `TempOutputWorkflow` objects are only appropriate as return values for calls 
+    to :py:func:`pypeliner.scheduler.Scheduler.subworkflow`.  The workflow returned
+    by the function executed for a subworkflow job will be stored by the pipeline
+    using `pickle`.
+
+    :param name: The name of the object.
+    :param axes: The axes for the object.
+
+    For a split output, the pipeline system expects a dictionary of workflows
+    with chunks of the split axis as keys.
+
+    """
+    normal = pypeliner.arguments.OutputWorkflowArg
+    splitmerge = None

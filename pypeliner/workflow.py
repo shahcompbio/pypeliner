@@ -1,3 +1,5 @@
+import os
+
 import pypeliner.commandline
 import pypeliner.jobs
 
@@ -18,24 +20,29 @@ class UserPathInfo(object):
             repr(self.fnames))
 
 
+parent_ctx = None
+
+
 class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
     """
-    def __init__(self, ctx=None, default_ctx=None):
+    def __init__(self, ctx=None, default_ctx=None, default_sandbox=None):
         self.ctx = {
             'mem': 4,
             'num_retry': 3,
             'mem_retry_factor': 2,
             'ncpus': 1,
-            'dockerize': None,
         }
+        if parent_ctx is not None:
+            self.ctx.update(parent_ctx)
         if ctx is not None:
             self.ctx.update(ctx)
-        ##TODO: remove default_ctx at some point?
+        ## TODO: remove default_ctx at some point?
         if default_ctx is not None:
             DeprecationWarning("default_ctx will be replaced by ctx starting with v0.6")
             self.ctx.update(default_ctx)
+        self.default_sandbox = default_sandbox
         self.job_definitions = dict()
         self.path_info = dict()
 
@@ -78,12 +85,16 @@ class Workflow(object):
         value of the object has changed in a subsequent run.
 
         """
+        job_ctx = self.ctx.copy()
+        job_ctx['local'] = True
+        job_ctx['no_container'] = True
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
-        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, obj, value)
 
-    def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None):
+        self.job_definitions[name] = pypeliner.jobs.SetObjDefinition(name, axes, job_ctx, obj, value)
+
+    def commandline(self, name='', axes=(), ctx=None, args=None, kwargs=None, sandbox=None):
         """ Add a command line based transform to the pipeline
 
         This call is equivalent to::
@@ -93,9 +104,10 @@ class Workflow(object):
         See :py:func:`pypeliner.scheduler.transform`
 
         """
-        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs)
+        ctx['no_container'] = False
+        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs, sandbox=None)
 
-    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None):
+    def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None, sandbox=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
         provided python function ``func`` to take input dependencies and create/update
         output dependents.
@@ -132,9 +144,13 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.JobDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        job_ctx['no_container'] = False
+        if sandbox is None:
+            sandbox = self.default_sandbox
+        self.job_definitions[name] = pypeliner.jobs.JobDefinition(
+            name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), sandbox=sandbox)
 
-    def subworkflow(self, name='', axes=(), func=None, ctx={}, args=None, kwargs=None):
+    def subworkflow(self, name='', axes=(), ctx=None, func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
         takes the input dependencies and creates/updates output dependents.  The python
         function ``func`` should return a workflow object containing the set of jobs.
@@ -145,6 +161,11 @@ class Workflow(object):
                      job with an empty list for the axes has a single instance.  A job with
                      one axis in the axes list will have as many instances as were defined
                      for that axis by the split that is responsible for that axis.
+        :param ctx: context of the subworkflow job as a dictionary of key, value pairs.  The context
+                    is given to the exec queue and provides a way of communicating jobs
+                    specific requirements such as memory and cpu usage.  Setting
+                    ``ctx['local'] = True`` will result in the job being run locally on
+                    the calling machine even when a cluster is being used.
         :param func: The function to call for this job.
         :param args: The list of positional arguments to be used for the function call.
         :param kwargs: The list of keyword arguments to be used for the function call.
@@ -154,14 +175,24 @@ class Workflow(object):
         file or object at runtime.  See :py:mod:`pypeliner.managed`.
 
         """
+        job_ctx = self.ctx.copy()
+        job_ctx['local'] = False
+        job_ctx['no_container'] = False
+        if ctx is not None:
+            job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, func, ctx, pypeliner.jobs.CallSet(args=args, kwargs=kwargs))
+        ret = pypeliner.managed.OutputWorkflow(name + '_workflow_definition', *axes)
+        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
 
     def _create_job_instances(self, graph, db):
         """ Create job instances from job definitions given resource and node managers,
         and a log directory.
         """
+        for job_def in self.job_definitions.values():
+            if hasattr(job_def, 'sandbox') and job_def.sandbox is not None:
+                job_def.sandbox.create_conda_env(db.envs_dir)
+
         for job_def in self.job_definitions.values():
             for job_inst in job_def.create_job_instances(graph, db):
                 yield job_inst

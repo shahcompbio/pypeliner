@@ -2,8 +2,8 @@ import os
 import datetime
 import time
 import shutil
-import shelve
 import importlib
+from sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.flyweight
@@ -34,7 +34,8 @@ class RegularFile(object):
             self.filename = filename + extension
             self.write_filename = self.write_filename + extension
     def allocate(self):
-        pypeliner.helpers.makedirs(os.path.dirname(self.filename))
+        if not os.path.exists(self.filename):
+            pypeliner.helpers.makedirs(os.path.dirname(self.filename))
     def push(self):
         try:
             os.rename(self.write_filename, self.filename)
@@ -54,13 +55,17 @@ class RegularFile(object):
             self.exists_cache.set(exists)
         return exists
     def get_createtime(self):
-        if not self.get_exists():
-            return None
-        createtime = self.createtime_cache.get()
+        createtime = self.createtime_save.get()
         if createtime is None:
+            createtime = self.createtime_cache.get()
+        if createtime is None:
+            if not self.get_exists():
+                return None
             createtime = os.path.getmtime(self.filename)
             self.createtime_cache.set(createtime)
             self.createtime_save.set(createtime)
+        if not isinstance(createtime, float):
+            createtime = float(createtime)
         return createtime
     def touch(self):
         pypeliner.helpers.touch(self.filename)
@@ -75,20 +80,23 @@ class RegularFile(object):
 class RegularTempFile(RegularFile):
     def get_createtime(self):
         if super(RegularTempFile, self).get_exists():
-            return super(RegularTempFile, self).get_createtime()
-        return self.createtime_save.get()
+            return float(super(RegularTempFile, self).get_createtime())
+        createtime = self.createtime_save.get()
+        if createtime and not isinstance(createtime, float):
+            createtime = float(createtime)
+        return createtime
     def delete(self):
         pypeliner.helpers.saferemove(self.filename)
 
 
 class FileStorage(object):
     def __init__(self, metadata_prefix=None, **kwargs):
-        createtime_shelf_filename = metadata_prefix + 'createtimes.shelf'
+        createtime_shelf_filename = metadata_prefix + 'createtimes.db'
         pypeliner.helpers.makedirs(os.path.dirname(createtime_shelf_filename))
         self.cached_exists = pypeliner.flyweight.FlyweightState()
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.saved_createtimes = pypeliner.flyweight.FlyweightState(
-            state_container=shelve.open(createtime_shelf_filename))
+            state_container=SqliteDb(createtime_shelf_filename))
     def __enter__(self):
         self.cached_exists.__enter__()
         self.cached_createtimes.__enter__()
@@ -117,6 +125,8 @@ def create(requested_storage, workflow_dir=None):
         storage_name = 'pypeliner.storage.FileStorage'
     elif requested_storage == 'azureblob':
         storage_name = 'pypeliner.contrib.azure.blobstorage.AzureBlobStorage'
+    elif requested_storage == 'awss3':
+        storage_name = 'pypeliner.contrib.aws.objectstorage.AwsStorage'
     else:
         storage_name = requested_storage
 

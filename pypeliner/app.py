@@ -83,9 +83,14 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         of date status of jobs, rerun jobs based on whether they have already been
         run.
 
+    context_config
+        Run jobs within a specific type of container, either docker or singularity.
+        config contains credentials for docker or path to dir with singularity containers
+
 """
 
 import logging
+import yaml
 import os
 import argparse
 import datetime
@@ -97,7 +102,6 @@ import pypeliner.runskip
 import pypeliner.execqueue.factory
 import pypeliner.storage
 import pypeliner.scheduler
-
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -124,6 +128,7 @@ config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
 config_infos.append(ConfigInfo('sentinal_only', bool, False, 'no timestamp checks, sentinal only'))
+config_infos.append(ConfigInfo('context_config', str, None, 'container registry credentials and job context overrides'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
 
@@ -161,6 +166,12 @@ def add_arguments(argparser):
     for config_info in config_infos:
         _add_argument(group, config_info)
 
+
+def load_config(configfile):
+    if not configfile:
+        return
+    with open(configfile) as configyaml:
+        return yaml.load(configyaml)
 
 class Pypeline(object):
     """ Pipeline application helper class
@@ -200,7 +211,6 @@ class Pypeline(object):
         logfmt = pypeliner.helpers.MultiLineFormatter('%(asctime)s - %(name)s - %(levelname)s - ')
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
-            handler.addFilter(logging.Filter('pypeliner'))
 
         #add json log file to the log_dir
         json_log_file = os.path.join(self.logs_dir, 'pipeline.json')
@@ -226,6 +236,7 @@ class Pypeline(object):
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
+        pypeliner.helpers.GlobalState('context_config', load_config(self.config['context_config']))
 
         if self.config['sentinal_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(

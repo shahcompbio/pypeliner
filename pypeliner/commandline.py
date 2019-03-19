@@ -1,17 +1,16 @@
 import sys
 import os
-import pypeliner
+import logging
 import subprocess
-import dill as pickle
 from pypeliner.helpers import Backoff
-
+import pypeliner
 
 def which(file):
     for path in os.environ["PATH"].split(os.pathsep):
-        if os.path.exists(os.path.join(path, file)):
-                return os.path.join(path, file)
-
+        if os.path.exists(os.path.join(path, file)) and os.path.isfile(os.path.join(path, file)):
+            return os.path.join(path, file)
     return None
+
 
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
@@ -21,12 +20,16 @@ class CommandLineException(Exception):
     :param returncode: exit code of failed command
 
     """
+
     def __init__(self, args, command, returncode):
         self.args = args
         self.command = command
         self.returncode = returncode
+
     def __str__(self):
-        return "Command '%s' with return code %d in command line `%s`" % (self.command, self.returncode, " ".join(self.args))
+        return "Command '%s' with return code %d in command line `%s`" % (
+            self.command, self.returncode, " ".join(self.args))
+
 
 class CommandNotFoundException(Exception):
     """ A command was not found on the path.
@@ -35,9 +38,11 @@ class CommandNotFoundException(Exception):
     :param command: command that could not be found
 
     """
+
     def __init__(self, args, command):
         self.args = args
         self.command = command
+
     def __str__(self):
         return "Command '%s' not found in command line `%s`" % (self.command, " ".join(self.args))
 
@@ -50,12 +55,15 @@ class Callable(object):
     :param args: arguments
 
     """
+
     def __init__(self, func, args, kwargs):
         self.func = func
         self.args = args
         self.kwargs = kwargs
+
     def __call__(self):
         self.retval = self.func(*self.args, **self.kwargs)
+
 
 def execute(*args, **docker_kwargs):
     """ Execute a command line
@@ -72,12 +80,9 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs and docker_kwargs.get("container_type", None) == 'docker':
+
+    if docker_kwargs and docker_kwargs.get("docker_image", None):
         args = dockerize_args(*args, **docker_kwargs)
-        _docker_login(docker_kwargs.get("server"),
-                      docker_kwargs.get("username"),
-                      docker_kwargs.get("password"),)
-        _docker_pull(docker_kwargs.get("image"))
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -137,8 +142,8 @@ def _get_next(items, identifier):
         if elem == identifier:
             return nextelem
 
-def _call_processes(args, command_list, infile, outfile):
 
+def _call_processes(args, command_list, infile, outfile):
     # List of processes created
     processes = []
 
@@ -154,7 +159,8 @@ def _call_processes(args, command_list, infile, outfile):
 
         # Create intermediate processes with pipes
         for command in command_list[1:-1]:
-            processes.append(_call_process(command, stdin=processes[-1].stdout, stdout=subprocess.PIPE, stderr=sys.stderr))
+            processes.append(
+                _call_process(command, stdin=processes[-1].stdout, stdout=subprocess.PIPE, stderr=sys.stderr))
             processes[-2].stdout.close()
 
         # Create final process with stdout as outfile
@@ -170,6 +176,7 @@ def _call_processes(args, command_list, infile, outfile):
         if process.returncode != 0:
             raise CommandLineException(args, command_list[idx][0], process.returncode)
 
+
 def _call_process(command, stdin, stdout, stderr):
     try:
         return subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=stderr)
@@ -181,9 +188,9 @@ def _call_process(command, stdin, stdout, stderr):
 
 
 def singularity_args(*args, **kwargs):
-    image = kwargs.get("image")
+    image = kwargs.get("docker_image")
     assert image, "singularity image path required."
-    mounts = sorted(set(kwargs.get("mounts", [])))
+    mounts = sorted(set(kwargs.get("mounts", {}).values()))
     docker_args = ['singularity', 'run']
     for mount in mounts:
         docker_args.extend(['-B', '{}:{}'.format(mount, mount)])
@@ -196,10 +203,25 @@ def singularity_args(*args, **kwargs):
 
 
 def dockerize_args(*args, **kwargs):
-    image = kwargs.get("image")
-    assert image, "docker image URL required."
+    if kwargs.get("no_container"):
+        return args
+    image = kwargs.get("docker_image")
 
-    mounts = sorted(set(kwargs.get("mounts", [])))
+    kwargs = pypeliner.helpers.GlobalState.get("context_config")
+
+    if not kwargs or not kwargs.get("docker"):
+        return args
+
+    if not image:
+        logging.getLogger('pypeliner.commandline').warn('running locally, no docker image specified')
+        return args
+
+    server = kwargs['docker']['server']
+    image = server + '/' + image
+
+    kwargs = kwargs.get('docker', None)
+
+    mounts = sorted(set(kwargs.get("mounts", {}).values()))
 
     docker_args = ['docker', 'run']
     for mount in mounts:
@@ -212,28 +234,47 @@ def dockerize_args(*args, **kwargs):
     docker_args.append('--rm')
 
     docker_path = which('docker')
+    if not docker_path:
+        raise Exception("Couldn't find docker in system")
+
     # expose docker socket to enable starting
     # new containers from the current container
     docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
     docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
     docker_args.append(image)
 
+    if '|' in args or '>' in args or '<' in args:
+        args = list(args)
+        args = ['bash', '-e', '-c'] + [' '.join(map(str, args))]
+
     args = docker_args + list(args)
+
+    _docker_pull(
+        image, server, kwargs['username'], kwargs['password']
+    )
 
     return args
 
 
-def _docker_pull(image):
+def _docker_pull(image, server, username, password):
     cmd = ['docker','pull',image]
-    execute(*cmd)
+
+    # log in if pull fails
+    try:
+        execute(*cmd)
+    except CommandLineException:
+        _docker_login(server, username, password)
+        execute(*cmd)
 
 
-@Backoff(exception_type=EOFError, max_backoff=300, randomize=True)
+@Backoff(max_backoff=300, randomize=True)
 def _docker_login(server, username, password):
     if not username or not password:
-        #assume repo is public
+        # assume repo is public
         return
 
     cmd = ['echo', password, '|', 'docker', 'login',
-           server, '-u', username, '--password-stdin']
+           server, '-u', username, '--password-stdin',
+           '>', '/dev/null']
+
     execute(*cmd)
