@@ -1,5 +1,7 @@
 # Pypeliner
 
+![build](https://travis-ci.org/shahcompbio/pypeliner.svg?branch=master)
+
 ## What is Pypeliner?
 
 Pypeliner is a library for creating informatic workflows or pipelines. It aims
