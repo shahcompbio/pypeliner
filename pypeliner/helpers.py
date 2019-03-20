@@ -147,7 +147,7 @@ def import_function(import_string):
 
 def pop_if(L, pred):
     for idx, item in enumerate(L):
-        if pred(item):
+        if pred(*item):
             return L.pop(idx)
     raise IndexError()
 
