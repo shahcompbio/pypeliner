@@ -1,3 +1,5 @@
+# Only build tags
+if: tag IS present
 language: python
 python:
 - 2.7
