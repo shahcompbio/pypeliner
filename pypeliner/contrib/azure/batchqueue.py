@@ -74,8 +74,8 @@ class AzureJobQueue(object):
         self.container_name = self.config['storage_container_name']
         self.blob_client.create_container(self.container_name)
 
-        self.compute_start_commands = self.config['compute_start_commands']
-        self.compute_finish_commands = self.config['compute_finish_commands']
+        self.compute_start_commands = {id: pool['compute_start_commands'] for id,pool in self.config['pools'].items()}
+        self.compute_finish_commands = {id: pool['compute_finish_commands'] for id,pool in self.config['pools'].items()}
 
         self.no_delete_pool = self.config.get('no_delete_pool', False)
         self.no_delete_job = self.config.get('no_delete_job', False)
@@ -100,6 +100,7 @@ class AzureJobQueue(object):
         'upload err': 'fileuploaderr.txt',
         'upload out': 'fileuploadout.txt',
     }
+
 
     def __enter__(self):
         return self
@@ -247,9 +248,9 @@ class AzureJobQueue(object):
         with open(run_script_filename, 'w') as f:
             f.write('set -e\n')
             f.write('set -o pipefail\n\n')
-            f.write(self.compute_start_commands + '\n')
+            f.write(self.compute_start_commands[pool_id] + '\n')
             f.write(command + '\n')
-            f.write(self.compute_finish_commands + '\n')
+            f.write(self.compute_finish_commands[pool_id] + '\n')
             f.write('wait')
 
         run_script_file = azure_helpers.create_blob_batch_resource(

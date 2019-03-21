@@ -126,6 +126,24 @@ def download_from_blob_to_path(
     return blob
 
 
+def get_biggest_pool(poolinfos):
+
+    biggestpool=None
+
+    for poolid, poolinfo in poolinfos.iteritems():
+        memory = poolinfo['mem_per_task']
+        cpus = poolinfo['cpus_per_task']
+        disk = poolinfo['disk_per_task']
+        score = memory + (cpus*8) + (disk)/10
+
+        if not biggestpool:
+            biggestpool = (score, poolid)
+        else:
+            if score > biggestpool[0]:
+                biggestpool = (score, poolid)
+
+    return biggestpool[1]
+
 def find_pool(poolinfos,  ctx):
     """
     choose the best pool based on job context
@@ -137,34 +155,45 @@ def find_pool(poolinfos,  ctx):
         return ctx['pool_id']
     memory_req = ctx.get('mem', 4)
     cpus_req = ctx.get('ncpus', 1)
+    disk_req = ctx.get('disk', 8)
     dedicated_req = ctx.get('dedicated', False)
+
+    # at the ctx level, memory is normally specified per cpu
+    # in batch yaml memory_per_task is less confusing than memory_per_cpu
+    memory_req_per_task = memory_req * cpus_req
 
     pools = []
 
     for poolid, poolinfo in poolinfos.iteritems():
         memory = poolinfo['mem_per_task']
         cpus = poolinfo['cpus_per_task']
+        disk = poolinfo['disk_per_task']
         dedicated = poolinfo.get('dedicated', None)
-
-        # total available mem (to submit jobs that require high mem but 1 core)
-        memory = memory * cpus
 
         # dont submit dedicated jobs to low priority nodes
         if dedicated_req and not dedicated:
             continue
 
-        if memory_req <= memory and cpus_req <= cpus:
+        if memory_req_per_task <= memory and cpus_req <= cpus and disk_req <= disk:
             # giving a bigger weight to cpu since cpu number is always smaller
-            distance = abs(memory_req - memory) + abs((cpus_req - cpus)*5)
+            # smaller weight to disk. score is an approximation of amount of wasted
+            # resources
+            distance = (memory - memory_req_per_task) + ((cpus - cpus_req)*8) + (disk - disk_req)/10
             pools.append((distance, poolid))
 
     if not pools:
-        error_str = "Could not find a pool to satisfy job requirements. " \
-                    "requested mem:{} cpus:{} dedicated: {}".format(memory_req, cpus_req, dedicated)
-        raise Exception(error_str)
+        biggestpool = get_biggest_pool(poolinfos)
+        warn_str = \
+            "Could not find a pool to satisfy job requirements. " \
+            "requested mem:{} cpus:{} dedicated: {}." \
+            " submitting to ".format(
+                memory_req_per_task, cpus_req, dedicated, biggestpool)
+        logging.getLogger('pypeliner.execqueue.azure_batch').warn(warn_str)
+        return biggestpool
 
     # choose best fit
     pools = sorted(pools, key=lambda tup: tup[0])
+
     return pools[0][1]
 
 
