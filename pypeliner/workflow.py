@@ -141,6 +141,8 @@ class Workflow(object):
         derived class.
 
         """
+        if not name:
+            raise ValueError("job name not specified")
         job_ctx = self.ctx.copy()
         if ctx is not None:
             job_ctx.update(ctx)
@@ -177,6 +179,8 @@ class Workflow(object):
         file or object at runtime.  See :py:mod:`pypeliner.managed`.
 
         """
+        if not name:
+            raise ValueError("subworkflow name not specified")
         job_ctx = self.ctx.copy()
         job_ctx['local'] = False
         job_ctx['no_container'] = False
