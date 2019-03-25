@@ -29,14 +29,21 @@ class GlobalState(object):
     :param variablename: key name
     :param value: key value
     """
-    def __init__(self, variablename, value):
-        self.variablename = variablename
-        self.value = value
-        _pypeliner_internal_global_state[self.variablename] = self.value
+    @staticmethod
+    def get(variablename, default_value=None):
+        return _pypeliner_internal_global_state.get(variablename, default_value)
 
     @staticmethod
-    def get(variablename):
-        return _pypeliner_internal_global_state.get(variablename)
+    def get_all():
+        return _pypeliner_internal_global_state
+
+    @staticmethod
+    def set(variablename, value):
+        _pypeliner_internal_global_state[variablename] = value
+
+    @staticmethod
+    def update_all(globals_dict):
+        _pypeliner_internal_global_state.update(globals_dict)
 
 
 class Backoff(object):

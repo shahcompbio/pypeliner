@@ -445,6 +445,11 @@ class AzureJobQueue(object):
         with open(job_after_filename, 'rb') as job_after_file:
             received = pickle.load(job_after_file)
 
+        # just in case a new storage key was pulled from storage in job
+        # generally this doesnt happen as key gets pulled on head node to
+        # get the create time for all resources anyway prior to running the job
+        pypeliner.helpers.GlobalState.update_all(received.pypeliner_globals)
+
         if received is None:
             raise pypeliner.execqueue.base.ReceiveError(
                 self._create_error_text(temps_dir, hostname=hostname))

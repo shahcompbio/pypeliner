@@ -236,8 +236,8 @@ class Pypeline(object):
         self.sch.logs_dir = self.logs_dir
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
-        pypeliner.helpers.GlobalState('context_config', load_config(self.config['context_config']))
-        pypeliner.helpers.GlobalState('sentinal_only', self.config['sentinal_only'])
+        pypeliner.helpers.GlobalState.set('context_config', load_config(self.config['context_config']))
+        pypeliner.helpers.GlobalState.set('sentinal_only', self.config['sentinal_only'])
 
         if self.config['sentinal_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(

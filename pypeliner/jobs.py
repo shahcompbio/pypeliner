@@ -369,7 +369,7 @@ class JobCallable(object):
         timeout = self.ctx.get("timeout", None) if ctx else None
         self.job_time_out = JobTimeOut(timeout)
         self.hostname = '?'
-        self.context_config = pypeliner.helpers.GlobalState.get("context_config")
+        self.pypeliner_globals = pypeliner.helpers.GlobalState.get_all()
     @property
     def duration(self):
         return self.job_timer.duration
@@ -400,7 +400,7 @@ class JobCallable(object):
         for arg in self.arglist:
             arg.push()
     def __call__(self):
-        pypeliner.helpers.GlobalState("context_config", self.context_config)
+        pypeliner.helpers.GlobalState.update_all(self.pypeliner_globals)
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
         with open(self.stdout_storage.write_filename, 'w', 0) as stdout_file, open(self.stderr_storage.write_filename, 'w', 0) as stderr_file:

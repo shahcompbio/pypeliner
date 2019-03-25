@@ -8,6 +8,7 @@ import datetime
 import logging
 
 import pypeliner
+import pypeliner.helpers
 from pypeliner.helpers import Backoff
 from rabbitmq import RabbitMqSemaphore
 
@@ -63,18 +64,26 @@ def get_storage_account_key(
         token = credentials.token
         return token['token_type'], token['access_token']
 
+    storage_keys = pypeliner.helpers.GlobalState.get('azure_storage_keys', {})
+    if storage_keys and storage_keys.get(accountname):
+        return storage_keys.get(accountname)
+
     client = KeyVaultClient(KeyVaultAuthentication(auth_callback))
     keyvault = "https://{}.vault.azure.net/".format(keyvault_account)
     # passing in empty string for version returns latest key
     try:
         secret_bundle = client.get_secret(keyvault, accountname, "")
     except KeyVaultErrorException:
-        err_str = "The pipeline is not setup to use the {} account".format(accountname)
-        err_str += "please add the storage key for the account to {}".format(keyvault_account)
+        err_str = "The pipeline is not setup to use the {} account. ".format(accountname)
+        err_str += "please add the storage key for the account to {} ".format(keyvault_account)
         err_str += "as a secret. All input/output paths should start with accountname"
         raise UnconfiguredStorageAccountError(err_str)
-    return secret_bundle.value
+    account_key = secret_bundle.value
 
+    storage_keys[accountname] = account_key
+    pypeliner.helpers.GlobalState.set('azure_storage_keys', storage_keys)
+
+    return account_key
 
 def get_blob_name(filename):
     """
