@@ -92,7 +92,6 @@ class AzureBlobStorage(object):
         self.secret_key = os.environ["SECRET_KEY"]
         self.tenant_id = os.environ["TENANT_ID"]
         self.subscription_id = os.environ["SUBSCRIPTION_ID"]
-        self.resource_group = os.environ["RESOURCE_GROUP"]
         self.keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.blob_client = None
@@ -123,13 +122,13 @@ class AzureBlobStorage(object):
         return (self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,
                 self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
                 self.secret_key, self.tenant_id, self.subscription_id,
-                self.resource_group, self.keyvault_account)
+                self.keyvault_account)
 
     def __setstate__(self, state):
         [self.cached_createtimes, self.rabbitmq_username, self.rabbitmq_password,
          self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
          self.secret_key, self.tenant_id, self.subscription_id,
-         self.resource_group, self.keyvault_account] = state
+         self.keyvault_account] = state
 
     def create_store(self, filename, **kwargs):
         return AzureBlob(self, filename, **kwargs)
