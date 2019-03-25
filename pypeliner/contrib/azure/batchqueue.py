@@ -36,13 +36,13 @@ class AzureJobQueue(object):
         secret_key = os.environ['SECRET_KEY']
         keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
 
-        storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT']
+        with open(config_filename) as f:
+            self.config = yaml.load(f)
+
+        storage_account_name = self.config['pypeliner_storage_account']
         storage_account_key = azure_helpers.get_storage_account_key(
             storage_account_name, client_id, secret_key,
             tenant_id, keyvault_account)
-
-        with open(config_filename) as f:
-            self.config = yaml.load(f)
 
         self.logger = logging.getLogger('pypeliner.execqueue.azure_batch')
 
