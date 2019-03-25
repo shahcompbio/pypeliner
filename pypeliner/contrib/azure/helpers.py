@@ -6,6 +6,7 @@ import random
 import string
 import datetime
 import logging
+from os.path import expanduser
 
 import pypeliner
 import pypeliner.helpers
@@ -237,12 +238,16 @@ def get_run_command(ctx):
         mount_string += ['-v /mnt:/mnt']
         mount_string = ' '.join(mount_string)
         image = ctx.get("server") + '/' + image
+
         command = ['docker run -w $PWD',
                    mount_string,
                    '-v /var/run/docker.sock:/var/run/docker.sock',
                    '-v /usr/bin/docker:/usr/bin/docker',
+                   '-v', '{}/.docker:/root/.docker'.format('$HOME'),
+                   '-e', 'ROOT_HOME={}'.format('$HOME'),
                    image, command
                    ]
+
         command = ' '.join(command)
         # wrap it up as docker group command
         command = 'sg docker -c "{}"'.format(command)

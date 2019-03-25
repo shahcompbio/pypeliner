@@ -4,6 +4,7 @@ import logging
 import subprocess
 from pypeliner.helpers import Backoff
 import pypeliner
+from os.path import expanduser
 
 def which(file):
     for path in os.environ["PATH"].split(os.pathsep):
@@ -237,10 +238,19 @@ def dockerize_args(*args, **kwargs):
     if not docker_path:
         raise Exception("Couldn't find docker in system")
 
+
+    if 'ROOT_HOME' in os.environ:
+        mount_path = os.environ['ROOT_HOME']
+    else:
+        mount_path = expanduser('~')
     # expose docker socket to enable starting
     # new containers from the current container
     docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
     docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
+    # will copy config file which preserves docker login
+    # all containers after  the first one will run as root
+    docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
+    docker_args.extend(['-v', '{}/.docker:/root/.docker'.format(mount_path)])
     docker_args.append(image)
 
     if '|' in args or '>' in args or '<' in args:
