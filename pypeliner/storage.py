@@ -25,7 +25,7 @@ class OutputMissingException(Exception):
 
 
 class RegularFile(object):
-    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, store_dir=None, extension=None, direct_write=True):
+    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, extension=None, direct_write=True, **kwargs):
         self.filename = filename
         self.exists_cache = exists_cache
         self.createtime_cache = createtime_cache
@@ -123,6 +123,22 @@ class FileStorage(object):
         else:
             return self._create_store(filename, RegularFile, **kwargs)
 
+class LocalRemoteStorage(object):
+    def __init__(self, remote_storage_class, metadata_prefix=None):
+        self.local_storage = FileStorage(metadata_prefix=metadata_prefix)
+        self.remote_storage = remote_storage_class(metadata_prefix=metadata_prefix)
+    def __enter__(self):
+        self.local_storage.__enter__()
+        self.remote_storage.__enter__()
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.local_storage.__exit__(exc_type, exc_value, traceback)
+        self.remote_storage.__exit__(exc_type, exc_value, traceback)
+    def create_store(self, filename, is_temp=False, **kwargs):
+        if kwargs.get('local'):
+            return self.local_storage.create_store(filename, is_temp=is_temp, **kwargs)
+        else:
+            return self.remote_storage.create_store(filename, is_temp=is_temp, **kwargs)
 
 def create(requested_storage, workflow_dir=None):
     if requested_storage is None:
@@ -143,7 +159,11 @@ def create(requested_storage, workflow_dir=None):
     storage_class = vars(storage_module)[storage_class_name]
 
     file_storage_prefix = os.path.join(workflow_dir, 'files_')
-    storage = storage_class(metadata_prefix=file_storage_prefix)
+
+    if requested_storage != "local":
+        storage = LocalRemoteStorage(storage_class, metadata_prefix=file_storage_prefix)
+    else:
+        storage = storage_class(metadata_prefix=file_storage_prefix)
 
     return storage
 
