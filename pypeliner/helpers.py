@@ -1,25 +1,55 @@
-import os
-import logging
-import stat
-import shutil
-import hashlib
 import errno
-import json
-import time
-import random
-from functools import wraps
+import hashlib
 import importlib
-from pypeliner import _pypeliner_internal_global_state
+import json
+import logging
+import os
+import random
+import shutil
+import stat
+import time
 from collections import deque
+from functools import wraps
+
+from pypeliner import _pypeliner_internal_global_state
 
 
 def running_in_docker():
+    """
+    returns True if python is running inside docker container
+    cgroup file is normally readable by all users
+    """
     with open('/proc/self/cgroup', 'r') as procfile:
         for line in procfile:
             fields = line.strip().split('/')
             if 'docker' in fields:
                 return True
     return False
+
+
+def log_event(info, name=None, extras=None, logger=None, level='info'):
+    if logger:
+        name = name if name else 'pypeliner.helpers'
+        logger = logging.getLogger(name)
+
+    if isinstance(info, dict):
+        # add primary info to json field
+        extras.update(info)
+        info = [i for keyvalue in info.iteritems() for i in keyvalue]
+
+    if isinstance(info, list) or isinstance(info, tuple):
+        info = ' '.join(map(str, info))
+
+    if level == 'warn':
+        logger.warning(info, extra=extras)
+    elif level == 'err':
+        logger.error(info, extra=extras)
+    elif level == 'info':
+        logger.info(info, extra=extras)
+    elif level == 'debug':
+        logger.debug(info, extra=extras)
+    else:
+        raise NotImplementedError('Cannot handle {} logging level'.format(level))
 
 
 class GlobalState(object):
@@ -29,6 +59,7 @@ class GlobalState(object):
     :param variablename: key name
     :param value: key value
     """
+
     @staticmethod
     def get(variablename, default_value=None):
         return _pypeliner_internal_global_state.get(variablename, default_value)
@@ -143,6 +174,7 @@ class Backoff(object):
 
         self.elapsed_time += self.backoff_time
 
+
 def import_function(import_string):
     module, funcname = import_string.rsplit('.', 1)
 
@@ -158,20 +190,24 @@ def pop_if(L, pred):
             return L.pop(idx)
     raise IndexError()
 
+
 def abspath(path):
     if path.endswith('/'):
         return os.path.abspath(path) + '/'
     else:
         return os.path.abspath(path)
 
+
 class MultiLineFormatter(logging.Formatter):
     def format(self, record):
         header = logging.Formatter.format(self, record)
         return header + record.message.rstrip('\n').replace('\n', '\n\t')
 
+
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps(vars(record))
+
 
 def which(name):
     if os.environ.get('PATH', None) is not None:
@@ -181,17 +217,20 @@ def which(name):
                 return p
     raise EnvironmentError('unable to find ' + name + ' in the system path')
 
+
 def set_executable(filename):
     mode = os.stat(filename).st_mode
     mode |= stat.S_IXUSR
     os.chmod(filename, stat.S_IMODE(mode))
 
+
 def md5_file(filename, block_size=8192):
     md5 = hashlib.md5()
-    with open(filename,'rb') as f: 
-        for chunk in iter(lambda: f.read(block_size), b''): 
-             md5.update(chunk)
+    with open(filename, 'rb') as f:
+        for chunk in iter(lambda: f.read(block_size), b''):
+            md5.update(chunk)
     return md5.digest()
+
 
 def overwrite_if_different(new_filename, existing_filename):
     do_copy = True
@@ -202,6 +241,7 @@ def overwrite_if_different(new_filename, existing_filename):
     if do_copy:
         os.rename(new_filename, existing_filename)
 
+
 def makedirs(dirname):
     dirname = abspath(dirname)
     try:
@@ -211,11 +251,13 @@ def makedirs(dirname):
             raise
     assert os.path.isdir(dirname)
 
+
 def saferemove(filename):
     try:
         os.remove(filename)
     except OSError:
         pass
+
 
 def symlink(source, link_name):
     source = os.path.abspath(source)
@@ -226,9 +268,11 @@ def symlink(source, link_name):
             raise
     os.symlink(source, link_name)
 
+
 def touch(filename, times=None):
     with open(filename, 'a'):
         os.utime(filename, times)
+
 
 def removefiledir(filename):
     saferemove(filename)

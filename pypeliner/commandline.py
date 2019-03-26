@@ -1,10 +1,12 @@
-import sys
-import os
 import logging
+import os
 import subprocess
-from pypeliner.helpers import Backoff
-import pypeliner
+import sys
 from os.path import expanduser
+
+import pypeliner
+from pypeliner.helpers import Backoff
+
 
 def which(file):
     for path in os.environ["PATH"].split(os.pathsep):
@@ -238,7 +240,6 @@ def dockerize_args(*args, **kwargs):
     if not docker_path:
         raise Exception("Couldn't find docker in system")
 
-
     if 'ROOT_HOME' in os.environ:
         mount_path = os.environ['ROOT_HOME']
     else:
@@ -267,7 +268,7 @@ def dockerize_args(*args, **kwargs):
 
 
 def _docker_pull(image, server, username, password):
-    cmd = ['docker','pull',image]
+    cmd = ['docker', 'pull', image]
 
     # log in if pull fails
     try:

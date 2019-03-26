@@ -1,17 +1,16 @@
-import os
-import datetime
-import time
-import shutil
 import importlib
-from sqlitedb import SqliteDb
+import os
 
-import pypeliner.helpers
 import pypeliner.flyweight
+import pypeliner.helpers
+
+from sqlitedb import SqliteDb
 
 
 class InputMissingException(Exception):
     def __init__(self, filename):
         self.filename = filename
+
     def __str__(self):
         return 'expected input {} missing'.format(self.filename)
 
@@ -19,12 +18,16 @@ class InputMissingException(Exception):
 class OutputMissingException(Exception):
     def __init__(self, filename):
         self.filename = filename
+
     def __str__(self):
         return 'expected output {0} missing'.format(self.filename)
 
 
 class RegularFile(object):
-    def __init__(self, filename, exists_cache, createtime_cache, createtime_save, extension=None, direct_write=True, **kwargs):
+    def __init__(
+            self, filename, exists_cache, createtime_cache, createtime_save,
+            extension=None, direct_write=True, **kwargs
+    ):
         self.filename = filename
         self.exists_cache = exists_cache
         self.createtime_cache = createtime_cache
@@ -33,9 +36,11 @@ class RegularFile(object):
         if extension is not None:
             self.filename = filename + extension
             self.write_filename = self.write_filename + extension
+
     def allocate(self):
         if not os.path.exists(self.filename):
             pypeliner.helpers.makedirs(os.path.dirname(self.filename))
+
     def push(self):
         try:
             os.rename(self.write_filename, self.filename)
@@ -45,15 +50,18 @@ class RegularFile(object):
         createtime = os.path.getmtime(self.filename)
         self.createtime_cache.set(createtime)
         self.createtime_save.set(createtime)
+
     def pull(self):
         if not self.get_exists():
             raise InputMissingException(self.filename)
+
     def get_exists(self):
         exists = self.exists_cache.get()
         if exists is None:
             exists = os.path.exists(self.filename)
             self.exists_cache.set(exists)
         return exists
+
     def get_createtime(self):
         # if sentinal only flag is set then pull create time from database too
         # to avoid hitting filesystem. this will cause issues if files
@@ -72,12 +80,14 @@ class RegularFile(object):
         if not isinstance(createtime, float):
             createtime = float(createtime)
         return createtime
+
     def touch(self):
         pypeliner.helpers.touch(self.filename)
         self.exists_cache.set(True)
         createtime = os.path.getmtime(self.filename)
         self.createtime_cache.set(createtime)
         self.createtime_save.set(createtime)
+
     def delete(self):
         raise Exception('cannot delete non-temporary files')
 
@@ -90,6 +100,7 @@ class RegularTempFile(RegularFile):
         if createtime and not isinstance(createtime, float):
             createtime = float(createtime)
         return createtime
+
     def delete(self):
         pypeliner.helpers.saferemove(self.filename)
 
@@ -102,42 +113,51 @@ class FileStorage(object):
         self.cached_createtimes = pypeliner.flyweight.FlyweightState()
         self.saved_createtimes = pypeliner.flyweight.FlyweightState(
             state_container=SqliteDb(createtime_shelf_filename))
+
     def __enter__(self):
         self.cached_exists.__enter__()
         self.cached_createtimes.__enter__()
         self.saved_createtimes.__enter__()
         return self
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.cached_exists.__exit__(exc_type, exc_value, traceback)
         self.cached_createtimes.__exit__(exc_type, exc_value, traceback)
         self.saved_createtimes.__exit__(exc_type, exc_value, traceback)
+
     def _create_store(self, filename, factory, **kwargs):
         exists_cache = self.cached_exists.create_flyweight(filename)
         createtime_cache = self.cached_createtimes.create_flyweight(filename)
         createtime_save = self.saved_createtimes.create_flyweight(filename)
         return factory(filename, exists_cache, createtime_cache, createtime_save, **kwargs)
+
     def create_store(self, filename, is_temp=False, **kwargs):
         if is_temp:
             return self._create_store(filename, RegularTempFile, **kwargs)
         else:
             return self._create_store(filename, RegularFile, **kwargs)
 
+
 class LocalRemoteStorage(object):
     def __init__(self, remote_storage_class, metadata_prefix=None):
         self.local_storage = FileStorage(metadata_prefix=metadata_prefix)
         self.remote_storage = remote_storage_class(metadata_prefix=metadata_prefix)
+
     def __enter__(self):
         self.local_storage.__enter__()
         self.remote_storage.__enter__()
         return self
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.local_storage.__exit__(exc_type, exc_value, traceback)
         self.remote_storage.__exit__(exc_type, exc_value, traceback)
+
     def create_store(self, filename, is_temp=False, **kwargs):
         if kwargs.get('local'):
             return self.local_storage.create_store(filename, is_temp=is_temp, **kwargs)
         else:
             return self.remote_storage.create_store(filename, is_temp=is_temp, **kwargs)
+
 
 def create(requested_storage, workflow_dir=None):
     if requested_storage is None:
@@ -152,7 +172,7 @@ def create(requested_storage, workflow_dir=None):
         storage_name = requested_storage
 
     storage_class_name = storage_name.split('.')[-1]
-    storage_module_name = storage_name[:-len(storage_class_name)-1]
+    storage_module_name = storage_name[:-len(storage_class_name) - 1]
 
     storage_module = importlib.import_module(storage_module_name)
     storage_class = vars(storage_module)[storage_class_name]
@@ -165,4 +185,3 @@ def create(requested_storage, workflow_dir=None):
         storage = storage_class(metadata_prefix=file_storage_prefix)
 
     return storage
-

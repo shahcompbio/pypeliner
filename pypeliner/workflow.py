@@ -1,5 +1,3 @@
-import os
-
 import pypeliner.commandline
 import pypeliner.jobs
 
@@ -8,10 +6,13 @@ class UserPathInfo(object):
     def __init__(self, template=None, fnames=None):
         self.template = template
         self.fnames = fnames
+
     def __eq__(self, other):
         return self.template == other.template and self.fnames == other.fnames
+
     def __ne__(self, other):
         return not self.__eq__(other)
+
     def __repr__(self):
         return '{0}.{1}({2}, {3})'.format(
             UserPathInfo.__module__,
@@ -27,6 +28,7 @@ class Workflow(object):
     """ Contaner for a set of jobs making up a single workflow.
 
     """
+
     def __init__(self, ctx=None, default_ctx=None, default_sandbox=None):
         self.ctx = {
             'mem': 4,
@@ -55,7 +57,9 @@ class Workflow(object):
         """
         user_file_id = (name, axes)
         if user_file_id in self.path_info:
-            raise ValueError('Filename for {} with axes {} already set to {}'.format(name, axes, self.path_info[user_file_id]))
+            raise ValueError(
+                'Filename for {} with axes {} already set to {}'.format(name, axes, self.path_info[user_file_id])
+            )
         self.path_info[user_file_id] = UserPathInfo()
         if 'fnames' in kwargs:
             self.path_info[user_file_id].fnames = kwargs['fnames']
@@ -107,7 +111,10 @@ class Workflow(object):
         if ctx is None:
             ctx = {}
         ctx['no_container'] = False
-        self.transform(name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute, args=args, kwargs=kwargs, sandbox=None)
+        self.transform(
+            name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute,
+            args=args, kwargs=kwargs, sandbox=None
+        )
 
     def transform(self, name='', axes=(), ctx=None, func=None, ret=None, args=None, kwargs=None, sandbox=None):
         """ Add a transform to the pipeline.  A transform defines a job that uses the
@@ -152,7 +159,8 @@ class Workflow(object):
         if sandbox is None:
             sandbox = self.default_sandbox
         self.job_definitions[name] = pypeliner.jobs.JobDefinition(
-            name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), sandbox=sandbox)
+            name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs), sandbox=sandbox
+        )
 
     def subworkflow(self, name='', axes=(), ctx=None, func=None, args=None, kwargs=None):
         """ Add a sub workflow to the pipeline.  A sub workflow is a set of jobs that
@@ -189,7 +197,9 @@ class Workflow(object):
         if name in self.job_definitions:
             raise ValueError('Job already defined')
         ret = pypeliner.managed.OutputWorkflow(name + '_workflow_definition', *axes)
-        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs))
+        self.job_definitions[name] = pypeliner.jobs.SubWorkflowDefinition(
+            name, axes, job_ctx, func, pypeliner.jobs.CallSet(ret=ret, args=args, kwargs=kwargs)
+        )
 
     def _create_job_instances(self, graph, db):
         """ Create job instances from job definitions given resource and node managers,

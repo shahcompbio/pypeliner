@@ -89,19 +89,19 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
 
 """
 
-import logging
-import yaml
-import os
 import argparse
 import datetime
+import logging
+import os
 from collections import *
 
 import pypeliner.execqueue
+import pypeliner.execqueue.factory
 import pypeliner.helpers
 import pypeliner.runskip
-import pypeliner.execqueue.factory
-import pypeliner.storage
 import pypeliner.scheduler
+import pypeliner.storage
+import yaml
 
 ConfigInfo = namedtuple('ConfigInfo', ['name', 'type', 'default', 'help'])
 
@@ -148,6 +148,7 @@ def _add_argument(argparser, config_info):
     kwargs['help'] = config_info.help
     argparser.add_argument(*args, **kwargs)
 
+
 def add_arguments(argparser):
     """ Add pypeliner arguments to an argparser object
 
@@ -173,6 +174,7 @@ def load_config(configfile):
     with open(configfile) as configyaml:
         return yaml.load(configyaml)
 
+
 class Pypeline(object):
     """ Pipeline application helper class
 
@@ -186,6 +188,7 @@ class Pypeline(object):
     the scheduler with options provided by the conifg argument.
 
     """
+
     def __init__(self, modules=(), config=None):
         self.modules = modules
         self.config = dict([(info.name, info.default) for info in config_infos])
@@ -212,12 +215,12 @@ class Pypeline(object):
         for handler in logging.root.handlers:
             handler.setFormatter(logfmt)
 
-        #add json log file to the log_dir
+        # add json log file to the log_dir
         json_log_file = os.path.join(self.logs_dir, 'pipeline.json')
         jsonlog = logging.FileHandler(json_log_file, mode='a')
         jsonlog.setLevel(self.config['loglevel'])
         jsonlog.addFilter(logging.Filter('pypeliner'))
-        logfmt=pypeliner.helpers.JsonFormatter()
+        logfmt = pypeliner.helpers.JsonFormatter()
         jsonlog.setFormatter(logfmt)
         logging.getLogger('').addHandler(jsonlog)
 
@@ -256,4 +259,4 @@ class Pypeline(object):
                 self.sch.run(workflow, self.exec_queue, self.file_storage, self.runskip)
             finally:
                 self.runskip.close()
-                print ('log file:', self.pipeline_log_filename)
+                print ('log file: ' + self.pipeline_log_filename)

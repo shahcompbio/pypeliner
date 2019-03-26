@@ -2,19 +2,24 @@
 arbitrary python objects.
 """
 
+import sys
 import types
 import weakref
-import sys
+
 if sys.version_info[0] < 3:
     from copy_reg import dispatch_table
 else:
     from copyreg import dispatch_table
+
     long = int
     xrange = range
 
+
 class Error(Exception):
     pass
-error = Error   # backward compatibility
+
+
+error = Error  # backward compatibility
 
 __all__ = ["Error", "copy", "deeptransform"]
 
@@ -43,7 +48,7 @@ def deeptransform(x, f, memo=None, _nil=[]):
         else:
             try:
                 issc = issubclass(cls, type)
-            except TypeError: # cls is not a class (old Boost; see SF #502085)
+            except TypeError:  # cls is not a class (old Boost; see SF #502085)
                 issc = 0
             if issc:
                 y = _deeptransform_atomic(x, f, memo)
@@ -69,13 +74,17 @@ def deeptransform(x, f, memo=None, _nil=[]):
                     y = _reconstruct(x, f, rv, 1, memo)
 
     memo[d] = y
-    _keep_alive(x, f, memo) # Make sure x lives at least as long as d
+    _keep_alive(x, f, memo)  # Make sure x lives at least as long as d
     return y
+
 
 _deeptransform_dispatch = d = {}
 
+
 def _deeptransform_atomic(x, f, memo):
     return x
+
+
 d[type(None)] = _deeptransform_atomic
 d[type(Ellipsis)] = _deeptransform_atomic
 d[int] = _deeptransform_atomic
@@ -102,13 +111,17 @@ d[types.BuiltinFunctionType] = _deeptransform_atomic
 d[types.FunctionType] = _deeptransform_atomic
 d[weakref.ref] = _deeptransform_atomic
 
+
 def _deeptransform_list(x, f, memo):
     y = []
     memo[id(x)] = y
     for a in x:
         y.append(deeptransform(a, f, memo))
     return y
+
+
 d[list] = _deeptransform_list
+
 
 def _deeptransform_tuple(x, f, memo):
     y = []
@@ -127,7 +140,10 @@ def _deeptransform_tuple(x, f, memo):
         y = x
     memo[d] = y
     return y
+
+
 d[tuple] = _deeptransform_tuple
+
 
 def _deeptransform_dict(x, f, memo):
     y = {}
@@ -135,14 +151,20 @@ def _deeptransform_dict(x, f, memo):
     for key, value in x.items():
         y[deeptransform(key, f, memo)] = deeptransform(value, f, memo)
     return y
+
+
 d[dict] = _deeptransform_dict
 
-def _deeptransform_method(x, f, memo): # Copy instance methods
+
+def _deeptransform_method(x, f, memo):  # Copy instance methods
     try:
-        return type(x)(x.__func__, deeptransform(x.__self__, f, memo),x.__class__)
+        return type(x)(x.__func__, deeptransform(x.__self__, f, memo), x.__class__)
     except Exception as e:
         return type(x)(x.__func__, deeptransform(x.__self__, f, memo))
+
+
 _deeptransform_dispatch[types.MethodType] = _deeptransform_method
+
 
 def _keep_alive(x, f, memo):
     """Keeps a reference to the object x in the memo.
@@ -158,7 +180,8 @@ def _keep_alive(x, f, memo):
         memo[id(memo)].append(x)
     except KeyError:
         # aha, this is the first one :-)
-        memo[id(memo)]=[x]
+        memo[id(memo)] = [x]
+
 
 def _deeptransform_inst(x, f, memo):
     if hasattr(x, '__deeptransform__'):
@@ -181,8 +204,11 @@ def _deeptransform_inst(x, f, memo):
     else:
         y.__dict__.update(state)
     return y
+
+
 if sys.version_info[0] < 3:
     d[types.InstanceType] = _deeptransform_inst
+
 
 def _reconstruct(x, f, info, deep, memo=None):
     if isinstance(info, str):
@@ -239,9 +265,11 @@ def _reconstruct(x, f, info, deep, memo=None):
             y[key] = value
     return y
 
+
 del d
 
 del types
+
 
 # Helper for instance creation without calling __init__
 class _EmptyClass:

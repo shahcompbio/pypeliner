@@ -1,8 +1,9 @@
 import functools
 import logging
-import pypeliner.commandline as cli
 import os
 import shutil
+
+import pypeliner.commandline as cli
 import yaml
 
 
@@ -47,11 +48,11 @@ class CondaSandbox(object):
     def wrap_function(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            import os
             if self.prefix is None:
                 raise Exception('Sandbox not initialized.')
             self._set_env()
             return func(*args, **kwargs)
+
         return wrapper
 
     def _run_conda(self):
