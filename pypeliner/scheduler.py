@@ -171,9 +171,7 @@ class Scheduler(object):
             extras={'job_name': job.displayname, 'task_name': job.id[1], "status": 'error'},
             logger=self._logger
         )
-        if self._retry_job(exec_queue, job):
-            return
-        else:
+        if not self._retry_job(exec_queue, job):
             raise pypeliner.graph.IncompleteJobException()
 
 
@@ -193,10 +191,13 @@ class Scheduler(object):
             received.collect_logs()
         except pypeliner.execqueue.base.ReceiveError:
             self._handle_error(job, traceback.format_exc(), "submit error\n", exec_queue)
+            return
         except IncompleteJobException:
             self._handle_error(job, received.log_text(), "failed to complete\n", exec_queue)
+            return
         except Exception:
             self._handle_error(job, traceback.format_exc(), 'collect logs error\n', exec_queue)
+            return
 
         if job.id != received.id:
             raise JobIdMismatchError('job id {} doenst match received id {}'.format(job.id, received.id))
