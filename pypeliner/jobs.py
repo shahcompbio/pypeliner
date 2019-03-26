@@ -228,15 +228,15 @@ class JobInstance(object):
         elif isinstance(val, str) and ':' in val:
             assert val.count(':') == 1, "time ctx values only support hours and minutes"
             # Juno and Luna only accept Hours and Mins, no seconds
-            val = datetime.datetime.strptime(val, "%H:%M")
-            val = timedelta(hours=val.hour, minutes=val.minute, seconds=val.second)
+            val = [int(i) for i in val.split(':')] #datetime.datetime.strptime(val, "%H:%M")
+            val = timedelta(hours=val[0], minutes=val[1])
             if by_factor:
                 assert isinstance(retry_val, (int, long, float)),\
                     "retry_factor for time should be an integer or float"
                 val *= retry_val
             else:
-                retry_val = datetime.datetime.strptime(retry_val, "%H:%M")
-                retry_val = timedelta(hours=retry_val.hour, minutes=retry_val.minute, seconds=retry_val.second)
+                retry_val = [int(i) for i in retry_val.split(':')]
+                retry_val = timedelta(hours=retry_val[0], minutes=retry_val[1])
                 val += retry_val
             hours = str(val.seconds/3600).zfill(2)
             mins = str((val.seconds/60) % 60).zfill(2)
