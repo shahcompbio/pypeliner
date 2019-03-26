@@ -3,17 +3,24 @@ Job scheduling class
 
 """
 
-import os
 import logging
+import os
 import traceback
-import fnmatch
 
-import pypeliner.graph
-import pypeliner.execqueue.base
 import pypeliner.database
+import pypeliner.execqueue.base
+import pypeliner.graph
 
 
 class PipelineException(Exception):
+    pass
+
+
+class JobIdMismatchError(Exception):
+    pass
+
+
+class IncompleteJobException(Exception):
     pass
 
 
@@ -22,6 +29,7 @@ class Scheduler(object):
     those jobs according to their dependencies.
 
     """
+
     def __init__(self):
         self._logger = logging.getLogger('pypeliner.scheduler')
         self.max_jobs = 1
@@ -35,10 +43,11 @@ class Scheduler(object):
         if not attr.startswith('_') and getattr(self, "freeze", False) and not hasattr(self, attr):
             raise AttributeError("Setting new attribute")
         super(Scheduler, self).__setattr__(attr, value)
- 
+
     @property
     def workflow_dir(self):
         return self._workflow_dir
+
     @workflow_dir.setter
     def workflow_dir(self, value):
         self._workflow_dir = value
@@ -46,6 +55,7 @@ class Scheduler(object):
     @property
     def logs_dir(self):
         return self._logs_dir
+
     @logs_dir.setter
     def logs_dir(self, value):
         self._logs_dir = value
@@ -69,8 +79,12 @@ class Scheduler(object):
 
         self._active_jobs = dict()
         self._job_exc_dirs = set()
-        with pypeliner.database.WorkflowDatabaseFactory(self.temps_dir, self.workflow_dir, self.logs_dir, file_storage) as db_factory:
-            workflow = pypeliner.graph.WorkflowInstance(workflow_def, db_factory, runskip, ctx=workflow_def.ctx, cleanup=self.cleanup)
+        with pypeliner.database.WorkflowDatabaseFactory(
+                self.temps_dir, self.workflow_dir, self.logs_dir, file_storage
+        ) as db_factory:
+            workflow = pypeliner.graph.WorkflowInstance(
+                workflow_def, db_factory, runskip, ctx=workflow_def.ctx, cleanup=self.cleanup
+            )
             failing = False
             try:
                 try:
@@ -108,25 +122,24 @@ class Scheduler(object):
             raise ValueError('duplicate temps directory ' + exc_dir)
         self._job_exc_dirs.add(exc_dir)
 
+        exec_log = {'job_name': job.displayname, 'status': ' executing', 'context': job.ctx}
+
         if hasattr(job.job_def, 'sandbox'):
             if job.job_def.sandbox is not None:
                 sandbox_name = os.path.basename(job.job_def.sandbox.prefix)
             else:
                 sandbox_name = 'root'
 
-            exec_log_str = 'job ' + job.displayname + ' executing in sandbox ' + sandbox_name
+            exec_log['sandbox'] = sandbox_name
 
-        else:
-            exec_log_str = 'job ' + job.displayname + ' executing'
-
-        self._logger.info(exec_log_str,
-                          extra={"id": job.displayname, "type":"job", "requested_mem(GB)":job.ctx["mem"], "status":"executing"})
-        self._logger.info('job ' + job.displayname + ' executing',
-                          extra={"id": job.displayname, "type":"job", "cmd": sent.displaycommand, 'task_name': job.id[1]})
-        self._logger.info('job ' + job.displayname + ' context ' + str(job.ctx))
+        pypeliner.helpers.log_event(
+            exec_log,
+            extras={'task_name': job.id[1], "cmd": sent.displaycommand},
+            logger=self._logger
+        )
 
         dirs = [self.temps_dir, self.logs_dir]
-        #need these to track the output file and the inputs
+        # need these to track the output file and the inputs
         dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
         dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
         sent.dirs = dirs
@@ -136,11 +149,13 @@ class Scheduler(object):
     def _retry_job(self, exec_queue, job):
         if not job.retry():
             return False
-        self._logger.info('job ' + job.displayname + ' retry ' + str(job.retry_idx),
-                          extra={"id": job.displayname, "type":"job", "retry_count": job.retry_idx, 'task_name': job.id[1]})
+        pypeliner.helpers.log_event(
+            {'job_name': job.displayname, 'retry_count': job.retry_idx},
+            extras={'task_name': job.id[1]},
+            logger=self._logger
+        )
         self._add_job(exec_queue, job)
         return True
-
 
     def _add_jobs(self, exec_queue, workflow):
         while exec_queue.length < self.max_jobs:
@@ -150,7 +165,20 @@ class Scheduler(object):
                 return
             self._add_job(exec_queue, job)
 
+    def _handle_error(self, job, error, error_str, exec_queue):
+        pypeliner.helpers.log_event(
+            ['job_name', job.displayname, error_str, error],
+            extras={'job_name': job.displayname, 'task_name': job.id[1], "status": 'error'},
+            logger=self._logger
+        )
+        if self._retry_job(exec_queue, job):
+            return
+        else:
+            raise pypeliner.graph.IncompleteJobException()
+
+
     def _wait_next_job(self, exec_queue, workflow):
+
         name = exec_queue.wait()
 
         job = self._active_jobs[name]
@@ -160,41 +188,47 @@ class Scheduler(object):
 
         try:
             received = exec_queue.receive(name)
-        except pypeliner.execqueue.base.ReceiveError as e:
-            self._logger.error('job ' + job.displayname + ' submit error\n' + traceback.format_exc(),
-                               extra={"id": job.displayname, "type":"job", "submit_error": traceback.format_exc(), 'task_name': job.id[1]})
-            received = None
+            if not received.finished:
+                raise IncompleteJobException()
+            received.collect_logs()
+        except pypeliner.execqueue.base.ReceiveError:
+            self._handle_error(job, traceback.format_exc(), "submit error\n", exec_queue)
+        except IncompleteJobException:
+            self._handle_error(job, received.log_text(), "failed to complete\n", exec_queue)
+        except Exception:
+            self._handle_error(job, traceback.format_exc(), 'collect logs error\n', exec_queue)
 
-        if received is not None and job.id != received.id:
-            raise Exception('job id {} doenst match received id {}'.format(job.id, received.id))
+        if job.id != received.id:
+            raise JobIdMismatchError('job id {} doenst match received id {}'.format(job.id, received.id))
 
-        if received is not None:
-            try:
-                received.collect_logs()
-            except Exception as e:
-                self._logger.error('job ' + job.displayname + ' collect logs error\n' + traceback.format_exc(),
-                                   extra={"id": job.displayname, "type":"job", "status":"error", 'task_name': job.id[1]})
-            if received.finished:
-                self._logger.info('job ' + job.displayname + ' completed successfully',
-                                  extra={"id": job.displayname, "type":"job", "status": "success", 'task_name': job.id[1]})
-            else:
-                self._logger.error('job ' + job.displayname + ' failed to complete\n' + received.log_text(),
-                                   extra={"id": job.displayname, "type":"job", "status": "fail", 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' -> ' + received.displaycommand,
-                              extra={"id": job.displayname, "type":"job", "cmd": received.displaycommand, 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' time ' + str(received.duration) + 's',
-                              extra={"id": job.displayname, "type":"job", "time": received.duration, 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' memory ' + str(received.memoryused) + 'G',
-                              extra={"id": job.displayname, "type":"job", "memory": received.memoryused, 'task_name': job.id[1]})
-            self._logger.info('job ' + job.displayname + ' host name ' + str(received.hostname),
-                              extra={"id": job.displayname, "type":"job", "hostname": received.hostname, 'task_name': job.id[1]})
+        pypeliner.helpers.log_event(
+            ['job_name', job.displayname, "completed successfully"],
+            extras={'job_name': job.displayname, 'task_name': job.id[1], "status": 'success'},
+            logger=self._logger
+        )
 
-        if received is None or not received.finished:
-            if self._retry_job(exec_queue, job):
-                return
-            else:
-                raise pypeliner.graph.IncompleteJobException()
+        pypeliner.helpers.log_event(
+            {'job_name': job.displayname, 'command': received.displaycommand},
+            extras={'task_name': job.id[1]},
+            logger=self._logger
+        )
+
+        pypeliner.helpers.log_event(
+            {'job_name': job.displayname, 'time': str(received.duration) + 's'},
+            extras={'task_name': job.id[1]},
+            logger=self._logger
+        )
+
+        pypeliner.helpers.log_event(
+            {'job_name': job.displayname, 'memory': str(received.memoryused) + 'G'},
+            extras={'task_name': job.id[1]},
+            logger=self._logger
+        )
+
+        pypeliner.helpers.log_event(
+            {'job_name': job.displayname, 'host_name': received.hostname},
+            extras={'task_name': job.id[1]},
+            logger=self._logger
+        )
 
         received.finalize(job)
-
-

@@ -1,5 +1,4 @@
 import sys
-
 _pypeliner_internal_global_state = {}
 
 from ._version import get_versions

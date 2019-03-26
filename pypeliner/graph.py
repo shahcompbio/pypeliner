@@ -6,32 +6,41 @@ import itertools
 import logging
 import collections
 import fnmatch
+import logging
 
 import pypeliner.helpers
 import pypeliner.identifiers
 import pypeliner.workflow
 
+
 class IncompleteJobException(Exception):
     pass
+
 
 class AmbiguousInputException(Exception):
     def __init__(self, id):
         self.id = id
+
     def __str__(self):
         return 'temp input {0} not created by any job'.format(self.id)
+
 
 class AmbiguousOutputException(Exception):
     def __init__(self, output, jobs):
         self.output = output
         self.jobs = jobs
+
     def __str__(self):
         return 'output {0} created by jobs {1}'.format(self.output, ' and '.join([str(j) for j in self.jobs]))
+
 
 class DependencyCycleException(Exception):
     def __init__(self, cycle):
         self.cycle = cycle
+
     def __str__(self):
         return 'dependency cycle {0}'.format(self.cycle)
+
 
 class NoJobs(Exception):
     pass
@@ -264,6 +273,7 @@ class WorkflowInstance(object):
         self.ctx = workflow_def.ctx
         if ctx:
             self.ctx.update(ctx)
+
     def regenerate(self):
         """ Regenerate dependency graph based on job instances.
         """
@@ -318,7 +328,6 @@ class WorkflowInstance(object):
         job.runskip_request = runskip
         return job
 
-
     def pop_next_job(self):
         """ Pop the next job from the top of this or a subgraph.
         """
@@ -341,14 +350,14 @@ class WorkflowInstance(object):
             is_run_required, explaination = self.runskip(job)
             self._logger.info(
                 'job ' + job.displayname + ' run: ' + str(is_run_required) + ' explanation: ' + explaination,
-                extra={"id": job.displayname, "type":"job", "explanation":explaination, 'task_name': job.id[1]})
+                extra={"id": job.displayname, "type": "job", "explanation": explaination, 'task_name': job.id[1]})
             if is_run_required:
                 return job
             else:
                 self.complete_job(job)
                 self._logger.info(
                     'job ' + job.displayname + ' skipped',
-                    extra={"id": job.displayname, "type":"job", "status": "skipped", 'task_name': job.id[1]})
+                    extra={"id": job.displayname, "type": "job", "status": "skipped", 'task_name': job.id[1]})
 
     def notify_completed(self, job_id):
         self.graph.notify_completed(job_id)

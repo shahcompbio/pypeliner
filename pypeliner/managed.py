@@ -36,11 +36,16 @@ class JobArgMismatchException(Exception):
         self.axes = axes
         self.node = node
         self.job_name = 'unknown'
+
     def __str__(self):
-        return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(self.name, self.axes, self.job_name, tuple(a[0] for a in self.node))
+        return 'arg {0} with axes {1} does not match job {2} with axes {3}'.format(
+            self.name, self.axes, self.job_name, tuple(a[0] for a in self.node)
+        )
+
 
 class Managed(object):
     """ Interface class used to represent a managed data """
+
     def __init__(self, name, *axes, **kwargs):
         if name is not None and type(name) != str:
             raise ValueError('name of argument must be string')
@@ -49,9 +54,10 @@ class Managed(object):
         self.name = name
         self.axes = axes
         self.kwargs = kwargs
+
     def create_arg(self, job):
 
-        #add cleanup as arg to override tempspace's cleanup option
+        # add cleanup as arg to override tempspace's cleanup option
         if job.workflow.cleanup is not None and not job.workflow.cleanup:
             self.kwargs["cleanup"] = job.workflow.cleanup
 
@@ -62,12 +68,19 @@ class Managed(object):
             common += 1
         axes_specific = self.axes[common:]
         if len(axes_specific) == 0 and self.normal is not None:
-            arg = self.normal(job.db, self.name, job.node[:common], direct_write=job.direct_write, store_dir = job.store_dir, **self.kwargs)
+            arg = self.normal(
+                job.db, self.name, job.node[:common], direct_write=job.direct_write,
+                store_dir=job.store_dir, **self.kwargs
+            )
         elif len(axes_specific) > 0 and self.splitmerge is not None:
-            arg = self.splitmerge(job.db, self.name, job.node[:common], axes_specific, direct_write=job.direct_write, store_dir = job.store_dir, **self.kwargs)
+            arg = self.splitmerge(
+                job.db, self.name, job.node[:common], axes_specific,
+                direct_write=job.direct_write, store_dir=job.store_dir, **self.kwargs
+            )
         else:
             raise JobArgMismatchException(self.name, self.axes, job.node)
         return arg
+
 
 class Template(Managed):
     """ Represents a name templated by axes 
@@ -89,6 +102,7 @@ class Template(Managed):
     normal = pypeliner.arguments.TemplateArg
     splitmerge = pypeliner.arguments.MergeTemplateArg
 
+
 class TempSpace(Managed):
     """ Represents a temporary file or directory that is not a dependency
 
@@ -106,6 +120,7 @@ class TempSpace(Managed):
     """
     normal = pypeliner.arguments.TempSpaceArg
     splitmerge = None
+
 
 class InputFile(Managed):
     """ Interface class used to represent a user specified managed file input
@@ -131,6 +146,7 @@ class InputFile(Managed):
     normal = pypeliner.arguments.InputFileArg
     splitmerge = pypeliner.arguments.MergeFileArg
 
+
 class OutputFile(Managed):
     """ Interface class used to represent a user specified managed file output
 
@@ -155,22 +171,29 @@ class OutputFile(Managed):
     normal = pypeliner.arguments.OutputFileArg
     splitmerge = pypeliner.arguments.SplitFileArg
 
+
 class File(Managed):
     """ Interface class used to represent a user specified managed file
 
     """
+
     def as_input(self):
         return InputFile(self.name, *self.axes, **self.kwargs)
+
     def as_output(self):
         return OutputFile(self.name, *self.axes, **self.kwargs)
+
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
+
 
 class _PropGet(object):
     def __init__(self, prop_name):
         self.prop_name = prop_name
+
     def __call__(self, a):
         return getattr(a, self.prop_name)
+
 
 class TempInputObj(Managed):
     """ Interface class used to represent a managed object input
@@ -188,6 +211,7 @@ class TempInputObj(Managed):
     """
     normal = pypeliner.arguments.TempInputObjArg
     splitmerge = pypeliner.arguments.TempMergeObjArg
+
     def prop(self, prop_name):
         """
         Resolve to a property of the object instead of the object itself.
@@ -195,6 +219,7 @@ class TempInputObj(Managed):
         :param name: The name of the property.
         """
         return TempInputObjExtract(self.name, self.axes, _PropGet(prop_name))
+
     def extract(self, func):
         """
         Resolve to the return value of the given function called on the object
@@ -210,6 +235,7 @@ class TempInputObj(Managed):
             performs a fixed calculation.
         """
         return TempInputObjExtract(self.name, self.axes, func)
+
 
 class TempOutputObj(Managed):
     """ Interface class used to represent a managed object output
@@ -234,25 +260,32 @@ class TempOutputObj(Managed):
     normal = pypeliner.arguments.TempOutputObjArg
     splitmerge = pypeliner.arguments.TempSplitObjArg
 
+
 class TempInputObjExtract(Managed):
     """ Interface class used to represent a property of a managed
     input object """
     normal = pypeliner.arguments.TempInputObjArg
     splitmerge = pypeliner.arguments.TempMergeObjArg
+
     def __init__(self, name, axes, func):
         Managed.__init__(self, name, *axes)
         self.kwargs['func'] = func
+
 
 class TempObj(Managed):
     """ Interface class used to represent a managed object
 
     """
+
     def as_input(self):
         return TempInputObj(self.name, *self.axes, **self.kwargs)
+
     def as_output(self):
         return TempOutputObj(self.name, *self.axes, **self.kwargs)
+
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
+
 
 class TempInputFile(Managed):
     """ Interface class used to represent a managed temporary file input
@@ -270,6 +303,7 @@ class TempInputFile(Managed):
     """
     normal = pypeliner.arguments.TempInputFileArg
     splitmerge = pypeliner.arguments.TempMergeFileArg
+
 
 class TempOutputFile(Managed):
     """ Interface class used to represent a managed temporary file output
@@ -289,16 +323,21 @@ class TempOutputFile(Managed):
     normal = pypeliner.arguments.TempOutputFileArg
     splitmerge = pypeliner.arguments.TempSplitFileArg
 
+
 class TempFile(Managed):
     """ Interface class used to represent a managed temporary file
 
     """
+
     def as_input(self):
         return TempInputFile(self.name, *self.axes, **self.kwargs)
+
     def as_output(self):
         return TempOutputFile(self.name, *self.axes, **self.kwargs)
+
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
+
 
 class Instance(Managed):
     """ Interface class used to represent an input chunk associated with the
@@ -309,13 +348,17 @@ class Instance(Managed):
     Resolves to the chunk of its job's instance for a given axis.
 
     """
+
     def __init__(self, axis):
         self.axis = axis
+
     def create_arg(self, job):
         return pypeliner.arguments.InputInstanceArg(job.db, job.node, self.axis)
 
+
 class InputInstance(Instance):
     pass
+
 
 class InputChunks(Managed):
     """ Interface class used to represent an input chunk list for a specific axis
@@ -329,8 +372,10 @@ class InputChunks(Managed):
     """
     normal = None
     splitmerge = pypeliner.arguments.InputChunksArg
+
     def __init__(self, *axes):
         Managed.__init__(self, None, *axes)
+
 
 class OutputChunks(Managed):
     """ Interface class used to represent an output that defines the list of
@@ -348,19 +393,25 @@ class OutputChunks(Managed):
     """
     normal = None
     splitmerge = pypeliner.arguments.OutputChunksArg
+
     def __init__(self, *axes, **kwargs):
         Managed.__init__(self, 'chunks', *axes, **kwargs)
+
 
 class Chunks(Managed):
     """ Interface class used to represent the list of chunks for a specific axis
 
     """
+
     def as_input(self):
         return InputChunks(self.name, *self.axes, **self.kwargs)
+
     def as_output(self):
         return OutputChunks(self.name, *self.axes, **self.kwargs)
+
     def create_arg(self, job):
         raise NotImplementedError('create input or output using as_input or as_output')
+
 
 class OutputWorkflow(Managed):
     """ Interface class used to represent a workflow output

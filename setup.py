@@ -1,4 +1,5 @@
 from setuptools import setup, find_packages
+
 import versioneer
 
 setup(
@@ -18,4 +19,3 @@ setup(
                                       'aws_fetch_run=pypeliner.contrib.aws.fetch_run:main'],
                   },
 )
-

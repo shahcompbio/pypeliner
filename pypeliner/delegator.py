@@ -1,13 +1,13 @@
-import inspect
 import logging
 import os
-import dill as pickle
-import sys
-import time
-import tempfile
 import shutil
 import subprocess
+import sys
+import tempfile
+import time
 import traceback
+
+import dill as pickle
 import pypeliner.helpers
 
 
@@ -17,18 +17,22 @@ class Delegator(object):
         self.before_filename = prefix + ".before"
         self.after_filename = prefix + ".after"
         self.syspaths = [os.path.dirname(os.path.abspath(module.__file__)) for module in modules]
+
     def cleanup(self):
         pypeliner.helpers.saferemove(self.before_filename)
         pypeliner.helpers.saferemove(self.after_filename)
+
     def _waitfile(self, filename):
         waittime = 1
         while waittime < 100:
             if os.path.exists(filename):
                 return
             if waittime >= 4:
-                logging.getLogger('pypeliner.delegator').warn('waiting {0}s for {1} to appear'.format(waittime, filename))
+                logging.getLogger('pypeliner.delegator').warn(
+                    'waiting {0}s for {1} to appear'.format(waittime, filename))
             time.sleep(waittime)
             waittime *= 2
+
     def initialize(self):
         self.cleanup()
         self.job.version = pypeliner.__version__
@@ -37,6 +41,7 @@ class Delegator(object):
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
         command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
         return command
+
     def finalize(self):
         self._waitfile(self.after_filename)
         if not os.path.exists(self.after_filename):
@@ -49,6 +54,7 @@ class Delegator(object):
             for logrecord in self.job.log_records:
                 logging.getLogger().handle(logrecord)
         return self.job
+
 
 def call_external(obj):
     try:
@@ -63,8 +69,9 @@ def call_external(obj):
             if exc.errno != 2:
                 raise
 
+
 def main():
-    job_logger=None
+    job_logger = None
 
     try:
         job = None
@@ -83,6 +90,7 @@ def main():
             if os.path.exists(a) and os.path.samefile(a, os.path.dirname(__file__)):
                 return False
             return True
+
         sys.path = list(filter(not_pypeliner_path, sys.path))
         sys.path.extend(sys.argv[3:])
         with open(before_filename, 'rb') as before:
