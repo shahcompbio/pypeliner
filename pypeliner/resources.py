@@ -79,7 +79,7 @@ class Resource(Dependency):
 class UserResource(Resource):
     """ A file resource with filename and creation time if created """
 
-    def __init__(self, storage, name, node, filename, local=False, direct_write=False, extensions=None, store_dir=None):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None, store_dir=None):
         self.name = name
         self.node = node
         # Note:
@@ -92,14 +92,14 @@ class UserResource(Resource):
             self.filename = None
         else:
             self.store = storage.create_store(
-                filename, local=local, is_temp=False, direct_write=direct_write, store_dir=store_dir
+                filename, is_temp=False, direct_write=direct_write, store_dir=store_dir
             )
             self.filename = self.store.filename
             if extensions is not None:
                 for ext in extensions:
                     self.extra_stores.append(
                         storage.create_store(
-                            filename, local=local, extension=ext, is_temp=False, direct_write=direct_write,
+                            filename, extension=ext, is_temp=False, direct_write=direct_write,
                             store_dir=store_dir
                         )
                     )
@@ -132,12 +132,12 @@ class UserResource(Resource):
 class TempFileResource(Resource):
     """ A file resource with filename and creation time if created """
 
-    def __init__(self, storage, name, node, filename, local=False, direct_write=False, extensions=None, store_dir=None):
+    def __init__(self, storage, name, node, filename, direct_write=False, extensions=None, store_dir=None):
         self.name = name
         self.node = node
         self.is_temp = True
         self.store = storage.create_store(
-            filename, local=local, is_temp=True, direct_write=direct_write, store_dir=store_dir
+            filename, is_temp=True, direct_write=direct_write, store_dir=store_dir
         )
         self.filename = self.store.filename
         self.extra_stores = []
@@ -145,7 +145,7 @@ class TempFileResource(Resource):
             for ext in extensions:
                 self.extra_stores.append(
                     storage.create_store(
-                        filename, local=local, extension=ext, is_temp=False, direct_write=direct_write,
+                        filename, extension=ext, is_temp=False, direct_write=direct_write,
                         store_dir=store_dir
                     )
                 )
