@@ -35,6 +35,7 @@ class Workflow(object):
             'num_retry': 3,
             'mem_retry_factor': 2,
             'ncpus': 1,
+            'disk': 8
         }
         if parent_ctx is not None:
             self.ctx.update(parent_ctx)

@@ -561,12 +561,14 @@ class SubWorkflowInstance(JobInstance):
             # to skip subworkflow even if we dont have return object on disk as long as all
             # inputs and outputs are up to date. input_resources and output_resources are only
             # used to track whether job is up to date.
-            if isinstance(arg, pypeliner.arguments.Arg) and not \
-                    isinstance(arg, pypeliner.arguments.OutputWorkflowArg):
-                self.inputs.extend(arg.get_inputs())
-                self.outputs.extend(arg.get_outputs())
-                merge_inputs.extend(arg.get_merge_inputs())
-                split_outputs.extend(arg.get_split_outputs())
+            if not isinstance(arg, pypeliner.arguments.Arg):
+                continue
+            if isinstance(arg, pypeliner.arguments.OutputWorkflowArg):
+                continue
+            self.inputs.extend(arg.get_inputs())
+            self.outputs.extend(arg.get_outputs())
+            merge_inputs.extend(arg.get_merge_inputs())
+            split_outputs.extend(arg.get_split_outputs())
         # A dependency that is both a merge input and split output
         # is only an output
         split_output_ids = set([a.id for a in split_outputs])
