@@ -88,7 +88,6 @@ class TempSpaceArg(Arg):
             db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir=kwargs.get('store_dir'),
-            local=kwargs.get('local'),
             extensions=kwargs.get('extensions'))
         self.filename = self.resource.filename
 
@@ -155,7 +154,6 @@ class InputFileArg(Arg):
             db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir=kwargs.get('store_dir'),
-            local=kwargs.get('local'),
             extensions=kwargs.get('extensions'))
 
     def get_inputs(self):
@@ -192,7 +190,6 @@ class MergeFileArg(Arg, SplitMergeArg):
                 db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 store_dir=kwargs.get('store_dir'),
-                local=kwargs.get('local'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = []
@@ -234,7 +231,6 @@ class OutputFileArg(Arg):
             db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir=kwargs.get('store_dir'),
-            local=kwargs.get('local'),
             extensions=kwargs.get('extensions'))
 
     def get_outputs(self):
@@ -274,7 +270,6 @@ class SplitFileArg(Arg, SplitMergeArg):
                 db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 store_dir=kwargs.get('store_dir'),
-                local=kwargs.get('local'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.split_outputs = list(db.nodemgr.get_split_outputs(self.axes, self.node, subset=self.axes_origin))
@@ -457,7 +452,6 @@ class TempInputFileArg(Arg):
             db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir=kwargs.get('store_dir'),
-            local=kwargs.get('local'),
             extensions=kwargs.get('extensions'))
 
     def get_inputs(self):
@@ -491,7 +485,6 @@ class TempMergeFileArg(Arg, SplitMergeArg):
                 db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 store_dir=kwargs.get('store_dir'),
-                local=kwargs.get('local'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node))
@@ -530,7 +523,6 @@ class TempOutputFileArg(Arg):
             db.file_storage, name, node, filename,
             direct_write=kwargs.get('direct_write'),
             store_dir=kwargs.get('store_dir'),
-            local=kwargs.get('local'),
             extensions=kwargs.get('extensions'))
 
     def get_outputs(self):
@@ -570,7 +562,6 @@ class FilenameCallback(object):
             self.storage, self.name, node, filename,
             direct_write=self.kwargs.get('direct_write'),
             store_dir=self.kwargs.get('store_dir'),
-            local=self.kwargs.get('local'),
             extensions=self.kwargs.get('extensions'))
         return resource.write_filename
 
@@ -588,7 +579,6 @@ class FilenameCallback(object):
             self.storage, self.name, node, filename,
             direct_write=self.kwargs.get('direct_write'),
             store_dir=self.kwargs.get('store_dir'),
-            local=self.kwargs.get('local'),
             extensions=self.kwargs.get('extensions'))
         if len(chunks) == 1:
             self.resources[chunks[0]] = resource
@@ -636,7 +626,6 @@ class TempSplitFileArg(Arg, SplitMergeArg):
                 db.file_storage, self.name, node, filename,
                 direct_write=kwargs.get('direct_write'),
                 store_dir=kwargs.get('store_dir'),
-                local=kwargs.get('local'),
                 extensions=kwargs.get('extensions'))
             self.resources.append(resource)
         self.merge_inputs = list(db.nodemgr.get_merge_inputs(self.axes, self.node, subset=self.axes_origin))
