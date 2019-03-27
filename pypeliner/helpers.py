@@ -38,7 +38,14 @@ def log_event(info, name=None, extras=None, logger=None, level='info'):
         info = [i for keyvalue in info.iteritems() for i in keyvalue]
 
     if isinstance(info, list) or isinstance(info, tuple):
-        info = ' '.join(map(str, info))
+        parsed_info = []
+        for val in info:
+            if isinstance(val, list) or isinstance(val, tuple):
+                extras[val[0]] = val[1]
+                parsed_info.extend(list(val))
+            else:
+                parsed_info.append(val)
+        info = ' '.join(map(str, parsed_info))
 
     if level == 'warn':
         logger.warning(info, extra=extras)

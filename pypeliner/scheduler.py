@@ -122,15 +122,14 @@ class Scheduler(object):
             raise ValueError('duplicate temps directory ' + exc_dir)
         self._job_exc_dirs.add(exc_dir)
 
-        exec_log = {'job_name': job.displayname, 'status': ' executing', 'context': job.ctx}
+        exec_log = [('job_name', job.displayname), ('status', ' executing'), ('context', job.ctx)]
 
         if hasattr(job.job_def, 'sandbox'):
             if job.job_def.sandbox is not None:
                 sandbox_name = os.path.basename(job.job_def.sandbox.prefix)
             else:
                 sandbox_name = 'root'
-
-            exec_log['sandbox'] = sandbox_name
+            exec_log.append(('sandbox', sandbox_name))
 
         pypeliner.helpers.log_event(
             exec_log,
@@ -150,7 +149,7 @@ class Scheduler(object):
         if not job.retry():
             return False
         pypeliner.helpers.log_event(
-            {'job_name': job.displayname, 'retry_count': job.retry_idx},
+            [('job_name', job.displayname), ('retry_count', job.retry_idx)],
             extras={'task_name': job.id[1]},
             logger=self._logger
         )
@@ -186,9 +185,9 @@ class Scheduler(object):
 
         try:
             received = exec_queue.receive(name)
+            received.collect_logs()
             if not received.finished:
                 raise IncompleteJobException()
-            received.collect_logs()
         except pypeliner.execqueue.base.ReceiveError:
             self._handle_error(job, traceback.format_exc(), "submit error\n", exec_queue)
             return
@@ -209,25 +208,25 @@ class Scheduler(object):
         )
 
         pypeliner.helpers.log_event(
-            {'job_name': job.displayname, 'command': received.displaycommand},
+            [('job_name', job.displayname), ('command', received.displaycommand)],
             extras={'task_name': job.id[1]},
             logger=self._logger
         )
 
         pypeliner.helpers.log_event(
-            {'job_name': job.displayname, 'time': str(received.duration) + 's'},
+            [('job_name', job.displayname), ('time', str(received.duration) + 's')],
             extras={'task_name': job.id[1]},
             logger=self._logger
         )
 
         pypeliner.helpers.log_event(
-            {'job_name': job.displayname, 'memory': str(received.memoryused) + 'G'},
+            [('job_name', job.displayname), ('memory', str(received.memoryused) + 'G')],
             extras={'task_name': job.id[1]},
             logger=self._logger
         )
 
         pypeliner.helpers.log_event(
-            {'job_name': job.displayname, 'host_name': received.hostname},
+            [('job_name', job.displayname), ('host_name', received.hostname)],
             extras={'task_name': job.id[1]},
             logger=self._logger
         )
