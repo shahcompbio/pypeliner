@@ -193,6 +193,11 @@ class Scheduler(object):
             return
         except IncompleteJobException:
             self._handle_error(job, received.log_text(), "failed to complete\n", exec_queue)
+            pypeliner.helpers.log_event(
+                [('job_name', job.displayname), ('command', received.displaycommand)],
+                extras={'task_name': job.id[1]},
+                logger=self._logger
+            )
             return
         except Exception:
             self._handle_error(job, traceback.format_exc(), 'collect logs error\n', exec_queue)
