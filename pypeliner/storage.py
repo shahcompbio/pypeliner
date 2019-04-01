@@ -3,7 +3,8 @@ import datetime
 import time
 import shutil
 import importlib
-from sqlitedb import SqliteDb
+
+from pypeliner.sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.flyweight
