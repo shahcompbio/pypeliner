@@ -4,7 +4,8 @@ import itertools
 import os
 import logging
 import shutil
-from sqlitedb import SqliteDb
+
+from pypeliner.sqlitedb import SqliteDb
 
 import pypeliner.helpers
 import pypeliner.resources
