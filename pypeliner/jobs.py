@@ -1,4 +1,4 @@
-from builtins import int
+from builtins import dict, int
 
 import copy
 import os
@@ -419,7 +419,7 @@ class JobCallable(object):
                 if func == pypeliner.commandline.execute:
                     self.displaycommand = '"' + ' '.join(str(arg) for arg in callset.args) + '"'
                 else:
-                    self.displaycommand = func.__module__ + '.' + func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.iteritems()) + ')'
+                    self.displaycommand = func.__module__ + '.' + func.__name__ + '(' + ', '.join(repr(arg) for arg in callset.args) + ', ' + ', '.join(key+'='+repr(arg) for key, arg in callset.kwargs.items()) + ')'
                 self.hostname = socket.gethostname()
                 with self.job_timer, self.job_mem_tracker, self.job_time_out:
                     self.allocate()

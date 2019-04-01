@@ -5,7 +5,9 @@ import logging
 import time
 
 import pypeliner
+import pypeliner.execqueue.factory
 import pypeliner.runskip
+import pypeliner.scheduler
 import pypeliner.workflow
 import pypeliner.managed as mgd
 
@@ -494,8 +496,8 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
 
         expected_output = []
-        for file_id in xrange(1, 2+1):
-            for line in xrange(1, 8+1):
+        for file_id in range(1, 2+1):
+            for line in range(1, 8+1):
                 expected_output.append('{}{}line{}\n'.format(line-1, 'extras', line))
 
         self.assertEqual(output, expected_output)
@@ -539,7 +541,7 @@ class scheduler_test(unittest.TestCase):
             output = output_file.readlines()
 
         expected_output = []
-        for line in xrange(1, 8+1):
+        for line in range(1, 8+1):
             expected_output.append('{}3{}2{}1line{}\n'.format(line-1, line-1, line-1, line))
 
         self.assertEqual(output, expected_output)
@@ -603,7 +605,7 @@ class scheduler_test(unittest.TestCase):
 
         print ('restarting')
 
-        for name, job in workflow.job_definitions.iteritems():
+        for name, job in workflow.job_definitions.items():
             if name != 'job5':
                 job.func = 'pypeliner.tests.tasks.do_assert'
             else:

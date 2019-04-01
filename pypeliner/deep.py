@@ -1,6 +1,7 @@
 """ Reworked version of standard libary copy module for transforming
 arbitrary python objects.
 """
+from builtins import int
 
 import types
 import weakref
@@ -79,7 +80,6 @@ def _deeptransform_atomic(x, f, memo):
 d[type(None)] = _deeptransform_atomic
 d[type(Ellipsis)] = _deeptransform_atomic
 d[int] = _deeptransform_atomic
-d[long] = _deeptransform_atomic
 d[float] = _deeptransform_atomic
 d[bool] = _deeptransform_atomic
 try:

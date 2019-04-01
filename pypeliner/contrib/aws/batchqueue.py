@@ -1,4 +1,6 @@
-from __future__ import print_function
+from __future__ import absolute_import, print_function
+from builtins import dict
+
 import os
 import pickle
 import logging
@@ -9,9 +11,9 @@ import pypeliner.tests.jobs
 import pypeliner.helpers
 import pypeliner.contrib.aws.helpers as aws_helpers
 
-from objectstorage import AwsSimpleStorageService
+from .objectstorage import AwsSimpleStorageService
 
-from aws_batch import AwsBatch
+from .aws_batch import AwsBatch
 
 class AwsJobQueue(object):
     """ Azure batch job queue.
@@ -91,7 +93,7 @@ class AwsJobQueue(object):
 
         error_text = [error_text]
 
-        for debug_type, debug_filename in self.debug_filenames.iteritems():
+        for debug_type, debug_filename in self.debug_filenames.items():
             debug_filename = os.path.join(job_temp_dir, debug_filename)
 
             if not os.path.exists(debug_filename):

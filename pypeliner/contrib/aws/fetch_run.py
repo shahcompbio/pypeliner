@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 import os
 import sys
 import shutil
 import subprocess
 import pypeliner
-from objectstorage import AwsSimpleStorageService
+from .objectstorage import AwsSimpleStorageService
 
 
 def init_storage():

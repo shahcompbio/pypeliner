@@ -1,4 +1,6 @@
 from __future__ import print_function
+from builtins import dict
+
 import datetime
 import os
 import time
@@ -226,7 +228,7 @@ class AzureJobQueue(object):
             pass
 
         # Delete any previous log files locally
-        for debug_type, debug_filename in self.debug_filenames.iteritems():
+        for debug_type, debug_filename in self.debug_filenames.items():
             debug_filename = os.path.join(temps_dir, debug_filename)
             try:
                 os.remove(debug_filename)
@@ -389,7 +391,7 @@ class AzureJobQueue(object):
 
         error_text = [error_text]
 
-        for debug_type, debug_filename in self.debug_filenames.iteritems():
+        for debug_type, debug_filename in self.debug_filenames.items():
             debug_filename = os.path.join(job_temp_dir, debug_filename)
 
             if not os.path.exists(debug_filename):

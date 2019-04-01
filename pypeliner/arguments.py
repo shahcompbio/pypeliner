@@ -1,3 +1,5 @@
+from builtins import dict
+
 import os
 
 import pypeliner.helpers
@@ -244,9 +246,9 @@ class SplitFileArg(Arg,SplitMergeArg):
         return self.filename_callback
     def update(self, job):
         if self.is_split:
-            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
+            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, list(self.filename_callback.resources.keys()), subset=self.axes_origin)
     def push(self):
-        for resource in self.filename_callback.resources.itervalues():
+        for resource in self.filename_callback.resources.values():
             resource.push()
 
 
@@ -351,9 +353,9 @@ class TempSplitObjArg(Arg,SplitMergeArg):
     def resolve(self):
         return self
     def finalize(self, values):
-        self.chunks_list = values.keys()
+        self.chunks_list = list(values.keys())
         self.resources = []
-        for chunks, value in values.iteritems():
+        for chunks, value in values.items():
             if not isinstance(chunks, tuple):
                 chunks = (chunks,)
             if len(self.axes) != len(chunks):
@@ -545,9 +547,9 @@ class TempSplitFileArg(Arg,SplitMergeArg):
         return self.filename_callback
     def update(self, job):
         if self.is_split:
-            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, self.filename_callback.resources.keys(), subset=self.axes_origin)
+            job.workflow.db.nodemgr.store_chunks(self.axes, self.node, list(self.filename_callback.resources.keys()), subset=self.axes_origin)
     def push(self):
-        for resource in self.filename_callback.resources.itervalues():
+        for resource in self.filename_callback.resources.values():
             resource.push()
 
 
