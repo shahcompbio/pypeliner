@@ -266,8 +266,8 @@ class JobInstance(object):
                 retry_val = [int(i) for i in retry_val.split(':')]
                 retry_val = timedelta(hours=retry_val[0], minutes=retry_val[1])
                 val += retry_val
-            hours = str(val.seconds / 3600).zfill(2)
-            mins = str((val.seconds / 60) % 60).zfill(2)
+            hours = str(int(val.total_seconds() / 3600)).zfill(2)
+            mins = str(int((val.total_seconds() / 60) % 60)).zfill(2)
             return '{}:{}'.format(hours, mins)
         else:
             raise Exception('unknown_format')
