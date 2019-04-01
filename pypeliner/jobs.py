@@ -405,7 +405,7 @@ class JobCallable(object):
         pypeliner.helpers.GlobalState.update_all(self.pypeliner_globals)
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
-        with open(self.stdout_storage.write_filename, 'w', 0) as stdout_file, open(self.stderr_storage.write_filename, 'w', 0) as stderr_file:
+        with open(self.stdout_storage.write_filename, 'wb', 0) as stdout_file, open(self.stderr_storage.write_filename, 'wb', 0) as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
