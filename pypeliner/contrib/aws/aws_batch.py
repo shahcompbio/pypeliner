@@ -1,3 +1,5 @@
+from builtins import dict
+
 import os
 import boto3
 import time
@@ -56,7 +58,7 @@ class AwsBatch(object):
         :return: True if the dicts are same
         :rtype: bool
         """
-        keys = set(ref1.keys() + ref2.keys())
+        keys = set(list(ref1.keys()) + list(ref2.keys()))
 
         for key in keys:
             ref1val = ref1.get(key, None)
@@ -167,16 +169,16 @@ class AwsBatch(object):
         mount_config['docker'] = '/usr/bin/docker'
 
         volumes = []
-        for name, path in mount_config.iteritems():
+        for name, path in mount_config.items():
             volumes.append({'name': name, 'host': {'sourcePath': path}})
 
         mountpoints = []
-        for name, path in mount_config.iteritems():
+        for name, path in mount_config.items():
             mountpoints.append({'containerPath': path, 'sourceVolume': name, 'readOnly': False})
 
         env_vars = []
         if def_metadata['env_vars']:
-            for name, value in def_metadata['env_vars'].iteritems():
+            for name, value in def_metadata['env_vars'].items():
                 env_vars.append({'name': name, 'value': value})
 
         container_properties = {
@@ -340,7 +342,7 @@ class AwsBatch(object):
         }
 
         # boto3 doesnt accept None
-        pop_keys = [k for k, v in compute_resources.iteritems() if v is None]
+        pop_keys = [k for k, v in compute_resources.items() if v is None]
         [compute_resources.pop(k) for k in pop_keys]
 
         response = self.batch_client.create_compute_environment(
@@ -364,7 +366,7 @@ class AwsBatch(object):
         if not config:
             return
 
-        for env_name, env_params in config.iteritems():
+        for env_name, env_params in config.items():
             if env_name in existing_envs:
                 continue
             self.create_compute_environment(env_name, env_params)
@@ -623,7 +625,7 @@ class AwsBatch(object):
 
         config = config.get("compute_environments")
 
-        for env_name, env_params in config.iteritems():
+        for env_name, env_params in config.items():
             self.disable_compute_environment(env_name)
             self.delete_compute_environment(env_name)
 

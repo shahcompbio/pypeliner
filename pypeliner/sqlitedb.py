@@ -33,13 +33,13 @@ class SqliteDb(object):
             yield row[0], row[1]
 
     def keys(self):
-        return list(self.iterkeys())
+        return list(self.keys())
 
     def values(self):
-        return list(self.itervalues())
+        return list(self.values())
 
     def items(self):
-        return list(self.iteritems())
+        return list(self.items())
 
     def __contains__(self, key):
         self.c.execute('SELECT 1 FROM kv WHERE key = ?', (key,))
@@ -69,4 +69,4 @@ class SqliteDb(object):
         self.conn.commit()
 
     def __iter__(self):
-        return self.iteritems()
+        return iter(self.items())

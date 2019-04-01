@@ -91,7 +91,7 @@ def execute(*args, **docker_kwargs):
     if args.count("<") > 1 or args[0] == "<" or args[-1] == "<":
         raise ValueError("Bad redirect from file")
 
-    args = filter(lambda arg: arg != '', args)
+    args = [arg for arg in args if arg != '']
     args = list(str(arg) for arg in args)
     command_list = list(_split_list(args, "|"))
 

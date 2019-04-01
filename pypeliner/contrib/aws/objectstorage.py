@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import os
 import datetime
 import time
@@ -6,7 +8,7 @@ import pypeliner.helpers
 import pypeliner.storage
 import pypeliner.flyweight
 
-from aws_storage import AwsSimpleStorageService
+from .aws_storage import AwsSimpleStorageService
 
 import pypeliner.contrib.aws.helpers as aws_helpers
 

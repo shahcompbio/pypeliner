@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import argparse
 import os
 import logging
@@ -38,7 +40,7 @@ def run_basic(exec_queue, base_temps_dir):
 
 
 if __name__ == '__main__':
-    import test_queue
+    from . import test_queue
 
     argparser = argparse.ArgumentParser()
 

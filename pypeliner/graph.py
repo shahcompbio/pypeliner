@@ -1,3 +1,5 @@
+from builtins import dict
+
 import os
 import networkx
 import itertools
@@ -307,7 +309,7 @@ class WorkflowInstance(object):
             return job
 
         contexts = context_config.get('context', {})
-        for _,inpctx in contexts.iteritems():
+        for _,inpctx in contexts.items():
             if fnmatch.fnmatch(job_displayname, inpctx["name_match"]):
                 job_ctx.update(inpctx.get("ctx", {}))
                 runskip = inpctx.get("runskip")

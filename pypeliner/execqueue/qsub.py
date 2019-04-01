@@ -1,3 +1,5 @@
+from builtins import dict
+
 import os
 import logging
 import subprocess
@@ -126,7 +128,7 @@ class AsyncQsubJob(object):
         self.debug_filenames['submit stderr'] = os.path.join(temps_dir, 'submit.err')
         self.debug_filenames['qacct stdout'] = os.path.join(temps_dir, 'qacct.out')
         self.debug_filenames['qacct stderr'] = os.path.join(temps_dir, 'qacct.err')
-        for filename in self.debug_filenames.itervalues():
+        for filename in self.debug_filenames.values():
             pypeliner.helpers.saferemove(filename)
 
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
@@ -216,7 +218,7 @@ class AsyncQsubJob(object):
             error_text += ['memory consumed: ' + self.qacct.results['maxvmem']]
             error_text += ['job exit status: ' + self.qacct.results['exit_status']]
 
-        for debug_type, debug_filename in self.debug_filenames.iteritems():
+        for debug_type, debug_filename in self.debug_filenames.items():
             if not os.path.exists(debug_filename):
                 error_text += [debug_type + ': missing']
                 continue
@@ -247,7 +249,7 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.local_queue.__exit__(exc_type, exc_value, traceback)
-        for job in self.jobs.itervalues():
+        for job in self.jobs.values():
             job.delete()
 
     def create(self, ctx, name, sent, temps_dir):
@@ -267,7 +269,7 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
                 if name is not None:
                     self.name_islocal[name] = True
                     return name
-            for name, job in self.jobs.iteritems():
+            for name, job in self.jobs.items():
                 if job.finished:
                     return name
             self.qstat.update()

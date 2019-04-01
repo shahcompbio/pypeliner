@@ -1,3 +1,5 @@
+from builtins import dict
+
 import itertools
 import os
 import time
@@ -73,7 +75,7 @@ def dict_arg_stuff(output_filenames, input_filenames):
 
 def merge_stuff(stfs):
     merged = ''
-    for split, stf in sorted(stfs.iteritems()):
+    for split, stf in sorted(stfs.items()):
         merged = merged + stf
     return merged
 
@@ -114,7 +116,7 @@ def file_transform(in_filename, out_filename, prefix, template_filename, merge_t
     with open(template_filename, 'w'):
         pass
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
-        for key, value in merge_templates.iteritems():
+        for key, value in merge_templates.items():
             out_file.write('{0}\t{1}\n'.format(key, value))
         for line in in_file:
             out_file.write('{0}'.format(prefix) + line)

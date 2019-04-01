@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from builtins import dict
+
 import os
 import re
 import uuid
@@ -11,7 +14,7 @@ from os.path import expanduser
 import pypeliner
 import pypeliner.helpers
 from pypeliner.helpers import Backoff
-from rabbitmq import RabbitMqSemaphore
+from .rabbitmq import RabbitMqSemaphore
 
 import azure.batch.batch_service_client as batch
 import azure.storage.blob as azureblob
@@ -140,7 +143,7 @@ def get_biggest_pool(poolinfos):
 
     biggestpool=None
 
-    for poolid, poolinfo in poolinfos.iteritems():
+    for poolid, poolinfo in poolinfos.items():
         memory = poolinfo['mem_per_task']
         cpus = poolinfo['cpus_per_task']
         disk = poolinfo['disk_per_task']
@@ -174,7 +177,7 @@ def find_pool(poolinfos,  ctx):
 
     pools = []
 
-    for poolid, poolinfo in poolinfos.iteritems():
+    for poolid, poolinfo in poolinfos.items():
         memory = poolinfo['mem_per_task']
         cpus = poolinfo['cpus_per_task']
         disk = poolinfo['disk_per_task']
@@ -394,7 +397,7 @@ def get_vm_image_and_node_agent_sku(
 
 
 def create_commands(commands_str):
-    return filter(lambda a: len(a) > 0, commands_str.split('\n'))
+    return [a for a in commands_str.split('\n') if len(a) > 0]
 
 
 def generate_blob_url(blob_client, container_name, blob_name):
@@ -431,13 +434,13 @@ def create_pool(batch_service_client, blob_client, pool_id, config):
     data_disks = None
     if config['data_disk_sizes']:
         data_disks = []
-        for i, disk_size in config['data_disk_sizes'].iteritems():
+        for i, disk_size in config['data_disk_sizes'].items():
             data_disks.append(batchmodels.DataDisk(i, disk_size))
 
     resource_files = []
 
     if config['start_resources']:
-        for vm_file_name, blob_path in config['start_resources'].iteritems():
+        for vm_file_name, blob_path in config['start_resources'].items():
             container_name, blob_name = get_container_and_blob_path(blob_path)
             res_url = generate_blob_url(blob_client, container_name, blob_name)
             resource_files.append(
