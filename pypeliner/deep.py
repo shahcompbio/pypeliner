@@ -1,8 +1,6 @@
 """ Reworked version of standard libary copy module for transforming
 arbitrary python objects.
 """
-from builtins import int
-
 import types
 import weakref
 import sys
