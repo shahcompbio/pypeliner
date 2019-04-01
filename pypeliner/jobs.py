@@ -162,7 +162,7 @@ class JobInstance(object):
             newest_input_date = None
         try:
             oldest_output_date = min(output_dates)
-        except ValueError:
+        except (TypeError, ValueError) as e:
             oldest_output_date = None
         if len(input_dates) == 0 and len(output_dates) == 0:
             explanation = ['no inputs/outputs: always run']
