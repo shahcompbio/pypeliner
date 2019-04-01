@@ -1,3 +1,5 @@
+from builtins import range
+
 import collections
 import errno
 import itertools
@@ -61,12 +63,12 @@ class NodeManager(object):
         chunks = [_convert_tuple(a) for a in chunks]
         if len(axes) != len(chunks[0]):
             raise ValueError('for multiple axis, chunks must be a tuple of the same length')
-        for level in xrange(len(axes)):
+        for level in range(len(axes)):
             if level not in subset:
                 continue
             for pre_chunks, level_chunks in itertools.groupby(sorted(chunks), lambda a: a[:level]):
                 level_node = node
-                for idx in xrange(level):
+                for idx in range(level):
                     level_node += pypeliner.identifiers.AxisInstance(axes[idx], pre_chunks[idx])
                 level_chunks = set([a[level] for a in level_chunks])
                 self.store_axis_chunks(axes[level], level_node, level_chunks)
@@ -95,7 +97,7 @@ class NodeManager(object):
         if 0 in subset:
             filename = self.db.get_temp_filename(axes[0], node)
             yield pypeliner.resources.TempObjManager(self.db.file_storage, axes[0], node, filename)
-        for level in xrange(1, len(axes)):
+        for level in range(1, len(axes)):
             if level not in subset:
                 continue
             for level_node in self.retrieve_nodes(axes[:level], base_node=node):
