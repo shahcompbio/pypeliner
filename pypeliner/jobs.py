@@ -1,3 +1,5 @@
+from builtins import int
+
 import copy
 import os
 import sys
@@ -220,7 +222,7 @@ class JobInstance(object):
         pypeliner.helpers.makedirs(exc_dir)
         return exc_dir
     def update_ctx_value(self, retry_val, val, by_factor=False):
-        if isinstance(val, (int, long, float, complex)):
+        if isinstance(val, (int, float, complex)):
             if by_factor:
                 return val * retry_val
             else:
@@ -231,7 +233,7 @@ class JobInstance(object):
             val = datetime.datetime.strptime(val, "%H:%M")
             val = timedelta(hours=val.hour, minutes=val.minute, seconds=val.second)
             if by_factor:
-                assert isinstance(retry_val, (int, long, float)),\
+                assert isinstance(retry_val, (int, float)),\
                     "retry_factor for time should be an integer or float"
                 val *= retry_val
             else:
