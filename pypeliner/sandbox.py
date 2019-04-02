@@ -22,11 +22,13 @@ class CondaSandbox(object):
         self.prefix = None
         self.logger = logging.getLogger('pypeliner.sandbox')
 
+    @property
+    def config(self):
+        return {'channels': self.channels, 'packages': self.packages, 'pip_packages': self.pip_packages}
+
     def _get_prefix(self):
-        m = hashlib.sha256()
-        m.update(str(tuple(self.channels)).encode())
-        m.update(str(frozenset(self.packages)).encode())
-        m.update(str(frozenset(self.pip_packages)).encode())
+        m = hashlib.md5()
+        m.update(yaml.dump(self.config).encode())
         return m.hexdigest()
 
     def create_conda_env(self, env_dir):
@@ -43,10 +45,7 @@ class CondaSandbox(object):
         self._write_log()
         self._run_conda()
         with open(env_config_file, 'w') as out_fh:
-            yaml.dump(
-                {'channels': self.channels, 'packages': self.packages, 'pip_packages': self.pip_packages},
-                out_fh
-            )
+            yaml.dump(self.config, out_fh)
         return True
 
     def wrap_function(self, func):
