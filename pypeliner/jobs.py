@@ -160,11 +160,11 @@ class JobInstance(object):
         output_dates = [output.createtime for output in self.output_resources]
         try:
             newest_input_date = max(input_dates)
-        except ValueError:
+        except (TypeError, ValueError):
             newest_input_date = None
         try:
             oldest_output_date = min(output_dates)
-        except (TypeError, ValueError) as e:
+        except (TypeError, ValueError):
             oldest_output_date = None
         if len(input_dates) == 0 and len(output_dates) == 0:
             explanation = ['no inputs/outputs: always run']
