@@ -1,4 +1,5 @@
 import functools
+import hashlib
 import logging
 import pypeliner.commandline as cli
 import os
@@ -21,11 +22,15 @@ class CondaSandbox(object):
         self.prefix = None
         self.logger = logging.getLogger('pypeliner.sandbox')
 
-    def __hash__(self):
-        return hash((tuple(self.channels), frozenset(self.packages), frozenset(self.pip_packages)))
+    def _get_prefix(self):
+        m = hashlib.sha256()
+        m.update(str(tuple(self.channels)).encode())
+        m.update(str(frozenset(self.packages)).encode())
+        m.update(str(frozenset(self.pip_packages)).encode())
+        return m.hexdigest()
 
     def create_conda_env(self, env_dir):
-        self.prefix = os.path.join(env_dir, str(hash(self)))
+        self.prefix = os.path.join(env_dir, self._get_prefix())
         env_config_file = os.path.join(self.prefix, 'sandbox_config.yaml')
         # TODO: Probably want some error checking on packages etc.
         if os.path.exists(self.prefix):
