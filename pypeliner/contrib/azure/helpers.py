@@ -287,7 +287,7 @@ def get_task_id(name, azure_task_name_max_len=64):
     # last few characters are more useful for identifying tasks
     name = name[-leftover_space:]
 
-    name = '-'.join(re.split('[:/]', name))
+    name = '-'.join(re.split('[:/?]', name))
 
     name = "{}-{}".format(uniq_string, name)
 
