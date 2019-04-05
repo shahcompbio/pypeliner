@@ -66,8 +66,8 @@ class RegularFile(object):
         # if sentinal only flag is set then pull create time from database too
         # to avoid hitting filesystem. this will cause issues if files
         # are deleted after pipeline run and before rerun
-        sentinal_only = pypeliner.helpers.GlobalState.get('sentinal_only')
-        if sentinal_only:
+        sentinel_only = pypeliner.helpers.GlobalState.get('sentinel_only')
+        if sentinel_only:
             createtime = self.createtime_save.get()
         else:
             createtime = self.createtime_cache.get()

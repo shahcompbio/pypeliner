@@ -78,7 +78,7 @@ by calling :py:func:`pypeliner.app.add_arguments` on an
         Run the pipeline in interactive mode, prompting at each step as to whether the job
         should be rerun.
 
-    sentinal_only
+    sentinel_only
         Run the pipeline in sentinal only mode, no time stamp checking on files for out
         of date status of jobs, rerun jobs based on whether they have already been
         run.
@@ -127,7 +127,7 @@ config_infos.append(ConfigInfo('repopulate', bool, False, 'recreate all temporar
 config_infos.append(ConfigInfo('rerun', bool, False, 'rerun the pipeline'))
 config_infos.append(ConfigInfo('nocleanup', bool, False, 'do not automatically clean up temporaries'))
 config_infos.append(ConfigInfo('interactive', bool, False, 'run in interactive mode'))
-config_infos.append(ConfigInfo('sentinal_only', bool, False, 'no timestamp checks, sentinal only'))
+config_infos.append(ConfigInfo('sentinel_only', bool, False, 'no timestamp checks, sentinal only'))
 config_infos.append(ConfigInfo('context_config', str, None, 'container registry credentials and job context overrides'))
 
 config_defaults = dict([(info.name, info.default) for info in config_infos])
@@ -240,9 +240,9 @@ class Pypeline(object):
         self.sch.max_jobs = int(self.config['maxjobs'])
         self.sch.cleanup = not self.config['nocleanup']
         pypeliner.helpers.GlobalState.set('context_config', load_config(self.config['context_config']))
-        pypeliner.helpers.GlobalState.set('sentinal_only', self.config['sentinal_only'])
+        pypeliner.helpers.GlobalState.set('sentinel_only', self.config['sentinel_only'])
 
-        if self.config['sentinal_only']:
+        if self.config['sentinel_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(
                 rerun=self.config['rerun'])
         else:
