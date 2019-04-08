@@ -11,6 +11,7 @@ requirements:
     - python 2.7*
     - dill
     - networkx
+    - future
     - pyyaml
 
   run:
@@ -19,6 +20,7 @@ requirements:
     - dill
     - pyyaml
     - nose
+    - future
 
 test:
   imports:
