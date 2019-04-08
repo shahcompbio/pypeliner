@@ -28,6 +28,7 @@ Contents:
    concepts
    tutorial
    api
+   azure
 
 
 Indices and tables
