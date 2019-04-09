@@ -1,5 +1,3 @@
-from builtins import dict
-
 import itertools
 import os
 import time

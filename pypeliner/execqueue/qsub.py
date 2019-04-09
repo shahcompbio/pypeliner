@@ -1,5 +1,3 @@
-from builtins import dict
-
 import os
 import logging
 import subprocess

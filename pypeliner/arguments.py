@@ -1,5 +1,3 @@
-from builtins import dict
-
 import os
 
 import pypeliner.helpers

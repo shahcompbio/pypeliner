@@ -1,5 +1,3 @@
-from builtins import dict
-
 import os
 import boto3
 import time
