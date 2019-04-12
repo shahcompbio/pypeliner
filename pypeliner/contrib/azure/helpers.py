@@ -198,7 +198,7 @@ def find_pool(poolinfos,  ctx):
         warn_str = \
             "Could not find a pool to satisfy job requirements. " \
             "requested mem:{} cpus:{} dedicated: {}." \
-            " submitting to ".format(
+            " submitting to {}".format(
                 memory_req_per_task, cpus_req, dedicated, biggestpool)
         logging.getLogger('pypeliner.execqueue.azure_batch').warn(warn_str)
         return biggestpool
