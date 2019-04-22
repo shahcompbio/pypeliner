@@ -140,6 +140,8 @@ class AzureBlobStorage(object):
         storage_account = filename[0]
         container_name = filename[1]
         filename = '/'.join(filename[2:])
+        if filename.startswith('/'):
+            filename = filename[1:]
         return storage_account, container_name, filename
 
     def push(self, blob_name, filename, createtime):
