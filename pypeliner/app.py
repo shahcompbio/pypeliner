@@ -185,7 +185,7 @@ class Pypeline(object):
                    :py:mod:`pypeliner.app` for available options.
 
     The Pipeline class sets up logging, creates an execution queue, and creates
-    the scheduler with options provided by the conifg argument.
+    the scheduler with options provided by the config argument.
 
     """
 
@@ -207,6 +207,7 @@ class Pypeline(object):
         self.pipeline_log_filename = os.path.join(self.logs_dir, 'pipeline.log')
         pypeliner.helpers.makedirs(self.logs_dir)
         pypeliner.helpers.symlink(self.logs_dir, os.path.join(self.config['pipelinedir'], 'log', 'latest'))
+
         logging.basicConfig(level=logging.DEBUG, filename=self.pipeline_log_filename, filemode='a')
         console = logging.StreamHandler()
         console.setLevel(self.config['loglevel'])

@@ -1,5 +1,5 @@
 import logging
-import pickle
+import dill as pickle
 
 import pypeliner.identifiers
 
@@ -239,5 +239,12 @@ class TempObjManager(object):
 
     def finalize(self, obj):
         self.output.put_obj(obj)
-        if not self.input.exists or not obj_equal(obj, self.get_obj()):
+
+        try:
+            existing_obj = self.get_obj()
+        except ImportError:
+            self.input.put_obj(obj)
+            return
+
+        if not self.input.exists or not obj_equal(obj, existing_obj):
             self.input.put_obj(obj)
