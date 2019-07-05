@@ -1,5 +1,3 @@
-from builtins import int
-
 import copy
 import datetime
 import os

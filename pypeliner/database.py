@@ -1,5 +1,3 @@
-from builtins import range
-
 import collections
 import errno
 import itertools
