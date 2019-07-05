@@ -54,9 +54,11 @@ class PatternMatcher(object):
     def add(self, key, match):
         self._patterns.append((key, match))
 
-    def print_patterns(self):
+    def get_patterns_str(self):
+        patterns = []
         for key, match in self._patterns:
-            print (key, match)
+            patterns.append('{} {}'.format(key, match))
+        return '\n'.join(patterns)
 
 
 class RunSkipCmd(cmd.Cmd):
@@ -149,5 +151,5 @@ class InteractiveRunSkip(object):
                 raise Exception('failed to obtain user input')
 
     def close(self):
-        print ('run skip commands:')
-        self.patterns.print_patterns()
+        self._logger.info('run skip commands:\n' + self.patterns.get_patterns_str())
+
