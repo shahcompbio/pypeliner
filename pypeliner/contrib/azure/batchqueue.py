@@ -202,6 +202,7 @@ class AzureJobQueue(object):
                 azurejob = self.mapping_from_tasks_to_job[task]
                 self.logger.debug(
                     "waiting for task {} with name {} running under job {}".format(task, name, azurejob))
+                self.batch_client.check_for_missing_node(azurejob, task)
 
             self.logger.warn(
                 "Tasks did not reach 'Completed' state within timeout period of " +

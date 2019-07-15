@@ -507,8 +507,8 @@ class BlobStorageClient(object):
         :type container_uri: str
         :param prefix: list blobs that start with this prefix only
         :type prefix: str
-        :return: list of blobs
-        :rtype: list
+        :return: generator to list the blobs
+        :rtype: generator
         """
         container_name = self.__parse_container_args(container_uri, container_name)
         container_blobs = self.blob_client.list_blobs(

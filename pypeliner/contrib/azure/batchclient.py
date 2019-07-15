@@ -20,6 +20,10 @@ from .blobclient import BlobStorageClient
 KnownProfiles.default.use(KnownProfiles.latest)
 
 
+class AzureBatchPoolError(Exception):
+    pass
+
+
 class AzureLoggingFilter(logging.Filter):
     def __init__(self):
         self.filter_keywords = [
@@ -425,9 +429,12 @@ class BatchClient(object):
         :return: name of node (azure affinity id)
         :rtype: str
         """
-        hostname = self.batch_client.task.get(
+        node_info = self.batch_client.task.get(
             job_id,
-            task_id).node_info.node_id
+            task_id).node_info
+        if not node_info:
+            return
+        hostname = node_info.node_id
         return hostname
 
     def get_job_id(self, pool_id):
@@ -780,4 +787,26 @@ class BatchClient(object):
             output_filename=job_after_file_path)
 
         return command
+
+    def check_for_missing_node(self, job_id, task_id):
+        node = self.get_node_id_for_task(job_id, task_id)
+        pool = self.get_pool_id_from_job(job_id)
+
+        if not node:
+            logging.debug(
+                'task {} under job {} and in pool {} '
+                'has not been scheduled on a node yet!'.format(
+                    task_id, job_id, pool
+                )
+            )
+        else:
+            status = self.__get_node_status(pool, node)
+
+            if status not in self.healthy_states:
+                logging.debug(
+                    'task {} under job {} and in pool {} was scheduled '
+                    'on node {} which is now in {} state'.format(
+                        task_id, job_id, pool, node, status
+                    )
+                )
 
