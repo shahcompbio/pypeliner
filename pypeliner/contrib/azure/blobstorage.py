@@ -1,43 +1,35 @@
-import os
 import datetime
+import os
 import time
 
+import pypeliner.flyweight
 import pypeliner.helpers
 import pypeliner.storage
-import pypeliner.flyweight
-import azure.storage.blob
-import azure.common
 
-import pypeliner.contrib.azure.helpers as azure_helpers
-
-
-class BlobMissing(Exception):
-    pass
+from .blobclient import BlobStorageClient, BlobMissing
 
 
 class AzureBlob(object):
     def __init__(self, storage, filename, **kwargs):
         self.storage = storage
-        if filename.startswith('/'):
-            filename = filename[1:]
         store_dir = kwargs.get("store_dir")
         extension = kwargs.get("extension")
         direct_write = kwargs.get("direct_write", False)
 
-        self.blob_name = azure_helpers.get_blob_name(filename)
-        if extension:
-            self.blob_name += extension
-        self.write_filename = filename + ('.tmp', '')[direct_write]
         self.filename = filename
+        self.blob_name = filename
+        self.write_filename = filename + ('.tmp', '')[direct_write]
 
-        self.createtime_cache = storage.create_createtime_cache(self.blob_name)
+        if extension:
+            self.filename += extension
+            self.blob_name += extension
+            self.write_filename += extension
 
-        if extension is not None:
-            self.filename = filename + extension
-            self.write_filename = self.write_filename + extension
         if store_dir and not direct_write:
             self.filename = os.path.join(store_dir, self.filename)
             self.write_filename = os.path.join(store_dir, self.write_filename)
+
+        self.createtime_cache = storage.create_createtime_cache(self.blob_name)
 
     def allocate(self):
         pypeliner.helpers.makedirs(os.path.dirname(self.filename))
@@ -47,7 +39,12 @@ class AzureBlob(object):
             os.rename(self.write_filename, self.filename)
         except OSError:
             raise pypeliner.storage.OutputMissingException(self.write_filename)
-        create_time = datetime.datetime.fromtimestamp(os.path.getmtime(self.filename)).strftime('%Y/%m/%d-%H:%M:%S')
+
+        create_time = datetime.datetime.fromtimestamp(
+            os.path.getmtime(self.filename)
+        )
+        create_time = create_time.strftime('%Y/%m/%d-%H:%M:%S')
+
         self.storage.push(self.blob_name, self.filename, create_time)
         self.createtime_cache.set(create_time)
 
@@ -83,7 +80,6 @@ class AzureBlob(object):
 
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
-        azure_helpers.set_azure_logging_filters()
         self.rabbitmq_username = os.environ.get("RABBITMQ_USERNAME", None)
         self.rabbitmq_password = os.environ.get("RABBITMQ_PASSWORD", None)
         self.rabbitmq_ipaddress = os.environ.get("RABBITMQ_IP", None)
@@ -101,12 +97,19 @@ class AzureBlobStorage(object):
         client = getattr(self, "blob_client", None)
         if client and client.account_name == storage_account_name:
             return
-        storage_account_key = azure_helpers.get_storage_account_key(
-            storage_account_name, self.client_id, self.secret_key,
-            self.tenant_id, self.keyvault_account)
-        self.blob_client = azure.storage.blob.BlockBlobService(
-            account_name=storage_account_name,
-            account_key=storage_account_key)
+
+        storage_keys = pypeliner.helpers.GlobalState.get('azure_storage_keys', {})
+        account_key = storage_keys.get(storage_account_name)
+
+        self.blob_client = BlobStorageClient(
+            storage_account_name, self.client_id, self.tenant_id,
+            self.secret_key, self.keyvault_account,
+            storage_account_key=account_key,
+            mq_username=self.rabbitmq_username,
+            mq_password=self.rabbitmq_password,
+            mq_ip=self.rabbitmq_ipaddress,
+            mq_vhost=self.rabbitmq_vhost
+        )
 
     def create_createtime_cache(self, blob_name):
         return self.cached_createtimes.create_flyweight(blob_name)
@@ -133,76 +136,43 @@ class AzureBlobStorage(object):
     def create_store(self, filename, **kwargs):
         return AzureBlob(self, filename, **kwargs)
 
-    def unpack_path(self, filename):
-        if filename.startswith('/'):
-            filename = filename[1:]
+    def get_storage_account(self, filename):
+        filename = filename.strip('/')
         filename = filename.split('/')
         storage_account = filename[0]
-        container_name = filename[1]
-        filename = '/'.join(filename[2:])
-        if filename.startswith('/'):
-            filename = filename[1:]
-        return storage_account, container_name, filename
+        return storage_account
 
     def push(self, blob_name, filename, createtime):
-        storage_account, container_name, blob_name = self.unpack_path(blob_name)
-        self.connect(storage_account)
-        self.blob_client.create_container(container_name)
-        self.blob_client.create_blob_from_path(
-            container_name, blob_name, filename,
-            metadata={'create_time': createtime}
+        self.connect(self.get_storage_account(blob_name))
+        self.blob_client.upload_from_file(
+            filename,
+            metadata={'create_time': createtime},
+            blob_uri=blob_name
         )
 
     def pull(self, blob_name, filename):
-        try:
-            storage_account, container_name, blob_name = self.unpack_path(blob_name)
-            self.connect(storage_account)
-            blob = self.blob_client.get_blob_properties(
-                container_name,
-                blob_name)
-            blob_size = blob.properties.content_length
-            blob = azure_helpers.download_from_blob_to_path(
-                self.blob_client,
-                container_name,
-                blob_name,
-                filename,
-                account_name=storage_account,
-                username=self.rabbitmq_username,
-                password=self.rabbitmq_password,
-                ipaddress=self.rabbitmq_ipaddress,
-                vhost=self.rabbitmq_vhost)
-        except azure.common.AzureMissingResourceHttpError:
-            raise pypeliner.storage.InputMissingException(blob_name)
-        file_size = os.path.getsize(filename)
-        assert blob_size == blob.properties.content_length
-        if file_size != blob.properties.content_length:
-            raise Exception('file size mismatch for {}:{} compared to {}:{}'.format(
-                blob_name, blob.properties.content_length, filename, file_size))
+        self.connect(self.get_storage_account(blob_name))
+        self.blob_client.download_to_path(
+            filename,
+            blob_uri=blob_name
+        )
 
     def retrieve_blob_createtime(self, blob_name):
-        storage_account, container_name, blob_name = self.unpack_path(blob_name)
-        try:
-            self.connect(storage_account)
-            blob = self.blob_client.get_blob_properties(
-                container_name,
-                blob_name)
-        except azure.common.AzureMissingResourceHttpError:
-            raise BlobMissing((container_name, blob_name))
-        if 'create_time' in blob.metadata:
-            return blob.metadata['create_time']
-        return blob.properties.last_modified.strftime('%Y/%m/%d-%H:%M:%S')
+        self.connect(self.get_storage_account(blob_name))
+        createtime = self.blob_client.get_metadata(
+            'create_time', blob_uri=blob_name
+        )
+        if not createtime:
+            return self.blob_client.get_last_modified(blob_uri=blob_name)
+        else:
+            return createtime
 
     def update_blob_createtime(self, blob_name, createtime):
-        storage_account, container_name, blob_name = self.unpack_path(blob_name)
-        self.connect(storage_account)
-        self.blob_client.set_blob_metadata(
-            container_name,
-            blob_name,
-            {'create_time': createtime})
+        self.connect(self.get_storage_account(blob_name))
+        self.blob_client.set_metadata(
+            'create_time', createtime, blob_uri=blob_name
+        )
 
     def delete_blob(self, blob_name):
-        storage_account, container_name, blob_name = self.unpack_path(blob_name)
-        self.connect(storage_account)
-        self.blob_client.delete_blob(
-            container_name,
-            blob_name)
+        self.connect(self.get_storage_account(blob_name))
+        self.blob_client.delete_blob(blob_uri=blob_name)
