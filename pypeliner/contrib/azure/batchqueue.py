@@ -66,8 +66,10 @@ class AzureJobQueue(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.info('tear down')
-        self.batch_client.delete_pools(ignore_exception=True)
-        self.batch_client.delete_jobs(ignore_exception=True, wait=True)
+        if not self.no_delete_job:
+            self.batch_client.delete_jobs(ignore_exception=True, wait=True)
+        if not self.no_delete_pool:
+            self.batch_client.delete_pools(ignore_exception=True)
 
     def get_jobid(self, pool_id):
         return 'pypeliner_{}_{}'.format(pool_id, self.run_id)

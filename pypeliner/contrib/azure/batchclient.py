@@ -271,9 +271,9 @@ class BatchClient(object):
         new_pool = batch.models.PoolAddParameter(
             id=pool_id,
             virtual_machine_configuration=vm_configuration,
-            vm_size=config['pool_vm_size'],
+            vm_size=pool_config['pool_vm_size'],
             enable_auto_scale=True,
-            auto_scale_formula=config['auto_scale_formula'],
+            auto_scale_formula=pool_config['auto_scale_formula'],
             auto_scale_evaluation_interval=datetime.timedelta(minutes=5),
             start_task=vm_start_task,
             max_tasks_per_node=pool_config['max_tasks_per_node'],
@@ -344,7 +344,7 @@ class BatchClient(object):
             memory = poolinfo['mem_per_task']
             cpus = poolinfo['cpus_per_task']
             disk = poolinfo['disk_per_task']
-            score = memory + (cpus * 8) + (disk) / 10
+            score = memory + (cpus * 8) + disk / 10
 
             if not biggestpool:
                 biggestpool = (score, poolid)
@@ -809,4 +809,3 @@ class BatchClient(object):
                         task_id, job_id, pool, node, status
                     )
                 )
-
