@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 import azure.common
@@ -41,6 +42,19 @@ class IncorrectContainerUri(Exception):
     pass
 
 
+class AzureLoggingFilter(logging.Filter):
+    def __init__(self):
+        self.filter_keywords = [
+            'azure', 'adal-python', 'urllib3', 'msrest'
+        ]
+
+    def filter(self, rec):
+        logname = rec.name.split('.')[0]
+        if logname in self.filter_keywords:
+            return False
+        return True
+
+
 class BlobStorageClient(object):
     def __init__(
             self, storage_account_name, client_id, tenant_id, secret_key, keyvault_account,
@@ -75,6 +89,8 @@ class BlobStorageClient(object):
         self.mq_ip = mq_ip
         self.mq_vhost = mq_vhost
 
+        self.logger = self.__get_logger(add_azure_filter=True)
+
         if not storage_account_key:
             storage_account_key = self.__get_storage_account_key(
                 storage_account_name, client_id, secret_key, tenant_id, keyvault_account
@@ -83,6 +99,20 @@ class BlobStorageClient(object):
         self.blob_client = azureblob.BlockBlobService(
             account_name=storage_account_name,
             account_key=storage_account_key)
+
+    def __get_logger(self, add_azure_filter=False):
+        """
+        generate a logger, optionally add filter to remove all azure sdk logs
+        :param add_azure_filter: set the filter if set
+        :type add_azure_filter: bool
+        :return: python logger object
+        :rtype: logging.Logger
+        """
+        logger = logging.getLogger('pypeliner.execqueue.azure_batch')
+        if add_azure_filter:
+            for handler in logging.root.handlers:
+                handler.addFilter(AzureLoggingFilter())
+        return logger
 
     def __unpack_blob_uri(self, blob_uri):
         blob_uri = self.__format_blob_name(blob_uri)
