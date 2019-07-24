@@ -61,7 +61,7 @@ class SqliteDb(object):
         :return: list of keys
         :rtype: list
         """
-        return list(self.keys())
+        return [v for v in self.iterkeys()]
 
     def values(self):
         """
@@ -69,7 +69,7 @@ class SqliteDb(object):
         :return: list of values
         :rtype: list
         """
-        return list(self.values())
+        return [v for v in self.itervalues()]
 
     def items(self):
         """
@@ -77,7 +77,12 @@ class SqliteDb(object):
         :return: list of tuple of key and its value
         :rtype: list
         """
-        return list(self.items())
+        return [v for v in self.iteritems()]
+
+    def delete(self, key):
+        c3 = self.conn.cursor()
+        c3.execute('DELETE FROM kv WHERE key = ?', (key,))
+
 
     def __contains__(self, key):
         """
