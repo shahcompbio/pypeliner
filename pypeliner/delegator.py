@@ -39,7 +39,7 @@ class Delegator(object):
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        command = pypeliner.commandline.dockerize_args(*command, **self.job.ctx)
+        command = pypeliner.commandline.containerize_args(*command, **self.job.ctx)
         return command
 
     def finalize(self):

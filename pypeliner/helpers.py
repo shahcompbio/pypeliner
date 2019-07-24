@@ -14,6 +14,12 @@ from functools import wraps
 from pypeliner import _pypeliner_internal_global_state
 
 
+def running_in_singularity():
+    if 'SINGULARITY_NAME' in os.environ:
+        return True
+    else:
+        return False
+
 def running_in_docker():
     """
     returns True if python is running inside docker container

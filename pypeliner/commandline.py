@@ -83,9 +83,7 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-
-    if docker_kwargs and docker_kwargs.get("docker_image", None):
-        args = dockerize_args(*args, **docker_kwargs)
+    args = containerize_args(*args, **docker_kwargs)
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -190,39 +188,67 @@ def _call_process(command, stdin, stdout, stderr):
             raise
 
 
-def singularity_args(*args, **kwargs):
-    image = kwargs.get("docker_image")
-    assert image, "singularity image path required."
+def containerize_args(*args, **kwargs):
+    if kwargs.get("no_container"):
+        return args
+    docker_image = kwargs.get("docker_image")
+    singularity_image = kwargs.get("singularity_image")
+
+    context_cfg = pypeliner.helpers.GlobalState.get("context_config")
+
+    if singularity_image and 'singularity' in context_cfg:
+        args = singularity_args(args, singularity_image, context_cfg)
+    elif docker_image and 'docker' in context_cfg:
+        args = dockerize_args(args, docker_image, context_cfg)
+
+    return args
+
+
+def singularity_args(args, image, context_cfg):
+    if not image:
+        logging.getLogger('pypeliner.commandline').warn(
+            'running locally, no singularity image specified'
+        )
+        return args
+
+    in_singularity = pypeliner.helpers.running_in_singularity()
+
+    server = context_cfg['singularity']['location']
+    image = os.path.join(server, image)
+
+    kwargs = context_cfg.get('singularity', None)
+
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
-    docker_args = ['singularity', 'run']
+
+    if in_singularity:
+        docker_args = ['ssh', 'localhost']
+    else:
+        docker_args = []
+
+    docker_args += ['singularity', 'run']
+
     for mount in mounts:
         docker_args.extend(['-B', '{}:{}'.format(mount, mount)])
     # paths on azure are relative, so we need to set the working dir
     wdir = os.getcwd()
     docker_args.extend(['--pwd', wdir])
     docker_args.append(image)
+
     args = docker_args + list(args)
     return args
 
 
-def dockerize_args(*args, **kwargs):
-    if kwargs.get("no_container"):
-        return args
-    image = kwargs.get("docker_image")
-
-    kwargs = pypeliner.helpers.GlobalState.get("context_config")
-
-    if not kwargs or not kwargs.get("docker"):
-        return args
-
+def dockerize_args(args, image, context_cfg):
     if not image:
-        logging.getLogger('pypeliner.commandline').warn('running locally, no docker image specified')
+        logging.getLogger('pypeliner.commandline').warn(
+            'running locally, no docker image specified'
+        )
         return args
 
-    server = kwargs['docker']['server']
+    server = context_cfg['docker']['server']
     image = server + '/' + image
 
-    kwargs = kwargs.get('docker', None)
+    kwargs = context_cfg.get('docker', None)
 
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
 
