@@ -6,6 +6,8 @@ import sys
 import types
 import weakref
 
+import collections
+
 if sys.version_info[0] < 3:
     from copy_reg import dispatch_table
 else:

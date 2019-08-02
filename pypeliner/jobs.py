@@ -168,6 +168,10 @@ class JobInstance(object):
             return True
         if None in output_dates:
             return True
+
+        if None in input_dates:
+            return True
+
         return max(input_dates) > min(output_dates)
 
     def explain_out_of_date(self):

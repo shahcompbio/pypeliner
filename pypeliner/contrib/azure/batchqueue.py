@@ -140,7 +140,7 @@ class AzureJobQueue(object):
         for debug_type, debug_filename in self.debug_filenames.items():
             debug_filename = os.path.join(temps_dir, debug_filename)
             if os.path.exists(debug_filename):
-               os.remove(debug_filename)
+                os.remove(debug_filename)
 
         # Create a bash script for running the job
         run_script_file_path = 'job.sh'
@@ -264,8 +264,7 @@ class AzureJobQueue(object):
 
         if len(tasks) >= list_max_results:
             mid_transition_time = sorted_transition_times[
-                len(sorted_transition_times) /
-                2]
+                len(sorted_transition_times) / 2]
             return self._update_task_state(
                 latest_transition_time=mid_transition_time)
 
@@ -338,14 +337,14 @@ class AzureJobQueue(object):
         with open(job_after_filename, 'rb') as job_after_file:
             received = pickle.load(job_after_file)
 
+        if received is None:
+            raise pypeliner.execqueue.base.ReceiveError(
+                self._create_error_text(temps_dir, hostname=hostname))
+
         # just in case a new storage key was pulled from storage in job
         # generally this doesnt happen as key gets pulled on head node to
         # get the create time for all resources anyway prior to running the job
         pypeliner.helpers.GlobalState.update_all(received.pypeliner_globals)
-
-        if received is None:
-            raise pypeliner.execqueue.base.ReceiveError(
-                self._create_error_text(temps_dir, hostname=hostname))
 
         received.hostname = hostname
 

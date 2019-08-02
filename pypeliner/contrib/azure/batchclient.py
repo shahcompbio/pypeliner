@@ -9,7 +9,8 @@ import string
 import time
 import uuid
 
-import azure.batch.batch_service_client as batch
+from azure.batch import BatchServiceClient
+
 import azure.batch.models as batchmodels
 import pypeliner
 from azure.common.credentials import ServicePrincipalCredentials
@@ -79,7 +80,7 @@ class BatchClient(object):
             tenant=tenant_id,
             resource="https://batch.core.windows.net/"
         )
-        self.batch_client = batch.BatchServiceClient(
+        self.batch_client = BatchServiceClient(
             self.credentials,
             batch_account_url
         )
@@ -217,9 +218,9 @@ class BatchClient(object):
 
         self.logger.info("creating job {}".format(job_id))
 
-        job = batch.models.JobAddParameter(
+        job = batchmodels.JobAddParameter(
             id=job_id,
-            pool_info=batch.models.PoolInformation(pool_id=pool_id))
+            pool_info=batchmodels.PoolInformation(pool_id=pool_id))
 
         try:
             self.batch_client.job.add(job)
@@ -263,12 +264,12 @@ class BatchClient(object):
             node_agent_sku_id=sku_to_use,
         )
 
-        vm_start_task = batch.models.StartTask(
+        vm_start_task = batchmodels.StartTask(
             command_line=self.__wrap_commands_in_shell('linux', start_vm_commands),
             user_identity=batchmodels.UserIdentity(auto_user=user),
             wait_for_success=True)
 
-        new_pool = batch.models.PoolAddParameter(
+        new_pool = batchmodels.PoolAddParameter(
             id=pool_id,
             virtual_machine_configuration=vm_configuration,
             vm_size=pool_config['pool_vm_size'],
@@ -302,7 +303,7 @@ class BatchClient(object):
         return logger
 
     def __random_string(self, length):
-        return ''.join(random.choice(string.lowercase) for _ in range(length))
+        return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
 
     def __wait_for_job_deletion(self, job_id):
         """
@@ -660,7 +661,7 @@ class BatchClient(object):
             upload_options = batchmodels.OutputFileUploadOptions(upload_condition='taskCompletion')
             return batchmodels.OutputFile(file_pattern=filename, destination=destination, upload_options=upload_options)
 
-        task = batch.models.TaskAddParameter(
+        task = batchmodels.TaskAddParameter(
             id=task_id,
             command_line=self.__wrap_commands_in_shell('linux', commands),
             resource_files=[
