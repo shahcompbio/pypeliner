@@ -42,7 +42,7 @@ class DrmaaJob(object):
         self.debug_filenames['job stdout'] = os.path.join(self.temps_dir, 'job.out')
         self.debug_filenames['job stderr'] = os.path.join(self.temps_dir, 'job.err')
         self.debug_filenames['resources'] = os.path.join(self.temps_dir, 'resources.txt')
-        for filename in self.debug_filenames.itervalues():
+        for filename in self.debug_filenames.values():
             pypeliner.helpers.saferemove(filename)
 
         job_template = self.session.createJobTemplate()
@@ -148,7 +148,7 @@ class DrmaaJob(object):
         else:
             error_text.append('no job info available')
 
-        for debug_type, debug_filename in self.debug_filenames.iteritems():
+        for debug_type, debug_filename in self.debug_filenames.items():
             if not os.path.exists(debug_filename):
                 error_text += [debug_type + ': missing']
 
@@ -256,7 +256,7 @@ class DrmaaJobQueue(object):
                     return name
 
             while True:
-                for name, job in self.jobs.iteritems():
+                for name, job in self.jobs.items():
                     if job.finished:
                         return name
 
