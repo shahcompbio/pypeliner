@@ -8,14 +8,14 @@ source:
 
 requirements:
   build:
-    - python 2.7*
+    - python
     - dill
     - networkx
     - future
     - pyyaml
 
   run:
-    - python 2.7*
+    - python
     - networkx >=1.11
     - dill
     - pyyaml
