@@ -116,8 +116,6 @@ class Backoff(object):
 
         self.step_size = step_size
 
-        self.success = False
-
         self.elapsed_time = 0
 
     def __call__(self, func):
@@ -155,16 +153,10 @@ class Backoff(object):
                 )
                 retry_no += 1
                 time.sleep(self.backoff_time)
-
+            except Exception:
+                raise
             else:
-                self.success = True
-                break
-
-        # try it one last time
-        if not self.success:
-            result = self.func(*args, **kwargs)
-
-        return result
+                return result
 
     def _update_backoff_time(self):
         """
