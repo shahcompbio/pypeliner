@@ -196,9 +196,9 @@ def containerize_args(*args, **kwargs):
 
     context_cfg = pypeliner.helpers.GlobalState.get("context_config")
 
-    if singularity_image and 'singularity' in context_cfg:
+    if context_cfg and singularity_image and 'singularity' in context_cfg:
         args = singularity_args(args, singularity_image, context_cfg)
-    elif docker_image and 'docker' in context_cfg:
+    elif context_cfg and docker_image and 'docker' in context_cfg:
         args = dockerize_args(args, docker_image, context_cfg)
 
     return args
