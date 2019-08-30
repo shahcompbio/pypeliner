@@ -7,7 +7,7 @@ import tempfile
 import time
 import traceback
 
-import dill as pickle
+import pypeliner.json_pickle as pickle
 import pypeliner.helpers
 
 
@@ -24,7 +24,7 @@ class Delegator(object):
 
     def _waitfile(self, filename):
         waittime = 1
-        while waittime < 100:
+        while waittime < 1:
             if os.path.exists(filename):
                 return
             if waittime >= 4:
@@ -35,11 +35,10 @@ class Delegator(object):
 
     def initialize(self):
         self.cleanup()
-        self.job.version = pypeliner.__version__
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        command = pypeliner.commandline.containerize_args(*command, **self.job.ctx)
+        command,_ = pypeliner.containerize.containerize_args(*command, **self.job.ctx)
         return command
 
     def finalize(self):
@@ -79,12 +78,14 @@ def main():
         after_filename = sys.argv[2]
 
         delegator_dir = os.path.dirname(before_filename)
+
         if not os.path.exists(delegator_dir) and pypeliner.helpers.running_in_docker():
-            raise Exception(
-                "Did you forget to add your working directory to docker mounts?"
-                " {} is not available inside docker, delegator will "
-                "fail.".format(delegator_dir)
-            )
+            if delegator_dir:
+                raise Exception(
+                    "Did you forget to add your working directory to docker mounts?"
+                    " {} is not available inside docker, delegator will "
+                    "fail.".format(delegator_dir)
+                )
 
         def not_pypeliner_path(a):
             if os.path.exists(a) and os.path.samefile(a, os.path.dirname(__file__)):
@@ -93,6 +94,7 @@ def main():
 
         sys.path = list(filter(not_pypeliner_path, sys.path))
         sys.path.extend(sys.argv[3:])
+
         with open(before_filename, 'rb') as before:
             job = pickle.load(before)
         if job is None:

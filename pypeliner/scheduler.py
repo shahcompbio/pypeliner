@@ -7,6 +7,7 @@ import logging
 import os
 import traceback
 
+import pypeliner
 import pypeliner.database
 import pypeliner.execqueue.base
 import pypeliner.graph
@@ -142,6 +143,7 @@ class Scheduler(object):
         dirs.extend([v.filename for v in job.inputs if isinstance(v, pypeliner.resources.UserResource)])
         dirs.extend([v.filename for v in job.outputs if isinstance(v, pypeliner.resources.UserResource)])
         sent.dirs = dirs
+        sent.version = pypeliner.__version__
 
         exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
 
@@ -204,7 +206,7 @@ class Scheduler(object):
             return
 
         if job.id != received.id:
-            raise JobIdMismatchError('job id {} doenst match received id {}'.format(job.id, received.id))
+            raise JobIdMismatchError('job id {} doesnt match received id {}'.format(job.id, received.id))
 
         pypeliner.helpers.log_event(
             ['job_name', job.displayname, "completed successfully"],

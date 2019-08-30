@@ -1,18 +1,8 @@
-import logging
-import os
 import subprocess
 import sys
-from os.path import expanduser
 
 import pypeliner
-from pypeliner.helpers import Backoff
-
-
-def which(file):
-    for path in os.environ["PATH"].split(os.pathsep):
-        if os.path.exists(os.path.join(path, file)) and os.path.isfile(os.path.join(path, file)):
-            return os.path.join(path, file)
-    return None
+import pypeliner.containerize
 
 
 class CommandLineException(Exception):
@@ -83,7 +73,8 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    args = containerize_args(*args, **docker_kwargs)
+    docker_kwargs['execute'] = True
+    args, shell_files = pypeliner.containerize.containerize_args(*args, **docker_kwargs)
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
@@ -174,6 +165,11 @@ def _call_processes(args, command_list, infile, outfile):
 
     # Check return codes
     for idx, process in enumerate(processes):
+        if len(args) == 2 and args[0] == "bash":
+            args = open(args[1]).readlines()
+        else:
+            args = args
+
         if process.returncode != 0:
             raise CommandLineException(args, command_list[idx][0], process.returncode)
 
@@ -186,132 +182,3 @@ def _call_process(command, stdin, stdout, stderr):
             raise CommandNotFoundException(command, command[0])
         else:
             raise
-
-
-def containerize_args(*args, **kwargs):
-    if kwargs.get("no_container"):
-        return args
-    docker_image = kwargs.get("docker_image")
-    singularity_image = kwargs.get("singularity_image")
-
-    context_cfg = pypeliner.helpers.GlobalState.get("context_config")
-
-    if context_cfg and singularity_image and 'singularity' in context_cfg:
-        args = singularity_args(args, singularity_image, context_cfg)
-    elif context_cfg and docker_image and 'docker' in context_cfg:
-        args = dockerize_args(args, docker_image, context_cfg)
-
-    return args
-
-
-def singularity_args(args, image, context_cfg):
-    if not image:
-        logging.getLogger('pypeliner.commandline').warn(
-            'running locally, no singularity image specified'
-        )
-        return args
-
-    in_singularity = pypeliner.helpers.running_in_singularity()
-
-    server = context_cfg['singularity']['location']
-    image = os.path.join(server, image)
-
-    kwargs = context_cfg.get('singularity', None)
-
-    mounts = sorted(set(kwargs.get("mounts", {}).values()))
-
-    if in_singularity:
-        docker_args = ['ssh', 'localhost']
-    else:
-        docker_args = []
-
-    docker_args += ['singularity', 'run']
-
-    for mount in mounts:
-        docker_args.extend(['-B', '{}:{}'.format(mount, mount)])
-    # paths on azure are relative, so we need to set the working dir
-    wdir = os.getcwd()
-    docker_args.extend(['--pwd', wdir])
-    docker_args.append(image)
-
-    args = docker_args + list(args)
-    return args
-
-
-def dockerize_args(args, image, context_cfg):
-    if not image:
-        logging.getLogger('pypeliner.commandline').warn(
-            'running locally, no docker image specified'
-        )
-        return args
-
-    server = context_cfg['docker']['server']
-    image = server + '/' + image
-
-    kwargs = context_cfg.get('docker', None)
-
-    mounts = sorted(set(kwargs.get("mounts", {}).values()))
-
-    docker_args = ['docker', 'run']
-    for mount in mounts:
-        docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
-
-    # paths on azure are relative, so we need to set the working dir
-    wdir = os.getcwd()
-    docker_args.extend(['-w', wdir])
-    # remove container after it finishes running
-    docker_args.append('--rm')
-
-    docker_path = which('docker')
-    if not docker_path:
-        raise Exception("Couldn't find docker in system")
-
-    if 'ROOT_HOME' in os.environ:
-        mount_path = os.environ['ROOT_HOME']
-    else:
-        mount_path = expanduser('~')
-    # expose docker socket to enable starting
-    # new containers from the current container
-    docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
-    docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
-    # will copy config file which preserves docker login
-    # all containers after  the first one will run as root
-    docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
-    docker_args.extend(['-v', '{}/.docker:/root/.docker'.format(mount_path)])
-    docker_args.append(image)
-
-    if '|' in args or '>' in args or '<' in args:
-        args = list(args)
-        args = ['bash', '-e', '-c'] + [' '.join(map(str, args))]
-
-    args = docker_args + list(args)
-
-    _docker_pull(
-        image, server, kwargs['username'], kwargs['password']
-    )
-
-    return args
-
-
-def _docker_pull(image, server, username, password):
-    cmd = ['docker', 'pull', image]
-
-    # log in if pull fails
-    try:
-        execute(*cmd)
-    except CommandLineException:
-        _docker_login(server, username, password)
-        execute(*cmd)
-
-
-@Backoff(max_backoff=300, randomize=True)
-def _docker_login(server, username, password):
-    if not username or not password:
-        # assume repo is public
-        return
-
-    cmd = ['echo', password, '|', 'docker', 'login',
-           server, '-u', username, '--password-stdin',
-           '>', '/dev/null']
-
-    execute(*cmd)

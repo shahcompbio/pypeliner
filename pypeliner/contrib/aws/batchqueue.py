@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import os
-import pickle
+import pypeliner.json_pickle as pickle
 import logging
 import yaml
 import time
@@ -120,8 +120,6 @@ class AwsJobQueue(object):
         :param temps_dir: unique path for job temps
         :type temps_dir: str
         """
-        sent.version = pypeliner.__version__
-
         self.job_temps_dir[name] = temps_dir
 
         job_name = self.batch_client.batch_compatible_format(name)

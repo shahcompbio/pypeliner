@@ -3,11 +3,11 @@ from __future__ import print_function
 import datetime
 import logging
 import os
-import pickle
 import time
 
 import pypeliner.execqueue.base
 import pypeliner.helpers
+import pypeliner.json_pickle as pickle
 import pypeliner.tests.jobs
 import yaml
 
@@ -67,12 +67,36 @@ class AzureJobQueue(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.info('tear down')
         if not self.no_delete_job:
-            self.batch_client.delete_jobs(ignore_exception=True, wait=True)
+            self.batch_client.delete_jobs(ignore_exception=True)
         if not self.no_delete_pool:
             self.batch_client.delete_pools(ignore_exception=True)
 
     def get_jobid(self, pool_id):
         return 'pypeliner_{}_{}'.format(pool_id, self.run_id)
+
+    def cleanup_old_job_files(self, pickle_blob_path, pickle_local_path, temps_dir):
+        # Delete any previous job result file locally and in blob
+        self.batch_client.blob_client.delete_blob(
+            container_name=self.batch_client.container_name, blob_name=pickle_blob_path
+        )
+
+        if os.path.exists(pickle_local_path):
+            os.remove(pickle_local_path)
+
+        # Delete any previous log files locally
+        for debug_type, debug_filename in self.debug_filenames.items():
+            debug_filename = os.path.join(temps_dir, debug_filename)
+            if os.path.exists(debug_filename):
+                os.remove(debug_filename)
+
+    def create_run_script(self, command, script_path, pool_id):
+        with open(script_path, 'w') as f:
+            f.write('set -e\n')
+            f.write('set -o pipefail\n\n')
+            f.write(self.batch_client.compute_start_commands[pool_id] + '\n')
+            f.write(command + '\n')
+            f.write(self.batch_client.compute_finish_commands[pool_id] + '\n')
+            f.write('wait')
 
     def send(self, ctx, name, sent, temps_dir):
         """ Add a job to the queue.
@@ -85,22 +109,19 @@ class AzureJobQueue(object):
 
         """
         pool_id = self.batch_client.find_pool(ctx)
-
         job_id = self.get_jobid(pool_id)
+        task_id = self.batch_client.get_task_id(name)
 
         self.logger.debug(
             'assigning job {} to pool {}'.format(name, pool_id)
         )
-
-        self.batch_client.create_pool(pool_id)
-        self.batch_client.create_job(pool_id, job_id)
-
-        task_id = self.batch_client.get_task_id(name)
-
         self.logger.info(
             'assigning task_id {} to job {}'.format(
                 task_id,
                 name))
+
+        self.batch_client.create_pool(pool_id)
+        self.batch_client.create_job(pool_id, job_id)
 
         self.mapping_from_tasks_to_job[task_id] = job_id
         self.job_names[task_id] = name
@@ -108,65 +129,56 @@ class AzureJobQueue(object):
         self.job_temps_dir[name] = temps_dir
         self.job_blobname_prefix[name] = 'output_' + task_id
 
-        job_before_file_path = 'job.pickle'
-        job_before_filename = os.path.join(temps_dir, job_before_file_path)
-        job_before_blobname = os.path.join(
-            self.job_blobname_prefix[name],
-            job_before_file_path)
+        after_remote_path = 'job_result.pickle'
+        after_local_path = os.path.join(temps_dir, after_remote_path)
+        after_blob_path = os.path.join(self.job_blobname_prefix[name], after_remote_path)
 
-        sent.version = pypeliner.__version__
+        self.cleanup_old_job_files(after_blob_path, after_local_path, temps_dir)
 
-        with open(job_before_filename, 'wb') as before:
+        before_remote_path = 'job.pickle'
+        before_local_path = os.path.join(temps_dir, before_remote_path)
+        before_blob_path = os.path.join(self.job_blobname_prefix[name], before_remote_path)
+
+        with open(before_local_path, 'wb') as before:
             pickle.dump(sent, before)
 
-        job_before_file = self.batch_client.create_blob_resource(
-            job_before_filename, job_before_blobname, job_before_file_path
+        before_file_resource = self.batch_client.create_blob_resource(
+            before_local_path, before_blob_path, before_remote_path
         )
-
-        job_after_file_path = 'job_result.pickle'
-        job_after_filename = os.path.join(temps_dir, job_after_file_path)
-        job_after_blobname = os.path.join(
-            self.job_blobname_prefix[name],
-            job_after_file_path)
-
-        # Delete any previous job result file locally and in blob
-        self.batch_client.blob_client.delete_blob(
-            container_name=self.batch_client.container_name, blob_name=job_after_blobname
-        )
-        if os.path.exists(job_after_filename):
-            os.remove(job_after_filename)
-
-        # Delete any previous log files locally
-        for debug_type, debug_filename in self.debug_filenames.items():
-            debug_filename = os.path.join(temps_dir, debug_filename)
-            if os.path.exists(debug_filename):
-                os.remove(debug_filename)
 
         # Create a bash script for running the job
-        run_script_file_path = 'job.sh'
-        run_script_filename = os.path.join(temps_dir, run_script_file_path)
-        run_script_blobname = os.path.join(
-            self.job_blobname_prefix[name], run_script_file_path
+        script_remote_path = 'job.sh'
+        script_local_path = os.path.join(temps_dir, script_remote_path)
+        script_blob_path = os.path.join(
+            self.job_blobname_prefix[name], script_remote_path
         )
 
-        command = self.batch_client.get_run_command(
-            ctx, job_before_file_path, job_after_file_path
-        )
+        command = ['pypeliner_delegate', '$AZ_BATCH_TASK_WORKING_DIR/' + before_remote_path,
+                   '$AZ_BATCH_TASK_WORKING_DIR/' + after_remote_path]
 
-        with open(run_script_filename, 'w') as f:
-            f.write('set -e\n')
-            f.write('set -o pipefail\n\n')
-            f.write(self.batch_client.compute_start_commands[pool_id] + '\n')
-            f.write(command + '\n')
-            f.write(self.batch_client.compute_finish_commands[pool_id] + '\n')
-            f.write('wait')
+        command, shell_files = pypeliner.containerize.containerize_args(*command, **ctx)
+
+        command[-1] = os.path.basename(command[-1])
+        command = ' '.join(command)
+
+        job_shell_files = []
+        for shell_file in shell_files:
+            job_shell_blobname = os.path.join(
+                self.job_blobname_prefix[name],
+                shell_file)
+
+            job_shell_files.append(self.batch_client.create_blob_resource(
+                shell_file, job_shell_blobname, os.path.basename(shell_file)
+            ))
+
+        self.create_run_script(command, script_local_path, pool_id)
 
         run_script_file = self.batch_client.create_blob_resource(
-            run_script_filename, run_script_blobname, run_script_file_path)
+            script_local_path, script_blob_path, script_remote_path)
 
         # Add the task to the job
         self.batch_client.add_task(
-            job_id, task_id, job_before_file,
+            job_id, task_id, before_file_resource, job_shell_files,
             run_script_file, self.job_blobname_prefix[name]
         )
 

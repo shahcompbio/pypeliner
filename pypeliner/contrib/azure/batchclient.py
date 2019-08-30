@@ -9,10 +9,8 @@ import string
 import time
 import uuid
 
-from azure.batch import BatchServiceClient
-
 import azure.batch.models as batchmodels
-import pypeliner
+from azure.batch import BatchServiceClient
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.profiles import KnownProfiles
 
@@ -630,7 +628,7 @@ class BatchClient(object):
         )
 
     def add_task(
-            self, job_id, task_id, input_file, job_script_file,
+            self, job_id, task_id, input_file, job_shell_files, job_script_file,
             output_blob_prefix
     ):
         """
@@ -649,6 +647,8 @@ class BatchClient(object):
         """
         commands = ['/bin/bash job.sh']
 
+        resource_files = [input_file, job_script_file] + job_shell_files
+
         # Obtain a shared access signature that provides write access to the output
         # container to which the tasks will upload their output.
         output_sas_url = self.blob_client.generate_container_url(
@@ -664,9 +664,7 @@ class BatchClient(object):
         task = batchmodels.TaskAddParameter(
             id=task_id,
             command_line=self.__wrap_commands_in_shell('linux', commands),
-            resource_files=[
-                input_file,
-                job_script_file],
+            resource_files=resource_files,
             output_files=[
                 create_output_file(
                     '../stdout.txt',
@@ -717,77 +715,6 @@ class BatchClient(object):
         :return str: azure batch pool id
         """
         return self.batch_client.job.get(job_id).pool_info.pool_id
-
-    def get_run_command(self, ctx, job_before_file_path, job_after_file_path):
-        """
-        generate pypeliner delegator command with docker args
-        Azure batch starts a process on each node during startup
-        this process runs the entire time VM is up (speculation?). running sudo gasswd
-        adds our user to the docker group in node startup. but all user/group
-        permission updates require restarting the bash process (normally by
-        running newgrp or by logout-login). Since we cannot do that with batch
-        and since the start task and compute task run under same process, we need
-        to explicitly specify the user group when running docker commands. sg in
-        linux can be used to set group when executing commands
-
-        :param ctx: job context
-        :type ctx: dict
-        :param job_before_file_path: delegator before file
-        :type job_before_file_path: str
-        :param job_after_file_path: delegator after file
-        :type job_after_file_path: str
-        :return: delegator command
-        :rtype: str
-        """
-        command = ['pypeliner_delegate',
-                   '$AZ_BATCH_TASK_WORKING_DIR/{input_filename}',
-                   '$AZ_BATCH_TASK_WORKING_DIR/{output_filename}',
-                   ]
-        command = ' '.join(command)
-
-        context_config = pypeliner.helpers.GlobalState.get("context_config")
-
-        if "docker" in context_config:
-            image = ctx.get("docker_image")
-            if not image:
-                return command
-            ctx = context_config["docker"]
-            mount_string = ['-v {}:{}'.format(mount, mount) for mount in ctx.get("mounts").values()]
-            mount_string += ['-v /mnt:/mnt']
-            mount_string = ' '.join(mount_string)
-            image = ctx.get("server") + '/' + image
-
-            command = ['docker run -w $PWD',
-                       mount_string,
-                       '-v /var/run/docker.sock:/var/run/docker.sock',
-                       '-v /usr/bin/docker:/usr/bin/docker',
-                       '-v', '{}/.docker:/root/.docker'.format('$HOME'),
-                       '-e', 'ROOT_HOME={}'.format('$HOME'),
-                       image, command
-                       ]
-
-            command = ' '.join(command)
-            # wrap it up as docker group command
-            command = 'sg docker -c "{}"'.format(command)
-
-            login_command = [
-                'echo', ctx.get('password'), '|', 'docker', 'login',
-                ctx.get('server'), '-u', ctx.get('username'),
-                '--password-stdin', '>', '/dev/null'
-            ]
-            login_command = ' '.join(login_command)
-            login_command = 'sg docker -c "{}"'.format(login_command)
-
-            pull_command = 'docker pull {} > /dev/null'.format(image)
-            pull_command = 'sg docker -c "{}"'.format(pull_command)
-
-            command = '\n'.join([login_command, pull_command, command])
-
-        command = command.format(
-            input_filename=job_before_file_path,
-            output_filename=job_after_file_path)
-
-        return command
 
     def check_for_missing_node(self, job_id, task_id):
         node = self.get_node_id_for_task(job_id, task_id)

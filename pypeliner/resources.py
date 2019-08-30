@@ -1,7 +1,7 @@
 import logging
-import dill as pickle
 
 import pypeliner.identifiers
+import pypeliner.json_pickle as pickle
 
 
 class Dependency(object):
@@ -198,6 +198,7 @@ class TempObjResource(Resource):
     def get_obj(self):
         self.store.allocate()
         self.store.pull()
+
         with open(self.store.filename, 'rb') as f:
             return pickle.load(f)
 
