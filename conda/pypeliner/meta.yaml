@@ -13,6 +13,7 @@ requirements:
     - networkx
     - future
     - pyyaml
+    - jsonpickle
 
   run:
     - python
@@ -21,6 +22,7 @@ requirements:
     - pyyaml
     - nose
     - future
+    - jsonpickle
 
 test:
   imports:
