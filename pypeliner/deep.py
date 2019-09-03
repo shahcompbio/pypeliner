@@ -212,7 +212,7 @@ if sys.version_info[0] < 3:
 
 
 def _reconstruct(x, f, info, deep, memo=None):
-    if isinstance(info, str):
+    if isinstance(info, (str, unicode)):
         return x
     assert isinstance(info, tuple)
     if memo is None:

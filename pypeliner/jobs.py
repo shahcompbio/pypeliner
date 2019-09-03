@@ -255,7 +255,7 @@ class JobInstance(object):
                 return val * retry_val
             else:
                 return val + retry_val
-        elif isinstance(val, str) and ':' in val:
+        elif isinstance(val, (str, unicode)) and ':' in val:
             assert val.count(':') == 1, "time ctx values only support hours and minutes"
             # Juno and Luna only accept Hours and Mins, no seconds
             val = [int(i) for i in val.split(':')]
@@ -469,7 +469,7 @@ class JobCallable(object):
                 pypeliner.helpers.makedirs(self.store_dir)
                 self.started = True
                 func = self.func
-                if isinstance(func, str):
+                if isinstance(func, (str, unicode)):
                     func = pypeliner.helpers.import_function(func)
                 callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
                 self.displaycommand = self.get_displaycommand(func, callset)

@@ -6,7 +6,7 @@ AxisInstanceBase = collections.namedtuple('AxisInstanceBase', ['axis', 'chunk'])
 
 class AxisInstance(AxisInstanceBase):
     def __new__(cls, axis, chunk):
-        assert isinstance(axis, str)
+        assert isinstance(axis, (str, unicode))
         return super(AxisInstance, cls).__new__(cls, axis, chunk)
 
     @property

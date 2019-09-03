@@ -47,7 +47,7 @@ class Managed(object):
     """ Interface class used to represent a managed data """
 
     def __init__(self, name, *axes, **kwargs):
-        if name is not None and type(name) != str:
+        if name is not None and type(name) not in [str, unicode]:
             raise ValueError('name of argument must be string')
         if type(axes) != tuple:
             raise ValueError('axes must be a tuple')
