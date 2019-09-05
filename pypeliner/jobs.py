@@ -1,4 +1,3 @@
-import copy
 import datetime
 import os
 import resource
@@ -18,6 +17,7 @@ import pypeliner.identifiers
 import pypeliner.managed
 import pypeliner.resources
 import pypeliner.storage
+import six
 
 try:
     from future_builtins import filter
@@ -255,13 +255,13 @@ class JobInstance(object):
                 return val * retry_val
             else:
                 return val + retry_val
-        elif isinstance(val, (str, unicode)) and ':' in val:
+        elif isinstance(val, six.string_types) and ':' in val:
             assert val.count(':') == 1, "time ctx values only support hours and minutes"
             # Juno and Luna only accept Hours and Mins, no seconds
             val = [int(i) for i in val.split(':')]
             val = timedelta(hours=val[0], minutes=val[1])
             if by_factor:
-                assert isinstance(retry_val, (int, float)),\
+                assert isinstance(retry_val, (int, float)), \
                     "retry_factor for time should be an integer or float"
                 val *= retry_val
             else:
@@ -461,7 +461,8 @@ class JobCallable(object):
         pypeliner.helpers.GlobalState.update_all(self.pypeliner_globals)
         self.stdout_storage.allocate()
         self.stderr_storage.allocate()
-        with open(self.stdout_storage.write_filename, 'w') as stdout_file, open(self.stderr_storage.write_filename, 'w') as stderr_file:
+        with open(self.stdout_storage.write_filename, 'w') as stdout_file, open(self.stderr_storage.write_filename,
+                                                                                'w') as stderr_file:
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = stdout_file, stderr_file
             try:
@@ -469,7 +470,7 @@ class JobCallable(object):
                 pypeliner.helpers.makedirs(self.store_dir)
                 self.started = True
                 func = self.func
-                if isinstance(func, (str, unicode)):
+                if isinstance(func, six.string_types):
                     func = pypeliner.helpers.import_function(func)
                 callset = pypeliner.deep.deeptransform(self.argset, resolve_arg)
                 self.displaycommand = self.get_displaycommand(func, callset)
@@ -580,7 +581,6 @@ class SubWorkflowInstance(JobInstance):
         self.outputs.extend(split_outputs)
         for node_input in self.db.nodemgr.get_node_inputs(self.node):
             self.inputs.append(node_input)
-
 
 
 class WorkflowCallable(JobCallable):

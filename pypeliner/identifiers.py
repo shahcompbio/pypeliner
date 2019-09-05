@@ -1,12 +1,14 @@
 import collections
 import os
 
+import six
+
 AxisInstanceBase = collections.namedtuple('AxisInstanceBase', ['axis', 'chunk'])
 
 
 class AxisInstance(AxisInstanceBase):
     def __new__(cls, axis, chunk):
-        assert isinstance(axis, (str, unicode))
+        assert isinstance(axis, six.string_types)
         return super(AxisInstance, cls).__new__(cls, axis, chunk)
 
     @property

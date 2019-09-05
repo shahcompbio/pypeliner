@@ -6,7 +6,7 @@ import sys
 import types
 import weakref
 
-import collections
+import six
 
 if sys.version_info[0] < 3:
     from copy_reg import dispatch_table
@@ -212,7 +212,7 @@ if sys.version_info[0] < 3:
 
 
 def _reconstruct(x, f, info, deep, memo=None):
-    if isinstance(info, (str, unicode)):
+    if isinstance(info, six.string_types):
         return x
     assert isinstance(info, tuple)
     if memo is None:
