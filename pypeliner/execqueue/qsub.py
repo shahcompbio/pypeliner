@@ -311,7 +311,7 @@ class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
     """ Statuses of jobs on a lfs cluster """
     def get_qstat_job_status(self):
         job_status = dict()
-        for line in subprocess.check_output([self.qenv.qstat_bin]).split('\n'):
+        for line in subprocess.check_output([self.qenv.qstat_bin]).decode().split('\n'):
             row = line.split()
             if not row:
                 continue
