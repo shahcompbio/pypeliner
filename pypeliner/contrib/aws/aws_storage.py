@@ -70,6 +70,19 @@ class AwsSimpleStorageService(object):
             ObjectLockEnabledForBucket=True,
         )
 
+    def create_signed_url(self, bucket, key):
+        url = self.client.generate_presigned_url(
+            ClientMethod='get_object',
+            Params={
+                'Bucket': bucket,
+                'Key': key
+            },
+            ExpiresIn=604800
+        )
+
+        return url
+
+
     def bucket_exists(self, bucket):
         """
         check if a bucket exists
