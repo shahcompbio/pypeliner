@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import datetime
 import logging
+import math
 import os
 import random
 import re
@@ -88,6 +89,9 @@ class BatchClient(object):
 
         self.active_pools = set()
         self.active_jobs = set()
+
+        self.last_resize = {}
+
 
     def __get_vm_image_and_node_agent_sku(self, pool_config):
         """Select the latest verified image that Azure Batch supports given
@@ -238,7 +242,11 @@ class BatchClient(object):
         :param str pool_id: An ID for the new pool.
         :param dict config: Configuration details.
         """
-        if pool_id in self.active_pools or self.pool_exists(pool_id):
+        if pool_id in self.active_pools:
+            return
+
+        if self.pool_exists(pool_id):
+            self.active_pools.add(pool_id)
             return
 
         self.logger.info("creating pool {}".format(pool_id))
@@ -271,9 +279,6 @@ class BatchClient(object):
             id=pool_id,
             virtual_machine_configuration=vm_configuration,
             vm_size=pool_config['pool_vm_size'],
-            enable_auto_scale=True,
-            auto_scale_formula=pool_config['auto_scale_formula'],
-            auto_scale_evaluation_interval=datetime.timedelta(minutes=5),
             start_task=vm_start_task,
             max_tasks_per_node=pool_config['max_tasks_per_node'],
         )
@@ -504,66 +509,21 @@ class BatchClient(object):
     @property
     def healthy_states(self):
         healthy_state_list = [
-            "idle", "running", "preempted",
-            "waitingforstarttask", "leavingpool", 'starting'
+            "idle", "running", "waitingforstarttask", "leavingpool", 'starting'
         ]
         return healthy_state_list
 
-    def verify_node_status(self, node_id, pool_id):
-        """
-        check if the node is in working state, if not disable it.
-        :param str node_id: compute node id
-        :param str pool_id: batch pool id
-        """
-
-        status = self.__get_node_status(pool_id, node_id)
-
-        # dont send jobs to failed nodes
-        if status not in self.healthy_states and not status == "offline":
-            self.logger.warning(
-                'node {} is in {} state and will be disabled'.format(
-                    node_id, status)
-            )
-            self.__disable_node(pool_id, node_id)
-
-    def __disable_node(self, pool_id, node_id):
-        self.batch_client.compute_node.disable_scheduling(pool_id, node_id)
+    @property
+    def unhealthy_states(self):
+        bad_status = [
+            'preempted', 'offline', 'rebooting', 'reimaging',
+            'starttaskfailed', 'unknown', 'unusable'
+        ]
+        return bad_status
 
     def __list_compute_nodes_in_pool(self, pool_id):
         for node in self.batch_client.compute_node.list(pool_id):
-            yield node.id
-
-    def __get_node_status(self, pool_id, node_id):
-        try:
-            status = self.batch_client.compute_node.get(
-                pool_id,
-                node_id).state.value
-        except batchmodels.BatchErrorException:
-            self.logger.warning("Couldn't get status for node {} ".format(node_id))
-            status = 'error'
-        return status
-
-    def check_pool_for_failed_nodes(self, pool_id):
-        """
-        Collects node state information from the batch pool
-        :param batch_client: batch service client
-        :param str pool_id: ID of pool to monitor
-        :param logger: logger object to issue warnings
-        """
-
-        healthy_states = ["idle", "running", "preempted",
-                          "waitingforstarttask", "leavingpool", 'starting']
-
-        for node_id in self.__list_compute_nodes_in_pool(pool_id):
-            status = self.__get_node_status(pool_id, node_id)
-
-            # node states are inconsistent with lower and upper cases
-            # stop looking when atleast one working node exists
-            if status.lower() in healthy_states:
-                return
-
-        self.logger.warning(
-            "Couldn't find any working nodes in pool. Please verify pool status")
+            yield node
 
     def download_blobs_from_container(
             self, directory_path, prefix
@@ -727,13 +687,124 @@ class BatchClient(object):
                     task_id, job_id, pool
                 )
             )
-        else:
-            status = self.__get_node_status(pool, node)
 
-            if status not in self.healthy_states:
-                logging.debug(
-                    'task {} under job {} and in pool {} was scheduled '
-                    'on node {} which is now in {} state'.format(
-                        task_id, job_id, pool, node, status
-                    )
+    def get_queued_tasks(self, job_id):
+        task_filter = "state eq 'active'"
+
+        tasks = list(
+            self.get_task_list(
+                job_id,
+                task_filter=task_filter)
+        )
+
+        return tasks
+
+    def __wait_resize(self, pool_id):
+        while not str(self.batch_client.pool.get(pool_id).allocation_state.name) == 'steady':
+            last_resize_time = self.last_resize.get(pool_id)
+            if not last_resize_time:
+                self.last_resize[pool_id] = datetime.datetime.now()
+            current_time = datetime.datetime.now()
+            time_delta = current_time - last_resize_time
+
+            if time_delta > datetime.timedelta(minutes=15):
+                logging.debug("stopping resize for pool {}".format(pool_id))
+                self.batch_client.pool.stop_resize(pool_id)
+                time.sleep(30)
+
+            time.sleep(30)
+
+    def __get_node_info(self, pool_id):
+
+        bad_nodes = []
+        idle_nodes = []
+        num_nodes = 0
+        for node in self.__list_compute_nodes_in_pool(pool_id):
+            num_nodes += 1
+            node_status = node.state.value.lower()
+            if node_status in self.unhealthy_states:
+                bad_nodes.append(node)
+            elif node_status == 'idle':
+                idle_nodes.append(node)
+
+        return bad_nodes, idle_nodes, num_nodes
+
+    def shrink_pool(self, pool_id, repeat=False, max_delete_idle_nodes=20):
+
+        self.__wait_resize(pool_id)
+
+        bad_nodes, idle_nodes, num_nodes = self.__get_node_info(pool_id)
+
+        while bad_nodes or idle_nodes:
+
+            idle_nodes = idle_nodes[:max_delete_idle_nodes]
+
+            self.__delete_nodes(pool_id, bad_nodes, idle_nodes)
+
+            self.__wait_resize(pool_id)
+
+            if not repeat:
+                break
+
+            bad_nodes, idle_nodes, num_nodes = self.__get_node_info(pool_id)
+
+    def resize_pool(self, pool_id, job_id):
+
+        dedicated = self.config['pools'][pool_id].get('dedicated')
+
+        self.__wait_resize(pool_id)
+
+        pool_config = self.config['pools'][pool_id]
+        tasks_per_node = pool_config['max_tasks_per_node']
+
+        bad_nodes, idle_nodes, num_nodes = self.__get_node_info(pool_id)
+
+        if idle_nodes:
+            return
+
+        queued_jobs = self.get_queued_tasks(job_id)
+
+        if len(queued_jobs) == 0:
+            self.shrink_pool(pool_id)
+
+        nodes_needed = int(math.ceil(len(queued_jobs) / tasks_per_node))
+        nodes_needed = min(nodes_needed, 20)
+        nodes_needed += num_nodes
+
+        logging.debug("scaling the pool to {}".format(nodes_needed))
+
+        self.last_resize[pool_id] = datetime.datetime.now()
+
+        try:
+            if dedicated:
+                resize = batchmodels.PoolResizeParameter(
+                    target_dedicated_nodes=nodes_needed,
                 )
+            else:
+                resize = batchmodels.PoolResizeParameter(
+                    target_low_priority_nodes=nodes_needed,
+                )
+
+            self.batch_client.pool.resize(pool_id, resize)
+        except:
+            logging.debug("error")
+            pass
+
+    def __delete_nodes(self, pool_id, bad_nodes, idle_nodes):
+
+        if bad_nodes:
+            remove_nodes = batchmodels.NodeRemoveParameter(
+                node_list=bad_nodes,
+                node_deallocation_option='requeue'
+
+            )
+            self.batch_client.pool.remove_nodes(pool_id, remove_nodes)
+
+        if idle_nodes:
+            idle_nodes = [node.id for node in idle_nodes]
+            remove_nodes = batchmodels.NodeRemoveParameter(
+                node_list=idle_nodes,
+                node_deallocation_option='taskcompletion'
+
+            )
+            self.batch_client.pool.remove_nodes(pool_id, remove_nodes)

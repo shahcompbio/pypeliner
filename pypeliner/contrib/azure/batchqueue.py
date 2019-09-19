@@ -48,6 +48,8 @@ class AzureJobQueue(object):
         self.job_temps_dir = {}
         self.job_blobname_prefix = {}
 
+        self.jobs_in_pool = {}
+
         self.mapping_from_tasks_to_job = {}
 
         self.most_recent_transition_time = None
@@ -66,6 +68,10 @@ class AzureJobQueue(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.logger.info('tear down')
+
+        for pool in self.batch_client.active_pools:
+            self.batch_client.shrink_pool(pool)
+
         if not self.no_delete_job:
             self.batch_client.delete_jobs(ignore_exception=True)
         if not self.no_delete_pool:
@@ -128,6 +134,10 @@ class AzureJobQueue(object):
         self.job_task_ids[name] = task_id
         self.job_temps_dir[name] = temps_dir
         self.job_blobname_prefix[name] = 'output_' + task_id
+
+        if pool_id not in self.jobs_in_pool:
+            self.jobs_in_pool[pool_id] = set()
+        self.jobs_in_pool[pool_id].add(task_id)
 
         after_remote_path = 'job_result.pickle'
         after_local_path = os.path.join(temps_dir, after_remote_path)
@@ -194,10 +204,12 @@ class AzureJobQueue(object):
             str: job name
 
         """
-
         timeout = datetime.timedelta(minutes=60)
 
         while True:
+            for pool_id in self.batch_client.active_pools:
+                self.batch_client.resize_pool(pool_id, self.get_jobid(pool_id))
+
             timeout_expiration = datetime.datetime.now() + timeout
 
             while datetime.datetime.now() < timeout_expiration:
@@ -226,9 +238,6 @@ class AzureJobQueue(object):
                 "Most recent transition: {}".format(
                     self.most_recent_transition_time))
             task_filter = "state eq 'completed'"
-
-            for pool_id in self.batch_client.active_pools:
-                self.batch_client.check_pool_for_failed_nodes(pool_id)
 
             for job_id in self.batch_client.active_jobs:
                 tasks = list(
@@ -359,12 +368,6 @@ class AzureJobQueue(object):
         pypeliner.helpers.GlobalState.update_all(received.pypeliner_globals)
 
         received.hostname = hostname
-
-        # batch keeps scheduling tasks on nodes in failed state, need to
-        # explicitly disable failed nodes.
-        if not received.finished or not received.started:
-            pool_id = self.batch_client.get_pool_id_from_job(job_id)
-            self.batch_client.verify_node_status(hostname, pool_id)
 
         return received
 
