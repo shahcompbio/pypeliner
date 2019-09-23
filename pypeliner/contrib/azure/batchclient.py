@@ -401,7 +401,7 @@ class BatchClient(object):
                 "requested mem:{} cpus:{} dedicated: {}." \
                 " submitting to {}".format(
                     memory_req_per_task, cpus_req, dedicated_req, biggestpool)
-            logging.getLogger('pypeliner.execqueue.azure_batch').warn(warn_str)
+            self.logger.warn(warn_str)
             return biggestpool
 
         # choose best fit
@@ -681,7 +681,7 @@ class BatchClient(object):
         pool = self.get_pool_id_from_job(job_id)
 
         if not node:
-            logging.debug(
+            self.logger.debug(
                 'task {} under job {} and in pool {} '
                 'has not been scheduled on a node yet!'.format(
                     task_id, job_id, pool
@@ -709,7 +709,7 @@ class BatchClient(object):
             time_delta = current_time - last_resize_time
 
             if time_delta > datetime.timedelta(minutes=15):
-                logging.debug("stopping resize for pool {}".format(pool_id))
+                self.logger.debug("stopping resize for pool {}".format(pool_id))
                 self.batch_client.pool.stop_resize(pool_id)
                 time.sleep(30)
 
@@ -772,7 +772,9 @@ class BatchClient(object):
         nodes_needed = min(nodes_needed, 20)
         nodes_needed += num_nodes
 
-        logging.debug("scaling the pool to {}".format(nodes_needed))
+        self.logger.debug(
+            "scaling the {} pool to {} nodes".format(pool_id, nodes_needed)
+        )
 
         self.last_resize[pool_id] = datetime.datetime.now()
 
@@ -787,9 +789,10 @@ class BatchClient(object):
                 )
 
             self.batch_client.pool.resize(pool_id, resize)
-        except:
-            logging.debug("error")
-            pass
+        except Exception as exc:
+            self.logger.debug(
+                "Could not resize pool due to the following error. {}".format(exc.message)
+            )
 
     def __delete_nodes(self, pool_id, bad_nodes, idle_nodes):
         if bad_nodes:
