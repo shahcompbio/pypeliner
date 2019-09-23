@@ -57,10 +57,14 @@ class AzureBlob(object):
         self.storage.pull(self.blob_name, self.filename)
 
     def get_exists(self):
-        # raise Exception(self.exists_cache)
         exists = self.exists_cache.get()
         if exists is None:
-            exists = os.path.exists(self.filename)
+            createtime = self.get_createtime()
+
+            if createtime is not None and createtime != 'missing':
+                exists = True
+            else:
+                exists = False
             self.exists_cache.set(exists)
         return exists
 

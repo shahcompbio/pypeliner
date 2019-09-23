@@ -704,6 +704,7 @@ class BatchClient(object):
             last_resize_time = self.last_resize.get(pool_id)
             if not last_resize_time:
                 self.last_resize[pool_id] = datetime.datetime.now()
+                last_resize_time = self.last_resize[pool_id]
             current_time = datetime.datetime.now()
             time_delta = current_time - last_resize_time
 
@@ -791,7 +792,6 @@ class BatchClient(object):
             pass
 
     def __delete_nodes(self, pool_id, bad_nodes, idle_nodes):
-
         if bad_nodes:
             remove_nodes = batchmodels.NodeRemoveParameter(
                 node_list=bad_nodes,
