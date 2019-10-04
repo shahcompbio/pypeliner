@@ -1,11 +1,8 @@
-import os
-import networkx
-import itertools
-import logging
 import collections
 import fnmatch
 import logging
 
+import networkx
 import pypeliner.helpers
 import pypeliner.identifiers
 import pypeliner.workflow
@@ -186,14 +183,6 @@ class DependencyGraph:
     def pop_next_job(self):
         """ Return the id of the next job that is ready for execution.
         """
-        for job in self.jobs.values():
-            if len(job.inputs) == 0 and job.id not in self.running and job.id not in self.completed:
-                self.running.add(job.id)
-                return job
-
-        for job_id in self.running:
-            if len(self.jobs[job_id].inputs) == 0:
-                raise NoJobs()
 
         resource_out_of_date = set()
 
@@ -223,12 +212,26 @@ class DependencyGraph:
                     resource_required.add(i.id)
 
         for job in self.jobs_forward:
+            if job.teardown:
+                continue
             inputs_created = all([i.id in self.created for i in job.inputs])
             if inputs_created and job.id not in self.running and job.id not in self.completed:
                 if job.id in job_required:
                     job.is_required_downstream = True
                 self.running.add(job.id)
                 return self.jobs[job.id]
+
+        # Wait until all jobs are finished running before teardown jobs commence
+        if len(self.running) > 0:
+            raise NoJobs()
+
+        # Start all teardown jobs
+        for job in self.jobs.values():
+            if not job.teardown:
+                continue
+            if len(job.inputs) == 0 and job.id not in self.running and job.id not in self.completed:
+                self.running.add(job.id)
+                return job
 
         raise NoJobs()
 
@@ -317,7 +320,7 @@ class WorkflowInstance(object):
             return job
 
         contexts = context_config.get('context', {})
-        for _,inpctx in contexts.items():
+        for _, inpctx in contexts.items():
             if fnmatch.fnmatch(job_displayname, inpctx["name_match"]):
                 job_ctx.update(inpctx.get("ctx", {}))
                 runskip = inpctx.get("runskip")
