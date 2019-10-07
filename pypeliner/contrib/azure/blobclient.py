@@ -245,9 +245,13 @@ class BlobStorageClient(object):
             blob = semaphore.run()
 
         else:
-            blob = self.blob_client.get_blob_to_path(container_name,
-                                                     blob_name,
-                                                     destination_file_path)
+            try:
+                blob = self.blob_client.get_blob_to_path(container_name,
+                                                         blob_name,
+                                                         destination_file_path)
+            except Exception as exc:
+                self.logger.info("Error downloading {} from {}".format(blob_name,container_name))
+                raise exc
 
         return blob
 

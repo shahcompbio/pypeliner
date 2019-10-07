@@ -70,7 +70,7 @@ class AzureJobQueue(object):
         self.logger.info('tear down')
 
         for pool in self.batch_client.active_pools:
-            self.batch_client.shrink_pool(pool)
+            self.batch_client.shrink_pool(pool, repeat=True)
 
         if not self.no_delete_job:
             self.batch_client.delete_jobs(ignore_exception=True)
@@ -168,7 +168,9 @@ class AzureJobQueue(object):
 
         command, shell_files = pypeliner.containerize.containerize_args(*command, **ctx)
 
-        command[-1] = os.path.basename(command[-1])
+        if shell_files:
+            command[-1] = os.path.basename(command[-1])
+
         command = ' '.join(command)
 
         job_shell_files = []

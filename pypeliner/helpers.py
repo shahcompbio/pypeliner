@@ -149,7 +149,7 @@ class Backoff(object):
                 self._update_backoff_time()
                 logging.getLogger("pypeliner.helpers").warn(
                     "error {} caught, retrying after {} seconds".format(
-                        exc.message, self.backoff_time)
+                        str(exc), self.backoff_time)
                 )
                 retry_no += 1
                 time.sleep(self.backoff_time)
