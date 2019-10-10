@@ -236,16 +236,15 @@ class TempObjManager(object):
 
     def get_obj(self):
         if self.input.exists:
-            return self.input.get_obj()
+            try:
+                return self.input.get_obj()
+            except:
+                return
 
     def finalize(self, obj):
         self.output.put_obj(obj)
 
-        try:
-            existing_obj = self.get_obj()
-        except ImportError:
-            self.input.put_obj(obj)
-            return
+        existing_obj = self.get_obj()
 
-        if not self.input.exists or not obj_equal(obj, existing_obj):
+        if not existing_obj or not obj_equal(obj, existing_obj):
             self.input.put_obj(obj)
