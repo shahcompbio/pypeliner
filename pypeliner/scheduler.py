@@ -177,6 +177,7 @@ class Scheduler(object):
 
 
     def _wait_next_job(self, exec_queue, workflow):
+
         name = exec_queue.wait()
 
         job = self._active_jobs[name]

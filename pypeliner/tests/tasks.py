@@ -1,34 +1,27 @@
 import itertools
 import os
-
-import pypeliner.managed as mgd
-import pypeliner.workflow
 import time
 
 import pypeliner
+import pypeliner.workflow
+import pypeliner.managed as mgd
 
-class PlannedException(Exception):
-    pass
 
 class stuff:
     def __init__(self, some_string):
         self.some_string = some_string
 
-
 def read_stuff(filename):
     with open(filename, 'r') as f:
         return stuff(''.join(f.readlines()).rstrip())
 
-
 def split_stuff(stf):
-    return dict([(ind, stuff(value)) for ind, value in enumerate(list(stf.some_string))])
-
+    return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
 def split_file_byline(in_filename, lines_per_file, out_filename_callback, max_files=None):
     with open(in_filename, 'r') as in_file:
         def line_group(line, line_idx=itertools.count()):
             return int(next(line_idx) / lines_per_file)
-
         for file_idx, lines in itertools.groupby(in_file, key=line_group):
             if max_files is not None and file_idx >= max_files:
                 break
@@ -36,11 +29,9 @@ def split_file_byline(in_filename, lines_per_file, out_filename_callback, max_fi
                 for line in lines:
                     out_file.write(line)
 
-
 def split_2_file_byline(in_filename, out_filename_1, out_filename_2):
     split_file_byline(in_filename, 2, out_filename_1)
     split_file_byline(in_filename, 2, out_filename_2)
-
 
 def do_file_stuff(in_filename, out_filename, toadd):
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
@@ -49,14 +40,12 @@ def do_file_stuff(in_filename, out_filename, toadd):
             out_file.write(str(line_number) + str(toadd) + line.rstrip() + '\n')
             line_number += 1
 
-
 def merge_file_byline(in_filenames, out_filename):
     with open(out_filename, 'w') as out_file:
         for id, in_filename in sorted(in_filenames.items()):
             with open(in_filename, 'r') as in_file:
                 for line in in_file.readlines():
                     out_file.write(line)
-
 
 def merge_2_file_byline(in_filenames_1, in_filenames_2, out_filename):
     with open(out_filename, 'w') as out_file:
@@ -66,27 +55,21 @@ def merge_2_file_byline(in_filenames_1, in_filenames_2, out_filename):
                     for line in in_file.readlines():
                         out_file.write(line)
 
-
 def split_by_line(stf):
-    return dict([(ind, stuff(value)) for ind, value in enumerate(stf.some_string.split('\n'))])
-
+    return dict([(ind,stuff(value)) for ind,value in enumerate(stf.some_string.split('\n'))])
 
 def split_by_char(stf):
-    return dict([(ind, stuff(value)) for ind, value in enumerate(list(stf.some_string))])
-
+    return dict([(ind,stuff(value)) for ind,value in enumerate(list(stf.some_string))])
 
 def do_stuff(a):
     return a + '-'
 
-
 def do_paired_stuff(output_filename, input1_filename, input2_filename):
     os.system('cat ' + input1_filename + ' ' + input2_filename + ' > ' + output_filename)
-
 
 def dict_arg_stuff(output_filenames, input_filenames):
     append_to_lines(input_filenames['1'], '1', output_filenames['1'])
     append_to_lines(input_filenames['2'], '2', output_filenames['2'])
-
 
 def merge_stuff(stfs):
     merged = ''
@@ -94,47 +77,38 @@ def merge_stuff(stfs):
         merged = merged + stf
     return merged
 
-
 def write_stuff(a, filename):
     with open(filename, 'w') as f:
         f.write(a)
-
 
 def append_to_lines(in_filename, append, out_filename):
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
         for line in in_file:
             out_file.write(line.rstrip() + append + '\n')
 
-
 def append_to_lines_instance(in_filename, instance, out_filename):
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
         for line in in_file:
             out_file.write(line.rstrip() + str(instance) + '\n')
-
 
 def copy_file(in_filename, out_filename):
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
         for line in in_file:
             out_file.write(line)
 
-
 def write_list(in_list, out_filename):
     with open(out_filename, 'w') as out_file:
         for a in sorted(in_list):
             out_file.write(str(a))
 
-
 def do_nothing(*arg):
     pass
-
 
 def do_assert(*arg):
     assert False
 
-
 def set_chunks():
     return [1, 2]
-
 
 def file_transform(in_filename, out_filename, prefix, template_filename, merge_templates):
     with open(template_filename, 'w'):
@@ -145,19 +119,16 @@ def file_transform(in_filename, out_filename, prefix, template_filename, merge_t
         for line in in_file:
             out_file.write('{0}'.format(prefix) + line)
 
-
 def write_files(out_filename_callback):
     for chunk in (1, 2):
         with open(out_filename_callback(chunk), 'w') as f:
             f.write('file{0}\n'.format(chunk))
-
 
 def check_temp(output_filename, temp_filename):
     with open(temp_filename, 'w'):
         pass
     with open(output_filename, 'w') as output_file:
         output_file.write(temp_filename)
-
 
 def create_workflow_2(input_filename, output_filename):
     workflow = pypeliner.workflow.Workflow()
@@ -179,7 +150,6 @@ def create_workflow_2(input_filename, output_filename):
             'b'))
 
     return workflow
-
 
 def create_workflow_1(input_filename, output_filename):
     workflow = pypeliner.workflow.Workflow()
@@ -221,8 +191,8 @@ def create_workflow_1(input_filename, output_filename):
 def touch(f):
     with open(f, 'w'):
         pass
-
-
+        
+        
 def checkexists(f):
     assert os.path.exists(f)
 
@@ -263,12 +233,11 @@ def job5(i1, o1):
 class Test(object):
     fragment_mean = None
     fragment_stddev = None
-
-
+    
 def calculate_fragment_stats(i1):
     checkexists(i1)
     return Test()
-
+    
 
 def sample_gc(o1, i1, i2, i3, i4):
     checkexists(i1)
@@ -302,5 +271,3 @@ def biased_length(o1, i1):
     checkexists(i1)
     touch(o1)
 
-def fail(*args):
-    raise PlannedException("Please ignore this error")

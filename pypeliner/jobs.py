@@ -104,7 +104,6 @@ class JobInstance(object):
         self.is_required_downstream = False
         self.init_inputs_outputs()
         self.runskip_request = None
-        self.teardown = self.ctx.get('teardown', False)
 
     def _create_arg(self, mg):
         if not isinstance(mg, pypeliner.managed.Managed):
