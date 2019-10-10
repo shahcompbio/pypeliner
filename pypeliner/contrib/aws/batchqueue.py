@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import os
-import pypeliner.json_pickle as pickle
+import dill as pickle
 import logging
 import yaml
 import time

@@ -1,7 +1,7 @@
 import logging
 
 import pypeliner.identifiers
-import pypeliner.json_pickle as pickle
+import dill as pickle
 
 
 class Dependency(object):

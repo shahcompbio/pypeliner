@@ -7,7 +7,7 @@ import time
 
 import pypeliner.execqueue.base
 import pypeliner.helpers
-import pypeliner.json_pickle as pickle
+import dill as pickle
 import pypeliner.tests.jobs
 import yaml
 

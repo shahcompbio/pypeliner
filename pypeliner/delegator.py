@@ -7,7 +7,7 @@ import tempfile
 import time
 import traceback
 
-import pypeliner.json_pickle as pickle
+import dill as pickle
 import pypeliner.helpers
 
 
