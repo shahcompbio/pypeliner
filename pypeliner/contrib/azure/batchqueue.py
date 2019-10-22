@@ -278,7 +278,7 @@ class AzureJobQueue(object):
 
         if len(tasks) >= list_max_results:
             mid_transition_time = sorted_transition_times[
-                len(sorted_transition_times) / 2]
+                int(len(sorted_transition_times) / 2)]
             return self._update_task_state(
                 latest_transition_time=mid_transition_time)
 
