@@ -1,16 +1,11 @@
-import datetime
 import os
 import resource
 import signal
-import socket
 import sys
-import time
 import traceback
-import uuid
-from datetime import timedelta
 
+import datetime
 import pypeliner.arguments
-import pypeliner.commandline
 import pypeliner.deep
 import pypeliner.helpers
 import pypeliner.identifiers
@@ -18,6 +13,12 @@ import pypeliner.managed
 import pypeliner.resources
 import pypeliner.storage
 import six
+import socket
+import time
+import uuid
+from datetime import timedelta
+
+import pypeliner.commandline
 
 try:
     from future_builtins import filter
@@ -209,7 +210,6 @@ class JobInstance(object):
                 status)
             explanation.append(text)
         for output in self.output_resources:
-            status = ''
             if output.createtime is None:
                 status = ''
             elif newest_input_date is not None and output.createtime < newest_input_date:
