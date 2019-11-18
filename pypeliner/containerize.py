@@ -131,6 +131,9 @@ def dockerize_args(args, image, context_cfg):
     # docker_args.extend(['-w', wdir])
     docker_args.extend(['-w', '$PWD'])
 
+    # map working directory into the container
+    docker_args.extend(['-v', '$PWD:$PWD'])
+
     # remove container after it finishes running
     docker_args.append('--rm')
 
