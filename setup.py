@@ -17,5 +17,6 @@ setup(
     package_data={'pypeliner': ['tests/*.input']},
     entry_points={'console_scripts': ['pypeliner_delegate=pypeliner.delegator:main',
                                       'aws_fetch_run=pypeliner.contrib.aws.fetch_run:main'],
-                  },
+    },
+    install_requires=['six', 'dill', 'networkx'],
 )
