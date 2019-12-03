@@ -250,8 +250,12 @@ class BlobStorageClient(object):
                                                          blob_name,
                                                          destination_file_path)
             except Exception as exc:
-                self.logger.info("Error downloading {} from {}".format(blob_name,container_name))
+                self.logger.exception("Error downloading {} from {}".format(blob_name, container_name))
                 raise exc
+
+        if not blob:
+            self.logger.exception('Blob SDK returned None, retrying')
+            raise AzureHttpError('Blob download failure', 1)
 
         return blob
 
