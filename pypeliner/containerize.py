@@ -155,7 +155,8 @@ def dockerize_args(args, image, context_cfg):
     docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
     docker_args.extend(['-v', '{}/.docker:/root/.docker'.format(mount_path)])
 
-    image_uri = server + '/' + image
+    image_uri = server + '/' + image if server else image
+
     docker_args.append(image_uri)
 
     if '|' in args or '>' in args or '<' in args:
@@ -173,7 +174,7 @@ def dockerize_args(args, image, context_cfg):
 
 def get_docker_prep_command(server, image, username, password):
     # try to pull the image. if fails then login and retry
-    image_uri = server + '/' + image
+    image_uri = server + '/' + image if server else image
 
     pull_cmd = 'docker pull {0}'.format(image_uri)
     login_cmd = 'docker login {0} -u {1} -p {2}'.format(server, username, password)
