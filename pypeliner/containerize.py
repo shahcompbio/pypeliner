@@ -1,9 +1,9 @@
 import logging
 import os
-import uuid
 from os.path import expanduser
 
 import pypeliner
+import uuid
 
 
 def which(filepath):
@@ -36,7 +36,7 @@ def containerize_args(*args, **kwargs):
     if context_cfg and context_cfg.get('singularity'):
         args, shell_files = singularity_args(args, docker_image, context_cfg, execute)
     elif context_cfg and context_cfg.get('docker'):
-        args, shell_files = dockerize_args(args, docker_image, context_cfg,)
+        args, shell_files = dockerize_args(args, docker_image, context_cfg, )
 
     return args, shell_files
 
@@ -116,44 +116,26 @@ def dockerize_args(args, image, context_cfg):
     server = context_cfg['docker']['server']
     kwargs = context_cfg.get('docker', None)
 
-    docker_prep_command = get_docker_prep_command(
-        server, image, kwargs['username'], kwargs['password']
-    )
-
-    mounts = sorted(set(kwargs.get("mounts", {}).values()))
-
-    docker_args = ['docker', 'run']
-    for mount in mounts:
-        docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
-
-    # paths on azure are relative, so we need to set the working dir
-    wdir = os.getcwd()
-    # docker_args.extend(['-w', wdir])
-    docker_args.extend(['-w', '$PWD'])
-
-    # map working directory into the container
-    docker_args.extend(['-v', '$PWD:$PWD'])
-
-    # remove container after it finishes running
-    docker_args.append('--rm')
-
-    docker_path = which('docker')
-    if not docker_path:
-        raise Exception("Couldn't find docker in system")
-    docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
-
-    # expose docker socket to enable starting
-    # new containers from the current container
-    docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
-
     if 'ROOT_HOME' in os.environ:
         mount_path = os.environ['ROOT_HOME']
     else:
         mount_path = expanduser('~')
-    # will copy config file which preserves docker login
-    # all containers after  the first one will run as root
-    docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
-    docker_args.extend(['-v', '{}/.docker:/root/.docker'.format(mount_path)])
+
+    docker_path = which('docker')
+    if not docker_path:
+        raise Exception("Couldn't find docker in system")
+
+    docker_args = [
+        'docker', 'run', '-w', '$PWD', '-v', '$PWD:$PWD',
+        '--rm', '-v', '{}:/usr/bin/docker'.format(docker_path),
+        '-v', '/var/run/docker.sock:/var/run/docker.sock',
+        '-e', 'ROOT_HOME={}'.format(mount_path),
+        '-v', '{}/.docker:/root/.docker'.format(mount_path)
+    ]
+
+    mounts = sorted(set(kwargs.get("mounts", {}).values()))
+    for mount in mounts:
+        docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
 
     image_uri = server + '/' + image if server else image
 
@@ -166,7 +148,14 @@ def dockerize_args(args, image, context_cfg):
 
     args = docker_args + list(args)
 
-    shell_file = write_to_shell_script([docker_prep_command, args])
+    commands = []
+    if server:
+        docker_prep_command = get_docker_prep_command(
+            server, image, kwargs['username'], kwargs['password']
+        )
+        commands.append(docker_prep_command)
+    commands.append(args)
+    shell_file = write_to_shell_script(commands)
     shell_files.append(shell_file)
 
     return ['bash', shell_file], shell_files
