@@ -133,6 +133,9 @@ def dockerize_args(args, image, context_cfg):
         '-v', '{}/.docker:/root/.docker'.format(mount_path)
     ]
 
+    if 'PYTHONPATH' in os.environ:
+        docker_args.extend(('--env', 'PYTHONPATH={}'.format(os.environ["PYTHONPATH"])))
+
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
