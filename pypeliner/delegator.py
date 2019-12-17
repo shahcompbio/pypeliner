@@ -24,7 +24,7 @@ class Delegator(object):
 
     def _waitfile(self, filename):
         waittime = 1
-        while waittime < 1:
+        while waittime < 100:
             if os.path.exists(filename):
                 return
             if waittime >= 4:
