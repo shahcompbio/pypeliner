@@ -1,14 +1,14 @@
-import datetime
 import logging
 import os
 
 import azure.common
 import azure.storage.blob as azureblob
+import datetime
 import pypeliner
 from azure.common import AzureHttpError
-from azure.common.credentials import ServicePrincipalCredentials
-from azure.keyvault import KeyVaultClient, KeyVaultAuthentication
-from azure.keyvault.models import KeyVaultErrorException
+from azure.core.exceptions import ResourceNotFoundError
+from azure.identity import ClientSecretCredential
+from azure.keyvault.secrets import SecretClient
 from pypeliner.helpers import Backoff
 
 from .rabbitmq import RabbitMqSemaphore
@@ -191,22 +191,14 @@ class BlobStorageClient(object):
         :param str accountname: storage account name
         """
 
-        def auth_callback(server, resource, scope):
-            credentials = ServicePrincipalCredentials(
-                client_id=client_id,
-                secret=secret_key,
-                tenant=tenant_id,
-                resource="https://vault.azure.net"
-            )
-            token = credentials.token
-            return token['token_type'], token['access_token']
+        credential = ClientSecretCredential(tenant_id, client_id, secret_key)
+        keyvault = 'https://{}.vault.azure.net'.format(keyvault_account)
 
-        client = KeyVaultClient(KeyVaultAuthentication(auth_callback))
-        keyvault = "https://{}.vault.azure.net/".format(keyvault_account)
-        # passing in empty string for version returns latest key
+        client = SecretClient(keyvault, credential)
+
         try:
-            secret_bundle = client.get_secret(keyvault, accountname, "")
-        except KeyVaultErrorException:
+            secret_bundle = client.get_secret(accountname)
+        except ResourceNotFoundError:
             err_str = "The pipeline is not setup to use the {} account. ".format(accountname)
             err_str += "please add the storage key for the account to {} ".format(keyvault_account)
             err_str += "as a secret. All input/output paths should start with accountname"
