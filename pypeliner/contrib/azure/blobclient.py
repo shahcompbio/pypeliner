@@ -45,7 +45,7 @@ class IncorrectContainerUri(Exception):
 class AzureLoggingFilter(logging.Filter):
     def __init__(self):
         self.filter_keywords = [
-            'azure', 'adal-python', 'urllib3', 'msrest'
+            'azure', 'adal-python', 'urllib3', 'msrest', 'msal'
         ]
 
     def filter(self, rec):
