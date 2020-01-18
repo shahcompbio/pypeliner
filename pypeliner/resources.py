@@ -246,5 +246,5 @@ class TempObjManager(object):
 
         existing_obj = self.get_obj()
 
-        if not existing_obj or not obj_equal(obj, existing_obj):
+        if existing_obj is None or not obj_equal(obj, existing_obj):
             self.input.put_obj(obj)
