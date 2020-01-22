@@ -95,11 +95,10 @@ def singularity_args(args, image, context_cfg, execute):
 
     command = ['bash', os.path.abspath(shell_file)]
 
-    if execute:
-        ssh_localhost = [
-            'ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', 'localhost'
-        ]
-        command = ssh_localhost + command
+    ssh_localhost = [
+        'ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', 'localhost'
+    ]
+    command = ssh_localhost + command
 
     return command, shell_files
 
