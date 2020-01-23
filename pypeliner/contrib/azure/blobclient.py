@@ -322,7 +322,7 @@ class BlobStorageClient(object):
         if not self.container_exists(container_name=container_name):
             self.create_container(container_name=container_name)
 
-        if os.stat(file_path).st_size > 1024*1024*1034:
+        if os.stat(file_path).st_size > 1024*1024*1024:
             self.blob_client.MAX_BLOCK_SIZE = 100*1024*1024
             self.blob_client.create_blob_from_path(
                 container_name, blob_name, file_path, metadata=metadata
