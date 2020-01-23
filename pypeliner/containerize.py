@@ -76,6 +76,11 @@ def singularity_args(args, image, context_cfg, execute):
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
     for mount in mounts:
         singularity_command.extend(['--bind', mount])
+    if kwargs.get('extra_args'):
+        extra_args = kwargs.get('extra_args')
+        assert isinstance(extra_args, list), 'singularity extra args must be a list'
+        singularity_command.extend(extra_args)
+
     # paths on azure are relative, so we need to set the working dir
     wdir = os.getcwd()
     singularity_command.extend(['--pwd', wdir])
