@@ -148,6 +148,10 @@ def dockerize_args(args, image, context_cfg):
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
 
+    org = context_cfg['docker']['org']
+
+    image = org + '/' + image if org else image
+
     image_uri = server + '/' + image if server else image
 
     docker_args.append(image_uri)
