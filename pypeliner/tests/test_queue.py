@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import argparse
 import os
 import logging
@@ -11,8 +9,12 @@ import pypeliner.helpers
 class BasicJob():
     def __init__(self):
         self.success = False
+        self.started = False
         self.ctx = {}
+        self.log_records = []
+        self.version = pypeliner.__version__
     def __call__(self):
+        self.started = True
         self.success = True
 
 
@@ -40,7 +42,7 @@ def run_basic(exec_queue, base_temps_dir):
 
 
 if __name__ == '__main__':
-    from . import test_queue
+    from pypeliner.tests import test_queue
 
     argparser = argparse.ArgumentParser()
 
