@@ -17,6 +17,7 @@ import socket
 import time
 import uuid
 from datetime import timedelta
+import dill as pickle
 
 import pypeliner.commandline
 
@@ -241,7 +242,7 @@ class JobInstance(object):
     def create_callable(self):
         return JobCallable(
             self.id, self.job_def.wrapped_func, self.argset, self.arglist,
-            self.db.file_storage, self.store_dir, self.logs_dir, self.ctx
+            self.db.file_storage, self.store_dir, self.logs_dir, self.create_exc_dir(), self.ctx
         )
 
     def create_exc_dir(self):
@@ -387,10 +388,22 @@ def resolve_arg(arg):
     return arg.resolve(), True
 
 
+def _waitfile(filename):
+    waittime = 1
+    while waittime < 100:
+        if os.path.exists(filename):
+            return
+        if waittime >= 4:
+            logging.getLogger('pypeliner.delegator').warn(
+                'waiting {0}s for {1} to appear'.format(waittime, filename))
+        time.sleep(waittime)
+        waittime *= 2
+
+
 class JobCallable(object):
     """ Callable function and args to be given to exec queue """
 
-    def __init__(self, id, func, argset, arglist, storage, store_dir, logs_dir, ctx):
+    def __init__(self, id, func, argset, arglist, storage, store_dir, logs_dir, exec_dir, ctx):
         self.storage = storage
         self.id = id
         self.ctx = ctx
@@ -402,6 +415,7 @@ class JobCallable(object):
         self.displaycommand = '?'
         self.store_dir = store_dir
         self.logs_dir = logs_dir
+        self.exec_dir = exec_dir
         self.stdout_filename = os.path.join(logs_dir, 'job.out')
         self.stderr_filename = os.path.join(logs_dir, 'job.err')
         self.stdout_storage = self.storage.create_store(self.stdout_filename)
@@ -412,6 +426,28 @@ class JobCallable(object):
         self.job_time_out = JobTimeOut(timeout)
         self.hostname = '?'
         self.pypeliner_globals = pypeliner.helpers.GlobalState.get_all()
+        self.version = pypeliner.__version__
+
+    def prepare_script(self, exec_dir):
+        script_filename = os.path.join(exec_dir, 'job.sh')
+        before_filename = os.path.join(exec_dir, 'job_before.pickle')
+        after_filename = os.path.join(exec_dir, 'job_after.pickle')
+
+        with open(before_filename, 'wb') as before:
+            pickle.dump(self, before)
+
+        command = [
+            'pypeliner_delegate',
+            before_filename,
+            after_filename,
+        ]
+
+        with open(script_filename, 'w') as f:
+            f.write('set -e\n')
+            f.write('set -o pipefail\n\n')
+            f.write(' '.join(command) + '\n')
+
+        return script_filename
 
     @property
     def duration(self):
@@ -510,6 +546,22 @@ class JobCallable(object):
         job.workflow.complete_job(job)
 
 
+def retrieve_result(exec_dir):
+    print(exec_dir)
+    after_filename = os.path.join(exec_dir, 'job_after.pickle')
+
+    _waitfile(after_filename)
+    if not os.path.exists(after_filename):
+        return None
+    job = None
+    with open(after_filename, 'rb') as after:
+        job = pickle.load(after)
+    # if job:
+    #     for logrecord in job.log_records:
+    #         logging.getLogger().handle(logrecord)
+    return job
+
+
 def _setobj_helper(value):
     return value
 
@@ -552,7 +604,7 @@ class SubWorkflowInstance(JobInstance):
         return WorkflowCallable(
             self.id, self.job_def.func, self.argset, self.arglist,
             self.db.file_storage, self.store_dir, self.logs_dir,
-            self.job_def.ctx)
+            self.create_exc_dir(), self.job_def.ctx)
 
     def init_inputs_outputs(self):
         self.inputs = list()

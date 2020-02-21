@@ -34,6 +34,7 @@ def split_2_file_byline(in_filename, out_filename_1, out_filename_2):
     split_file_byline(in_filename, 2, out_filename_2)
 
 def do_file_stuff(in_filename, out_filename, toadd):
+    raise
     with open(in_filename, 'r') as in_file, open(out_filename, 'w') as out_file:
         line_number = 0
         for line in in_file:

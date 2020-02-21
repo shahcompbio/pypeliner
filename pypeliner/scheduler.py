@@ -116,6 +116,7 @@ class Scheduler(object):
     def _add_job(self, exec_queue, job):
         sent = job.create_callable()
         exc_dir = job.create_exc_dir()
+        script_filename = sent.prepare_script(exc_dir)
 
         self._active_jobs[job.displayname] = job
 
@@ -145,7 +146,7 @@ class Scheduler(object):
         sent.dirs = dirs
         sent.version = pypeliner.__version__
 
-        exec_queue.send(job.ctx, job.displayname, sent, exc_dir)
+        exec_queue.send(job.ctx, job.displayname, script_filename, exc_dir)
 
     def _retry_job(self, exec_queue, job):
         if not job.retry():
@@ -185,9 +186,12 @@ class Scheduler(object):
 
         assert job is not None
 
+        exec_queue.receive(name)
+        exec_dir = job.create_exc_dir()
+        received = pypeliner.jobs.retrieve_result(exec_dir)
+
         try:
-            received = exec_queue.receive(name)
-            received.collect_logs()
+            # received.collect_logs()
             if not received.finished:
                 raise IncompleteJobException()
         except pypeliner.execqueue.base.ReceiveError:

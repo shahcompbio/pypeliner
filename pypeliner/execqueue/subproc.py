@@ -21,11 +21,11 @@ class SubProcessJobQueue(pypeliner.execqueue.base.JobQueue):
     def __exit__(self, exc_type, exc_value, traceback):
         pass
 
-    def create(self, ctx, name, sent, temps_dir):
+    def create(self, ctx, name, script_filename, temps_dir):
         raise NotImplementedError()
 
-    def send(self, ctx, name, sent, temps_dir):
-        submitted = self.create(ctx, name, sent, temps_dir)
+    def send(self, ctx, name, script_filename, temps_dir):
+        submitted = self.create(ctx, name, script_filename, temps_dir)
         self.jobs[name] = submitted
         self.pid_names[submitted.process.pid] = name
 
@@ -53,7 +53,6 @@ class SubProcessJobQueue(pypeliner.execqueue.base.JobQueue):
     def receive(self, name):
         job = self.jobs.pop(name)
         job.finalize(self.pid_returncodes.pop(name))
-        return job.received
 
     @property
     def length(self):

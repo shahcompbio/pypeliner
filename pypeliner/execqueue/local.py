@@ -10,11 +10,10 @@ import pypeliner
 
 class LocalJob(object):
     """ Encapsulate a running job called locally by subprocess """
-    def __init__(self, ctx, name, sent, temps_dir, modules):
+    def __init__(self, ctx, name, script_filename, temps_dir, modules):
         self.name = name
         self.logger = logging.getLogger('pypeliner.execqueue')
-        self.delegated = pypeliner.delegator.Delegator(sent, os.path.join(temps_dir, 'job.dgt'), modules)
-        self.command = self.delegated.initialize()
+        self.command = ['bash', script_filename]
         self.debug_filenames = dict()
         self.debug_filenames['job stdout'] = os.path.join(temps_dir, 'job.out')
         self.debug_filenames['job stderr'] = os.path.join(temps_dir, 'job.err')
@@ -39,8 +38,7 @@ class LocalJob(object):
             
     def finalize(self, returncode):
         self.close_debug_files()
-        self.received = self.delegated.finalize()
-        if returncode != 0 or self.received is None or not self.received.started:
+        if returncode != 0:
             error_text = self.name + ' failed to complete\n'
             error_text += '-' * 10 + ' delegator command ' + '-' * 10 + '\n'
             error_text += ' '.join(self.command) + '\n'
@@ -52,8 +50,8 @@ class LocalJob(object):
 
 class LocalJobQueue(pypeliner.execqueue.subproc.SubProcessJobQueue):
     """ Queue of local jobs """
-    def create(self, ctx, name, sent, temps_dir):
-        return LocalJob(ctx, name, sent, temps_dir, self.modules)
+    def create(self, ctx, name, script_filename, temps_dir):
+        return LocalJob(ctx, name, script_filename, temps_dir, self.modules)
 
 
 class LocalRemoteQueue(pypeliner.execqueue.base.JobQueue):
