@@ -328,7 +328,7 @@ class BlobStorageClient(object):
                 container_name, blob_name, file_path, metadata=metadata
             )
         else:
-            self.blob_client.MAX_BLOCK_SIZE = None
+            self.blob_client.MAX_BLOCK_SIZE = 4*1024*1024
             self.blob_client.create_blob_from_path(
                 container_name, blob_name, file_path, metadata=metadata
             )
