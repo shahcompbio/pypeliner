@@ -170,7 +170,8 @@ class Scheduler(object):
         pypeliner.helpers.log_event(
             ['job_name', job.displayname, error_str, error],
             extras={'job_name': job.displayname, 'task_name': job.id[1], "status": 'error'},
-            logger=self._logger
+            logger=self._logger,
+            'err',
         )
         if not self._retry_job(exec_queue, job):
             raise pypeliner.graph.IncompleteJobException()
