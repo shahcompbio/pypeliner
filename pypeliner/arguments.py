@@ -112,7 +112,7 @@ class TempSpaceArg(Arg):
             pypeliner.helpers.removefiledir(self.filename)
 
 
-class MergeTemplateArg(Arg):
+class MergeTemplateArg(Arg, SplitMergeArg):
     """ Temp input files merged along a single axis
 
     The name parameter is treated as a string with named formatting.  Resolves to a dictionary with the keys as chunks
@@ -129,9 +129,9 @@ class MergeTemplateArg(Arg):
         self.formatted = {}
         for node in db.nodemgr.retrieve_nodes(self.axes, self.node):
             if self.template is not None:
-                self.formatted[node[-1][1]] = self.template.format(**dict(node))
+                self.formatted[self.get_node_chunks(node)] = self.template.format(**dict(node))
             else:
-                self.formatted[node[-1][1]] = self.name.format(**dict(node))
+                self.formatted[self.get_node_chunks(node)] = self.name.format(**dict(node))
 
     def get_merge_inputs(self):
         return self.merge_inputs
