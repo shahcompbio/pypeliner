@@ -122,7 +122,7 @@ def dockerize_args(args, image, context_cfg):
 
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
 
-    docker_args = ['docker', 'run']
+    docker_args = ['udocker', 'run']
     for mount in mounts:
         docker_args.extend(['-v', '{}:{}'.format(mount, mount)])
 
@@ -137,14 +137,10 @@ def dockerize_args(args, image, context_cfg):
     # remove container after it finishes running
     docker_args.append('--rm')
 
-    docker_path = which('docker')
+    docker_path = which('udocker')
     if not docker_path:
         raise Exception("Couldn't find docker in system")
     docker_args.extend(['-v', '{}:/usr/bin/docker'.format(docker_path)])
-
-    # expose docker socket to enable starting
-    # new containers from the current container
-    docker_args.extend(['-v', '/var/run/docker.sock:/var/run/docker.sock'])
 
     if 'ROOT_HOME' in os.environ:
         mount_path = os.environ['ROOT_HOME']
@@ -153,7 +149,6 @@ def dockerize_args(args, image, context_cfg):
     # will copy config file which preserves docker login
     # all containers after  the first one will run as root
     docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
-    docker_args.extend(['-v', '{}/.docker:/root/.docker'.format(mount_path)])
 
     image_uri = server + '/' + image
     docker_args.append(image_uri)
@@ -175,8 +170,8 @@ def get_docker_prep_command(server, image, username, password):
     # try to pull the image. if fails then login and retry
     image_uri = server + '/' + image
 
-    pull_cmd = 'docker pull {0}'.format(image_uri)
-    login_cmd = 'docker login {0} -u {1} -p {2}'.format(server, username, password)
+    pull_cmd = 'udocker pull {0}'.format(image_uri)
+    login_cmd = 'udocker login {0} -u {1} -p {2}'.format(server, username, password)
 
     cmd = ['{\n', pull_cmd, '\n}', '||', '{\n', login_cmd, '&&', pull_cmd, '\n}']
     cmd = ' '.join(cmd)
