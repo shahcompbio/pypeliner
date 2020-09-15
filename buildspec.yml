@@ -1,0 +1,6 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - docker run -e ANACONDA_API_TOKEN  -v $PWD:$PWD -w $PWD --rm  singlecellpipeline/conda_build:v0.0.1 bash -c "conda update -n base -c defaults conda -y &&  conda config --set anaconda_upload yes && conda build conda/pypeliner"
