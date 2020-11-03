@@ -1,12 +1,14 @@
 import logging
 import subprocess
-import time
+from random import randint
 
 import pypeliner.helpers
+import time
 
 
 class QEnv(object):
     """ Paths to qsub, qstat, qdel """
+
     def __init__(self):
         self.qsub_bin = pypeliner.helpers.which('qsub')
         self.qstat_bin = pypeliner.helpers.which('qstat')
@@ -16,6 +18,7 @@ class QEnv(object):
 
 class LsfEnv(object):
     """ Paths to qsub, qstat, qdel in LSF"""
+
     def __init__(self):
         self.qsub_bin = pypeliner.helpers.which('bsub')
         self.qstat_bin = pypeliner.helpers.which('bjobs')
@@ -29,12 +32,15 @@ class QstatError(Exception):
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
+
     def __init__(self, qenv, qstat_period=20, max_qstat_failures=10):
         self.qenv = qenv
         self.qstat_period = qstat_period
         self.max_qstat_failures = max_qstat_failures
         self.qstat_attempt_time = None
-        self.cached_job_status = None
+        self.running_job_status = set()
+        self.queued_job_status = set()
+        self.error_job_status = set()
         self.qstat_failures = 0
         self.qstat_time = None
         self.logger = logging.getLogger('pypeliner.execqueue')
@@ -44,11 +50,13 @@ class QstatJobStatus(object):
         """
         if self.qstat_attempt_time is not None:
             time_since_attempt = time.time() - self.qstat_attempt_time
-            sleep_time = max(0, self.qstat_period - time_since_attempt)
+            sleep_time = max(0.0, self.qstat_period - time_since_attempt)
             time.sleep(sleep_time)
         self.qstat_attempt_time = time.time()
         try:
-            self.cached_job_status = self.get_qstat_job_status()
+            self.running_job_status, self.queued_job_status, self.error_job_status = self.get_qstat_job_status(
+                self.queued_job_status, self.error_job_status
+            )
             self.qstat_failures = 0
             self.qstat_time = time.time()
         except:
@@ -67,13 +75,13 @@ class QstatJobStatus(object):
         Returns:
             bool: job finished, None for no information
         """
-        if self.cached_job_status is None:
+        if self.qstat_time is None:
             return False
 
         if qsub_time >= self.qstat_time:
             return False
 
-        return qsub_job_id not in self.cached_job_status
+        return qsub_job_id not in self.running_job_status and qsub_job_id not in self.queued_job_status
 
     def errors(self, qsub_job_id):
         """ Query whether job is in error state.
@@ -81,28 +89,63 @@ class QstatJobStatus(object):
         Returns:
             bool: job finished, None for no information
         """
-        if self.cached_job_status is None:
-            return None
+        return qsub_job_id in self.error_job_status
 
-        return 'e' in self.cached_job_status.get(qsub_job_id, '').lower()
+    def parse_job_status(self, cmd=None):
+        if not cmd:
+            cmd = [self.qenv.qstat_bin]
 
-    def get_qstat_job_status(self):
-        """ Run qstat to obtain job statues.
-
-        Returns:
-            dict: job id to job status dictionary
-        """
-        job_status = dict()
-
-        for line in subprocess.check_output([self.qenv.qstat_bin]).split('\n'):
+        for line in subprocess.check_output(cmd).split('\n'):
             row = line.split()
             try:
                 qsub_job_id = row[0]
                 status = row[4].lower()
-                job_status[qsub_job_id] = status
+                yield qsub_job_id, status
             except IndexError:
                 continue
-        return job_status
+
+    @staticmethod
+    def job_errored_out(err_str):
+        return 'e' in err_str.lower()
+
+    @property
+    def cmd_list_running_jobs(self):
+        return [self.qenv.qstat_bin, '-s', 'r']
+
+    def get_qstat_job_status(self, queued_job_status, error_job_status):
+        """ Run qstat to obtain job status.
+
+        Returns:
+            dict: job id to job status dictionary
+        """
+
+        running_job_status = set()
+
+        # 33% chance of running full bjobs to update queued dict
+        # lowers load in case too many jobs are in queue
+        if randint(0, 2) == 2:
+            queued_job_status = set()
+            error_job_status = set()
+            for qsub_job_id, status_code in self.parse_job_status():
+                if status_code == 'pend':
+                    queued_job_status.add(qsub_job_id)
+                elif self.job_errored_out(status_code):
+                    error_job_status.add(qsub_job_id)
+                    if qsub_job_id in queued_job_status:
+                        queued_job_status.remove(qsub_job_id)
+                    if qsub_job_id in running_job_status:
+                        running_job_status.remove(qsub_job_id)
+                else:
+                    running_job_status.add(qsub_job_id)
+                    if qsub_job_id in queued_job_status:
+                        queued_job_status.remove(qsub_job_id)
+        else:
+            for qsub_job_id, status_code in self.parse_job_status(cmd=self.cmd_list_running_jobs):
+                running_job_status.add(qsub_job_id)
+                if qsub_job_id in queued_job_status:
+                    queued_job_status.remove(qsub_job_id)
+
+        return running_job_status, queued_job_status, error_job_status
 
 
 class QacctError(Exception):
@@ -133,13 +176,14 @@ class QacctWrapper(object):
                 qacct_results[key] = value
         return qacct_results
 
-
     def check(self):
         """ Run qacct to obtain finished job info.
         """
         try:
-            with open(self.qacct_stdout_filename, 'w') as qacct_stdout, open(self.qacct_stderr_filename, 'w') as qacct_stderr:
-                subprocess.check_call([self.qenv.qacct_bin, '-j', self.job_id], stdout=qacct_stdout, stderr=qacct_stderr)
+            with open(self.qacct_stdout_filename, 'w') as qacct_stdout, open(self.qacct_stderr_filename,
+                                                                             'w') as qacct_stderr:
+                subprocess.check_call([self.qenv.qacct_bin, '-j', self.job_id], stdout=qacct_stdout,
+                                      stderr=qacct_stderr)
         except subprocess.CalledProcessError:
             self.qacct_failures += 1
             if self.qacct_failures > self.max_qacct_failures:
@@ -152,6 +196,7 @@ class QacctWrapper(object):
 
 class LsfacctWrapper(QacctWrapper):
     """class to check job status after completion in LSF"""
+
     def parse_qacct(self):
         """parse job completion status report"""
         qacct_results = dict()
@@ -174,8 +219,9 @@ class LsfacctWrapper(QacctWrapper):
 
 class QsubWrapper(object):
     """class to submit jobs in SGE"""
+
     def __init__(self, qenv, ctx, name, script_filename, native_spec, job_stdout_filename,
-                 job_stderr_filename, submit_stdout_filename, submit_stderr_filename,):
+                 job_stderr_filename, submit_stdout_filename, submit_stderr_filename, ):
         self.qsub_job_id = None
         self.qenv = qenv
         self.ctx = ctx
@@ -206,13 +252,13 @@ class QsubWrapper(object):
     def submit_job(self):
         """submit job and return job id"""
         try:
-            with open(self.submit_stdout_filename, 'w') as submit_stdout, open(self.submit_stderr_filename, 'w') as submit_stderr:
+            with open(self.submit_stdout_filename, 'w') as submit_stdout, open(self.submit_stderr_filename,
+                                                                               'w') as submit_stderr:
                 subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
         except Exception as e:
             raise pypeliner.execqueue.base.SubmitError('submit error ' + str(e))
 
         return self.extract_job_id()
-
 
 
 class LsfsubWrapper(QsubWrapper):
