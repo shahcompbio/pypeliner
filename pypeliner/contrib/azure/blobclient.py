@@ -2,13 +2,14 @@ import logging
 import os
 
 import azure.common
+import azure.core.exceptions
 import azure.storage.blob as azureblob
+import azure.storage.blob._shared_access_signature as blob_sas
 import datetime
 import pypeliner
 from azure.common import AzureHttpError
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
-from azure.keyvault.secrets import SecretClient
 from pypeliner.helpers import Backoff
 
 from .rabbitmq import RabbitMqSemaphore
@@ -57,8 +58,8 @@ class AzureLoggingFilter(logging.Filter):
 
 class BlobStorageClient(object):
     def __init__(
-            self, storage_account_name, client_id, tenant_id, secret_key, keyvault_account,
-            storage_account_key=None, mq_username=None, mq_password=None, mq_ip=None, mq_vhost=None
+            self, storage_account_name, client_id, tenant_id, secret_key,
+            storage_account_token=None, mq_username=None, mq_password=None, mq_ip=None, mq_vhost=None
     ):
         """
         abstraction around all azure blob related methods
@@ -70,10 +71,6 @@ class BlobStorageClient(object):
         :type tenant_id: str
         :param secret_key: secret key for the app
         :type secret_key: str
-        :param keyvault_account: keyvault account for pulling storage keys
-        :type keyvault_account:  str
-        :param storage_account_key: storage account key
-        :type storage_account_key:  str
         :param mq_username: rabbitmq username
         :type mq_username: str
         :param mq_password: rabbitmq password
@@ -91,14 +88,31 @@ class BlobStorageClient(object):
 
         self.logger = self.__get_logger(add_azure_filter=True)
 
-        if not storage_account_key:
-            storage_account_key = self.__get_storage_account_key(
-                storage_account_name, client_id, secret_key, tenant_id, keyvault_account
+        if not storage_account_token:
+            storage_account_token = self.__get_storage_account_token(
+                client_id, secret_key, tenant_id
             )
 
-        self.blob_client = azureblob.BlockBlobService(
-            account_name=storage_account_name,
-            account_key=storage_account_key)
+        storage_account_url = self.__get_account_url(storage_account_name)
+
+        self.blob_client = azureblob.BlobServiceClient(
+            storage_account_url,
+            storage_account_token)
+
+    @staticmethod
+    def __get_account_url(account_name):
+        """
+        generate and return oauth account url
+        :param account_name: storage account_name
+        :type str
+        :return: storage account oauth url
+        :rtype: str
+        """
+        oauth_url = "https://{}.blob.core.windows.net".format(
+            account_name
+        )
+
+        return oauth_url
 
     def __get_logger(self, add_azure_filter=False):
         """
@@ -180,8 +194,8 @@ class BlobStorageClient(object):
         """
         return filename.strip('/')
 
-    def __get_storage_account_key(
-            self, accountname, client_id, secret_key, tenant_id, keyvault_account
+    def __get_storage_account_token(
+            self, client_id, secret_key, tenant_id
     ):
         """
         Uses the azure management package and the active directory
@@ -191,21 +205,9 @@ class BlobStorageClient(object):
         :param str accountname: storage account name
         """
 
-        credential = ClientSecretCredential(tenant_id, client_id, secret_key)
-        keyvault = 'https://{}.vault.azure.net'.format(keyvault_account)
+        token_credential = ClientSecretCredential(tenant_id, client_id, secret_key)
 
-        client = SecretClient(keyvault, credential)
-
-        try:
-            secret_bundle = client.get_secret(accountname)
-        except ResourceNotFoundError:
-            err_str = "The pipeline is not setup to use the {} account. ".format(accountname)
-            err_str += "please add the storage key for the account to {} ".format(keyvault_account)
-            err_str += "as a secret. All input/output paths should start with accountname"
-            raise UnconfiguredStorageAccountError(err_str)
-        account_key = secret_bundle.value
-
-        return account_key
+        return token_credential
 
     @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
     def __get_blob_to_path(
@@ -237,10 +239,13 @@ class BlobStorageClient(object):
             blob = semaphore.run()
 
         else:
+
             try:
-                blob = self.blob_client.get_blob_to_path(container_name,
-                                                         blob_name,
-                                                         destination_file_path)
+                blob_client = self.blob_client.get_blob_client(container_name, blob_name)
+                with open(destination_file_path, "wb") as my_blob:
+                    download_stream = blob_client.download_blob()
+                    my_blob.write(download_stream.readall())
+                blob = blob_client.get_blob_properties()
             except Exception as exc:
                 self.logger.exception("Error downloading {} from {}".format(blob_name, container_name))
                 raise exc
@@ -254,15 +259,16 @@ class BlobStorageClient(object):
     def __get_blob_permission_obj(self, permissions):
         permissions = permissions.split('|')
         permissions = {val: True for val in permissions}
-        return azureblob.BlobPermissions(**permissions)
+        return azure.storage.blob.BlobSasPermissions(**permissions)
 
     def __get_blob_properties(self, container_name, blob_name):
         blob_name = self.__format_blob_name(blob_name)
         try:
-            blob = self.blob_client.get_blob_properties(
-                container_name, blob_name
-            )
+            blob_client = self.blob_client.get_blob_client(container_name, blob_name)
+            blob = blob_client.get_blob_properties()
         except azure.common.AzureMissingResourceHttpError:
+            raise BlobMissing((container_name, blob_name))
+        except:
             raise BlobMissing((container_name, blob_name))
 
         return blob
@@ -294,10 +300,10 @@ class BlobStorageClient(object):
             raise pypeliner.storage.InputMissingException(blob_name)
 
         blob_size = self.get_blob_size(container_name, blob_name)
-        assert blob_size == blob.properties.content_length
+        assert blob_size == blob.size
 
         file_size = os.path.getsize(destination_file_path)
-        if file_size != blob.properties.content_length:
+        if file_size != blob.size:
             raise Exception('file size mismatch for {}:{} compared to {}:{}'.format(
                 blob_name, blob.properties.content_length, destination_file_path, file_size))
 
@@ -319,20 +325,20 @@ class BlobStorageClient(object):
         """
         container_name, blob_name = self.__parse_blob_args(blob_uri, container_name, blob_name)
 
-        if not self.container_exists(container_name=container_name):
-            self.create_container(container_name=container_name)
+        self.create_container(container_name=container_name)
 
-        if os.stat(file_path).st_size > 1024*1024*1024:
-            self.blob_client.MAX_BLOCK_SIZE = 100*1024*1024
-            self.blob_client.create_blob_from_path(
-                container_name, blob_name, file_path, metadata=metadata
-            )
+        blob_client = self.blob_client.get_blob_client(container_name, blob_name)
+
+        if os.stat(file_path).st_size > 1024 * 1024 * 1024:
+            blob_client.MAX_BLOCK_SIZE = 100 * 1024 * 1024
+            with open(file_path, "rb") as stream:
+                blob_client.upload_blob(stream, overwrite=True)
         else:
-            self.blob_client.MAX_BLOCK_SIZE = 4*1024*1024
-            self.blob_client.create_blob_from_path(
-                container_name, blob_name, file_path, metadata=metadata
-            )
+            blob_client.MAX_BLOCK_SIZE = 4 * 1024 * 1024
+            with open(file_path, "rb") as stream:
+                blob_client.upload_blob(stream, overwrite=True)
 
+        blob_client.set_blob_metadata(metadata=metadata)
 
     def blob_exists(self, container_name=None, blob_name=None, blob_uri=None):
         """
@@ -348,7 +354,14 @@ class BlobStorageClient(object):
         :rtype: bool
         """
         container_name, blob_name = self.__parse_blob_args(blob_uri, container_name, blob_name)
-        return self.blob_client.exists(container_name, blob_name)
+
+        blob_client = self.blob_client.get_blob_client(container_name, blob_name)
+
+        try:
+            blob_client.get_blob_properties()
+            return True
+        except:
+            return False
 
     def get_blob_size(self, container_name=None, blob_name=None, blob_uri=None):
         """
@@ -365,8 +378,7 @@ class BlobStorageClient(object):
         """
         container_name, blob_name = self.__parse_blob_args(blob_uri, container_name, blob_name)
         blob = self.__get_blob_properties(container_name, blob_name)
-        blob_size = blob.properties.content_length
-        return blob_size
+        return blob.size
 
     def set_metadata(
             self, metadata_key, metadata_value, container_name=None, blob_name=None, blob_uri=None,
@@ -425,7 +437,7 @@ class BlobStorageClient(object):
         """
         container_name, blob_name = self.__parse_blob_args(blob_uri, container_name, blob_name)
         blob = self.__get_blob_properties(container_name, blob_name)
-        return blob.properties.last_modified.strftime('%Y/%m/%d-%H:%M:%S')
+        return blob.last_modified.strftime('%Y/%m/%d-%H:%M:%S')
 
     def delete_blob(self, container_name=None, blob_name=None, blob_uri=None):
         """
@@ -475,7 +487,7 @@ class BlobStorageClient(object):
                 lifetime_hours=sas_lifetime_hours
             )
 
-        return self.blob_client.make_blob_url(container_name, blob_name, sas_token=sas_token)
+        return self.make_blob_url(container_name, blob_name, sas_token=sas_token)
 
     def get_blob_sas_token(
             self, container_name=None, blob_name=None, blob_uri=None,
@@ -498,13 +510,25 @@ class BlobStorageClient(object):
         :rtype: str
         """
         container_name, blob_name = self.__parse_blob_args(blob_uri, container_name, blob_name)
-        blob_sas_token = self.blob_client.generate_blob_shared_access_signature(
+        start_time = datetime.datetime.utcnow()
+        expiry_time = datetime.datetime.utcnow() + datetime.timedelta(hours=lifetime_hours)
+
+        token = self.blob_client.get_user_delegation_key(
+            key_start_time=start_time,
+            key_expiry_time=expiry_time
+        )
+
+        sas_token = blob_sas.generate_blob_sas(
+            self.account_name,
             container_name,
             blob_name,
+            user_delegation_key=token,
             permission=self.__get_blob_permission_obj(blob_permissions),
-            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=lifetime_hours))
+            start=start_time,
+            expiry=expiry_time,
+        )
 
-        return blob_sas_token
+        return sas_token
 
     def get_container_sas_token(self, container_uri=None, container_name=None, blob_permissions='read',
                                 lifetime_hours=120):
@@ -525,15 +549,25 @@ class BlobStorageClient(object):
         :rtype: str
         """
         container_name = self.__parse_container_args(container_uri, container_name)
-        # Obtain the SAS token for the container, setting the expiry time and
-        # permissions. In this case, no start time is specified, so the shared
-        # access signature becomes valid immediately.
-        container_sas_token = self.blob_client.generate_container_shared_access_signature(
-            container_name,
-            permission=self.__get_blob_permission_obj(blob_permissions),
-            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=lifetime_hours))
 
-        return container_sas_token
+        start_time = datetime.datetime.utcnow()
+        expiry_time = datetime.datetime.utcnow() + datetime.timedelta(hours=lifetime_hours)
+
+        token = self.blob_client.get_user_delegation_key(
+            key_start_time=start_time,
+            key_expiry_time=expiry_time
+        )
+
+        sas_token = blob_sas.generate_container_sas(
+            self.account_name,
+            container_name,
+            user_delegation_key=token,
+            permission=self.__get_blob_permission_obj(blob_permissions),
+            start=start_time,
+            expiry=expiry_time,
+        )
+
+        return sas_token
 
     def list_blobs(self, container_uri=None, container_name=None, prefix=None):
         """
@@ -549,10 +583,11 @@ class BlobStorageClient(object):
         :rtype: generator
         """
         container_name = self.__parse_container_args(container_uri, container_name)
-        container_blobs = self.blob_client.list_blobs(
-            container_name,
-            prefix=prefix)
-        return container_blobs
+        blob_client = self.blob_client.get_container_client(container_name)
+        container_blobs = blob_client.list_blobs(name_starts_with=prefix)
+
+        for container in container_blobs:
+            yield container
 
     def create_container(self, container_uri=None, container_name=None):
         """
@@ -564,8 +599,10 @@ class BlobStorageClient(object):
         :type container_uri: str
         """
         container_name = self.__parse_container_args(container_uri, container_name)
+
         if not self.container_exists(container_name=container_name):
-            self.blob_client.create_container(container_name)
+            container_client = self.blob_client.get_container_client(container_name)
+            container_client.create_container()
 
     def container_exists(self, container_uri=None, container_name=None):
         """
@@ -577,7 +614,27 @@ class BlobStorageClient(object):
         :type container_name: str
         """
         container_name = self.__parse_container_args(container_uri, container_name)
-        return self.blob_client.exists(container_name)
+        container_client = self.blob_client.get_container_client(container_name)
+        try:
+            container_client.get_container_properties()
+            return True
+        except ResourceNotFoundError:
+            raise
+
+    def make_blob_url(self, container_name, blob_name, sas_token=None):
+        protocol = "https"
+        primary_endpoint = "{}.blob.core.windows.net".format(self.account_name)
+
+        url = '{}://{}/{}/{}'.format(
+            protocol,
+            primary_endpoint,
+            container_name,
+            blob_name,
+        )
+
+        if sas_token:
+            url += '?' + sas_token
+        return url
 
     def generate_container_url(
             self, container_uri=None, container_name=None, add_sas=True,
@@ -610,7 +667,7 @@ class BlobStorageClient(object):
 
         # WORKAROUND: for some reason there is no function to create an url for a
         # container
-        output_sas_url = self.blob_client.make_blob_url(
+        output_sas_url = self.make_blob_url(
             container_name, 'null',
             sas_token=sas_token).replace('/null', '')
 

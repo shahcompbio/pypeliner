@@ -127,12 +127,12 @@ class AzureBlobStorage(object):
             return
 
         storage_keys = pypeliner.helpers.GlobalState.get('azure_storage_keys', {})
-        account_key = storage_keys.get(storage_account_name)
+        account_token = storage_keys.get(storage_account_name)
 
         self.blob_client = BlobStorageClient(
             storage_account_name, self.client_id, self.tenant_id,
-            self.secret_key, self.keyvault_account,
-            storage_account_key=account_key,
+            self.secret_key,
+            storage_account_token=account_token,
             mq_username=self.rabbitmq_username,
             mq_password=self.rabbitmq_password,
             mq_ip=self.rabbitmq_ipaddress,

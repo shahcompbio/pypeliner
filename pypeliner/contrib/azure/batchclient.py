@@ -1,15 +1,15 @@
 from __future__ import absolute_import
 
-import datetime
 import logging
 import os
 import random
 import re
 import string
-import time
-import uuid
 
 import azure.batch.models as batchmodels
+import datetime
+import time
+import uuid
 from azure.batch import BatchServiceClient
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.profiles import KnownProfiles
@@ -39,7 +39,7 @@ class AzureLoggingFilter(logging.Filter):
 class BatchClient(object):
     def __init__(
             self, client_id, tenant_id, secret_key, batch_account_url,
-            config, keyvault_account, storage_account_key=None
+            config, storage_account_token=None
     ):
         """
         abstraction around all batch related methods
@@ -53,10 +53,8 @@ class BatchClient(object):
         :type batch_account_url: str
         :param config: configuration file data from submit config
         :type config: dict
-        :param keyvault_account: keyvault account for pulling storage keys
-        :type keyvault_account:  str
-        :param storage_account_key: storage account key
-        :type storage_account_key:  str
+        :param storage_account_token: storage account key
+        :type storage_account_token:  str
         """
         self.config = config
 
@@ -67,8 +65,8 @@ class BatchClient(object):
         self.logger.info('creating blob client')
         self.blob_client = BlobStorageClient(
             config['pypeliner_storage_account'],
-            client_id, tenant_id, secret_key, keyvault_account,
-            storage_account_key=storage_account_key,
+            client_id, tenant_id, secret_key,
+            storage_account_token=storage_account_token,
         )
 
         self.logger.info('creating batch client')
@@ -111,17 +109,20 @@ class BatchClient(object):
 
             # get verified vm image list and node agent sku ids from service
             node_agent_skus = self.batch_client.account.list_node_agent_skus()
+
             # pick the latest supported sku
-            skus_to_use = [
-                (sku, image_ref) for sku in node_agent_skus for image_ref in sorted(
-                    sku.verified_image_references, key=lambda item: item.sku)
-                if image_ref.publisher.lower() == publisher.lower() and
-                   image_ref.offer.lower() == offer.lower() and
-                   image_ref.sku.startswith(sku_starts_with)
-            ]
-            # skus are listed in reverse order, pick first for latest
-            sku_to_use, image_ref_to_use = skus_to_use[0]
-            sku_to_use = sku_to_use.id
+            for sku in node_agent_skus:
+                for image_ref in sorted(sku.verified_image_references, key=lambda item: item.sku):
+                    if not image_ref.publisher.lower() == publisher.lower():
+                        continue
+                    if not image_ref.offer.lower() == offer.lower():
+                        continue
+                    if not image_ref.sku.startswith(sku_starts_with):
+                        continue
+
+                    sku_to_use = sku.id
+                    image_ref_to_use = image_ref
+                    break
 
         return sku_to_use, image_ref_to_use
 
@@ -558,7 +559,7 @@ class BatchClient(object):
             status = self.__get_node_status(pool_id, node_id)
 
             # node states are inconsistent with lower and upper cases
-            # stop looking when atleast one working node exists
+            # stop looking when at least one working node exists
             if status.lower() in healthy_states:
                 return
 
@@ -578,7 +579,7 @@ class BatchClient(object):
         """
         container_blobs = self.blob_client.list_blobs(container_name=self.container_name, prefix=prefix)
 
-        for blob in container_blobs.items:
+        for blob in container_blobs:
             destination_filename = blob.name
 
             # Remove prefix
@@ -614,6 +615,7 @@ class BatchClient(object):
         :rtype: `azure.batch.models.ResourceFile`
         :return: A ResourceFile initialized with a SAS URL appropriate for Batch
         """
+
         self.blob_client.upload_from_file(
             file_path, container_name=self.container_name, blob_name=blob_name
         )

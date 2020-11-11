@@ -30,11 +30,11 @@ class AzureJobQueue(object):
 
         storage_account_name = self.config['pypeliner_storage_account']
         storage_keys = pypeliner.helpers.GlobalState.get('azure_storage_keys', {})
-        account_key = storage_keys.get(storage_account_name)
+        account_token = storage_keys.get(storage_account_name)
 
         self.batch_client = BatchClient(
             client_id, tenant_id, secret_key, batch_account_url,
-            self.config, keyvault_account, storage_account_key=account_key
+            self.config, keyvault_account, storage_account_token=account_token
         )
 
         self.logger = self.batch_client.logger
