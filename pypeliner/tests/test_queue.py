@@ -1,6 +1,7 @@
 import argparse
 import os
 import logging
+import yaml
 
 import pypeliner.execqueue.factory
 import pypeliner.helpers
@@ -18,14 +19,14 @@ class BasicJob():
         self.success = True
 
 
-def run_basic(exec_queue, base_temps_dir):
+def run_basic(exec_queue, base_temps_dir, ctx):
 
     assert exec_queue.empty
 
     job = test_queue.BasicJob()
     temps_dir = os.path.join(base_temps_dir, 'basic')
     pypeliner.helpers.makedirs(temps_dir)
-    exec_queue.send({'mem': 1}, 'basic', job, temps_dir)
+    exec_queue.send(ctx, 'basic', job, temps_dir)
 
     assert exec_queue.length == 1
     assert not exec_queue.empty
@@ -52,6 +53,9 @@ if __name__ == '__main__':
     argparser.add_argument('--nativespec', default=None,
         help='Native spec if needed')
 
+    argparser.add_argument('--configyaml', default=None,
+        help='Optional config yaml')
+
     args = vars(argparser.parse_args())
 
     logging.basicConfig(level=logging.DEBUG)
@@ -65,5 +69,10 @@ if __name__ == '__main__':
 
     exec_queue = pypeliner.execqueue.factory.create(args['submit'], [test_queue], native_spec=args['nativespec'])
 
+    ctx = {'mem': 1}
+    if args.get('configyaml') is not None:
+        ctx = yaml.load(open(args['configyaml']), Loader=yaml.FullLoader)
+
     with exec_queue:
-        run_basic(exec_queue, base_temps_dir)
+        run_basic(exec_queue, base_temps_dir, ctx)
+
