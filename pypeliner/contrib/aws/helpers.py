@@ -42,4 +42,4 @@ def random_string(length):
     :return: randomly generated string
     :rtype: str
     """
-    return ''.join(random.choice(string.lowercase) for _ in range(length))
+    return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
