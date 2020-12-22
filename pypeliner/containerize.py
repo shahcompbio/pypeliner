@@ -113,12 +113,14 @@ def dockerize_args(args, image, context_cfg):
         )
         return args, shell_files
 
-    server = context_cfg['docker']['server']
+    server = context_cfg['docker'].get('server')
     kwargs = context_cfg.get('docker', None)
 
-    docker_prep_command = get_docker_prep_command(
-        server, image, kwargs['username'], kwargs['password']
-    )
+    docker_prep_command = None
+    if server is not None:
+        docker_prep_command = get_docker_prep_command(
+            server, image, kwargs['username'], kwargs['password']
+        )
 
     mounts = sorted(set(kwargs.get("mounts", {}).values()))
 
@@ -150,7 +152,9 @@ def dockerize_args(args, image, context_cfg):
     # all containers after  the first one will run as root
     docker_args.extend(['-e', 'ROOT_HOME={}'.format(mount_path)])
 
-    image_uri = server + '/' + image
+    image_uri = image
+    if server is not None:
+        image_uri = server + '/' + image
     docker_args.append(image_uri)
 
     if '|' in args or '>' in args or '<' in args:
@@ -160,7 +164,12 @@ def dockerize_args(args, image, context_cfg):
 
     args = docker_args + list(args)
 
-    shell_file = write_to_shell_script([docker_prep_command, args])
+    if docker_prep_command is not None:
+        cmds = [docker_prep_command, args]
+    else:
+        cmds = [args]
+
+    shell_file = write_to_shell_script(cmds)
     shell_files.append(shell_file)
 
     return ['bash', shell_file], shell_files
