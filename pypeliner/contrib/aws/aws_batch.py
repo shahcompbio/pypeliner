@@ -128,7 +128,7 @@ class AwsBatch(object):
 
         for job_defn in job_defns:
             defn_container_props = job_defn['containerProperties']
-            defn_retry = job_defn['retryStrategy']
+            defn_retry = job_defn.get('retryStrategy',0)
             defn_container_type = job_defn['type']
             defn_arn = job_defn['jobDefinitionArn']
 
