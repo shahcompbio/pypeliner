@@ -73,8 +73,8 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    docker_kwargs['execute'] = True
-    args, shell_files = pypeliner.containerize.containerize_args(*args, **docker_kwargs)
+    if docker_kwargs and docker_kwargs.get('docker'):
+        args, shell_files = pypeliner.containerize.containerize_args(*args, **docker_kwargs)
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")

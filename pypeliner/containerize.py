@@ -29,26 +29,18 @@ def containerize_args(*args, **kwargs):
 
     context_cfg = pypeliner.helpers.GlobalState.get("context_config")
 
-    execute = kwargs.get("execute")
-
     shell_files = []
 
     if context_cfg and context_cfg.get('singularity'):
-        args, shell_files = singularity_args(args, docker_image, context_cfg, execute)
+        args, shell_files = singularity_args(args, context_cfg)
     elif context_cfg and context_cfg.get('docker'):
-        args, shell_files = dockerize_args(args, docker_image, context_cfg, )
+        args, shell_files = dockerize_args(args, docker_image, context_cfg)
 
     return args, shell_files
 
 
-def singularity_args(args, image, context_cfg, execute):
+def singularity_args(args, context_cfg):
     shell_files = []
-
-    if not image:
-        logging.getLogger('pypeliner.commandline').warn(
-            'running locally, no docker image specified'
-        )
-        return args, []
 
     singularity = context_cfg['singularity'].get('singularity_exe', 'singularity')
 
@@ -56,8 +48,11 @@ def singularity_args(args, image, context_cfg, execute):
 
     org = context_cfg['singularity']['org']
 
-    image = org + '/' + image if org else image
-    image = 'docker://' + server + '/' + image
+    image = context_cfg['singularity']['image']
+
+    if not image.endswith('.sif'):
+        image = org + '/' + image if org else image
+        image = 'docker://' + server + '/' + image
 
     kwargs = context_cfg.get('singularity', None)
 
@@ -102,14 +97,7 @@ def singularity_args(args, image, context_cfg, execute):
     shell_file = write_to_shell_script(commands)
     shell_files.append(shell_file)
 
-    command = ['bash', os.path.abspath(shell_file)]
-
-    ssh_localhost = [
-        'ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-T', 'localhost'
-    ]
-    command = ssh_localhost + command
-
-    return command, shell_files
+    return ['bash', os.path.abspath(shell_file)], shell_files
 
 
 def dockerize_args(args, image, context_cfg):
