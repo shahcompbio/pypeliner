@@ -44,13 +44,11 @@ def singularity_args(args, context_cfg):
 
     singularity = context_cfg['singularity'].get('singularity_exe', 'singularity')
 
-    server = context_cfg['singularity'].get('server', 'docker.io')
-
-    org = context_cfg['singularity']['org']
-
     image = context_cfg['singularity']['image']
 
     if not image.endswith('.sif'):
+        server = context_cfg['singularity'].get('server', 'docker.io')
+        org = context_cfg['singularity']['org']
         image = org + '/' + image if org else image
         image = 'docker://' + server + '/' + image
 
