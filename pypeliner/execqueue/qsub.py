@@ -1,14 +1,14 @@
-import logging
 import os
+import logging
 import subprocess
+import time
 from string import Formatter
 
-import pypeliner.delegator
+import pypeliner.helpers
 import pypeliner.execqueue.local
 import pypeliner.execqueue.qcmd
 import pypeliner.execqueue.utils
-import pypeliner.helpers
-import time
+import pypeliner.delegator
 
 
 class NativespecFormatter(dict):
@@ -25,7 +25,6 @@ class QsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess
     """
-
     def __init__(self, ctx, name, sent, temps_dir, modules, qsub_bin, native_spec):
         self.name = name
         self.logger = logging.getLogger('pypeliner.execqueue')
@@ -41,9 +40,7 @@ class QsubJob(object):
         with open(self.script_filename, 'w') as script_file:
             script_file.write(' '.join(self.command) + '\n')
         pypeliner.helpers.set_executable(self.script_filename)
-        self.submit_command = self.create_submit_command(ctx, self.name, self.script_filename, qsub_bin, native_spec,
-                                                         self.debug_filenames['job stdout'],
-                                                         self.debug_filenames['job stderr'])
+        self.submit_command = self.create_submit_command(ctx, self.name, self.script_filename, qsub_bin, native_spec, self.debug_filenames['job stdout'], self.debug_filenames['job stderr'])
         try:
             self.debug_files.append(open(self.debug_filenames['submit stdout'], 'w'))
             self.debug_files.append(open(self.debug_filenames['submit stderr'], 'w'))
@@ -59,11 +56,10 @@ class QsubJob(object):
                 error_text += str(e) + '\n'
             error_text += pypeliner.execqueue.utils.log_text(self.debug_filenames)
             self.logger.error(error_text,
-                              extra={"id": self.name, "status": "submit_fail", "type": "job"})
+                              extra={"id":self.name, "status": "submit_fail", "type":"job"})
             raise pypeliner.execqueue.base.SubmitError()
 
-    def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename,
-                              stderr_filename):
+    def create_submit_command(self, ctx, name, script_filename, qsub_bin, native_spec, stdout_filename, stderr_filename):
         qsub = [qsub_bin]
         qsub += ['-sync', 'y', '-b', 'y']
         qsub += Formatter().vformat(native_spec, (), NativespecFormatter(**ctx))
@@ -89,13 +85,12 @@ class QsubJob(object):
             error_text += 'return code {0}\n'.format(returncode)
             error_text += pypeliner.execqueue.utils.log_text(self.debug_filenames)
             self.logger.error(error_text,
-                              extra={"id": self.name, "status": "fail", "type": "job"})
+                              extra={"id":self.name, "status": "fail", "type":"job"})
             raise pypeliner.execqueue.base.ReceiveError()
 
 
 class QsubJobQueue(pypeliner.execqueue.subproc.SubProcessJobQueue):
     """ Queue of qsub jobs """
-
     def __init__(self, modules=None, native_spec=None):
         super(QsubJobQueue, self).__init__(modules)
         self.qsub_bin = pypeliner.helpers.which('qsub')
@@ -113,9 +108,7 @@ class AsyncQsubJob(object):
     """ Encapsulate a running job created using a queueing system's
     qsub submit command called using subprocess, and polled using qstat
     """
-
-    def __init__(self, ctx, name, sent, temps_dir, modules, qenv, native_spec, qstat_job_status, qsub_wrapper,
-                 qacct_wrapper):
+    def __init__(self, ctx, name, sent, temps_dir, modules, qenv, native_spec, qstat_job_status, qsub_wrapper, qacct_wrapper):
         self.name = name
         self.qenv = qenv
         self.qstat_job_status = qstat_job_status
@@ -141,6 +134,7 @@ class AsyncQsubJob(object):
             script_file.write(' '.join(self.command) + '\n')
         pypeliner.helpers.set_executable(self.script_filename)
 
+
         self.qsub = qsub_wrapper(
             self.qenv, ctx, name, self.script_filename, native_spec, self.debug_filenames['job stdout'],
             self.debug_filenames['job stderr'], self.debug_filenames['submit stdout'],
@@ -161,8 +155,7 @@ class AsyncQsubJob(object):
     def finished(self):
         """ Get job finished boolean.
         """
-        if not self.qstat_job_status.finished(self.qsub_job_id, self.qsub_time) and not self.qstat_job_status.errors(
-                self.qsub_job_id):
+        if not self.qstat_job_status.finished(self.qsub_job_id, self.qsub_time) and not self.qstat_job_status.errors(self.qsub_job_id):
             return False
 
         if self.qstat_job_status.errors(self.qsub_job_id):
@@ -197,7 +190,7 @@ class AsyncQsubJob(object):
             subprocess.check_call([self.qenv.qdel_bin, self.qsub_job_id])
         except:
             self.logger.error('Unable to delete {}'.format(self.qsub_job_id),
-                              extra={"id": self.name, "status": "could_not_delete_job", "type": "job"})
+                              extra={"id":self.name, "status": "could_not_delete_job", "type":"job"})
 
     def create_error_text(self, desc):
         """ Create error text string.
@@ -240,7 +233,6 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
     a list of running jobs, with the ability to wait for jobs and return
     completed jobs.  Requires override of the create method.
     """
-
     def __init__(self, modules=None, **kwargs):
         self.modules = modules
         self.native_spec = kwargs['native_spec']
@@ -299,10 +291,8 @@ class AsyncQsubJobQueue(pypeliner.execqueue.base.JobQueue):
     def qenv(self):
         return pypeliner.execqueue.qcmd.QEnv()
 
-
 class PbsQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
     """ Statuses of jobs on a pbs cluster """
-
     def finished(self, job_id):
         return 'c' in self.cached_job_status.get(job_id, 'c')
 
@@ -312,7 +302,6 @@ class PbsQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
 
 class PbsJobQueue(AsyncQsubJobQueue):
     """ Queue of jobs running on a pbs cluster """
-
     def __init__(self, modules=None, **kwargs):
         super(PbsJobQueue, self).__init__(modules, **kwargs)
         self.qstat = PbsQstatJobStatus(self.qenv)
@@ -320,11 +309,9 @@ class PbsJobQueue(AsyncQsubJobQueue):
 
 class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
     """ Statuses of jobs on a lfs cluster """
-
-    def parse_job_status(self, cmd=None):
-        if not cmd:
-            cmd = [self.qenv.qstat_bin]
-        for line in subprocess.check_output(cmd).decode().split('\n'):
+    def get_qstat_job_status(self):
+        job_status = dict()
+        for line in subprocess.check_output([self.qenv.qstat_bin]).decode().split('\n'):
             row = line.split()
             if not row:
                 continue
@@ -333,25 +320,24 @@ class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
             try:
                 qsub_job_id = row[0]
                 status = row[3].lower()
-                yield qsub_job_id, status
+                job_status[qsub_job_id] = status
             except IndexError:
                 continue
+        return job_status
 
-    @staticmethod
-    def job_errored_out(err_str):
-        return 'ERR' in err_str or 'SUSP' in err_str
-
-    @property
-    def cmd_list_running_jobs(self):
-        return [self.qenv.qstat_bin, '-r']
+    def errors(self, qsub_job_id):
+        if self.cached_job_status is None:
+            return None
+        # possible error states are POST_ERR state if it fails, or {P|U|S}SUSP states
+        return 'ERR' in self.cached_job_status.get(qsub_job_id, '') or \
+               'SUSP' in self.cached_job_status.get(qsub_job_id, '')
 
 
 class LsfJobQueue(AsyncQsubJobQueue):
     """ Queue of jobs running on a lfs cluster """
-
     def __init__(self, modules=None, **kwargs):
         super(LsfJobQueue, self).__init__(modules, **kwargs)
-        self.qstat = LsfQstatJobStatus(self.qenv, qstat_period=60)
+        self.qstat = LsfQstatJobStatus(self.qenv)
 
     def create(self, ctx, name, sent, temps_dir):
         """create job"""
