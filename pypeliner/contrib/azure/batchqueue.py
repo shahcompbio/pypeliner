@@ -23,7 +23,6 @@ class AzureJobQueue(object):
         client_id = os.environ['CLIENT_ID']
         tenant_id = os.environ['TENANT_ID']
         secret_key = os.environ['SECRET_KEY']
-        keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
 
         with open(config_filename) as f:
             self.config = yaml.load(f)
@@ -34,7 +33,7 @@ class AzureJobQueue(object):
 
         self.batch_client = BatchClient(
             client_id, tenant_id, secret_key, batch_account_url,
-            self.config, keyvault_account, storage_account_token=account_token
+            self.config, storage_account_token=account_token
         )
 
         self.logger = self.batch_client.logger
