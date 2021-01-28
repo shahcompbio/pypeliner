@@ -73,7 +73,8 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    if docker_kwargs and docker_kwargs.get('docker'):
+    context_cfg = pypeliner.helpers.GlobalState.get("context_config")
+    if docker_kwargs and docker_kwargs.get('docker_image') and 'docker' in context_cfg:
         args, shell_files = pypeliner.containerize.containerize_args(*args, **docker_kwargs)
 
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
