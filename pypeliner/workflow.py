@@ -92,7 +92,6 @@ class Workflow(object):
         """
         job_ctx = self.ctx.copy()
         job_ctx['local'] = True
-        job_ctx['no_container'] = True
         name = '_'.join(('setobj', str(obj.name)) + obj.axes)
         if name in self.job_definitions:
             raise ValueError('Object {} axes {} already set'.format(obj.name, repr(obj.axes)))
@@ -111,7 +110,6 @@ class Workflow(object):
         """
         if ctx is None:
             ctx = {}
-        ctx['no_container'] = False
 
         self.transform(
             name=name, axes=axes, ctx=ctx, func=pypeliner.commandline.execute,
@@ -157,7 +155,7 @@ class Workflow(object):
             job_ctx.update(ctx)
         if name in self.job_definitions:
             raise ValueError('Job already defined')
-        job_ctx['no_container'] = False
+
         if sandbox is None:
             sandbox = self.default_sandbox
         self.job_definitions[name] = pypeliner.jobs.JobDefinition(
@@ -192,8 +190,6 @@ class Workflow(object):
         if not name:
             raise ValueError("subworkflow name not specified")
         job_ctx = self.ctx.copy()
-        job_ctx['local'] = False
-        job_ctx['no_container'] = False
         if ctx is not None:
             job_ctx.update(ctx)
         if name in self.job_definitions:

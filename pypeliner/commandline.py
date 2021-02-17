@@ -1,9 +1,6 @@
 import subprocess
 import sys
 
-import pypeliner
-import pypeliner.containerize
-
 
 class CommandLineException(Exception):
     """ A command produced a non-zero exit code.
@@ -58,7 +55,7 @@ class Callable(object):
         self.retval = self.func(*self.args, **self.kwargs)
 
 
-def execute(*args, **docker_kwargs):
+def execute(*args):
     """ Execute a command line
 
     :param args: executable and command line arguments
@@ -73,10 +70,6 @@ def execute(*args, **docker_kwargs):
     :raises: :py:class:`CommandLineException`, :py:class:`CommandNotFoundException`
 
     """
-    context_cfg = pypeliner.helpers.GlobalState.get("context_config")
-    if docker_kwargs and docker_kwargs.get('docker_image') and 'docker' in context_cfg:
-        args, shell_files = pypeliner.containerize.containerize_args(*args, **docker_kwargs)
-
     if args.count(">") > 1 or args[0] == ">" or args[-1] == ">":
         raise ValueError("Bad redirect to file")
 

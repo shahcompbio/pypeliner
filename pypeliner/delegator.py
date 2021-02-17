@@ -9,6 +9,7 @@ import traceback
 
 import dill as pickle
 import pypeliner.helpers
+import pypeliner.containerize
 
 
 class Delegator(object):
@@ -38,7 +39,10 @@ class Delegator(object):
         with open(self.before_filename, 'wb') as before:
             pickle.dump(self.job, before)
         command = ['pypeliner_delegate', self.before_filename, self.after_filename] + self.syspaths
-        command,_ = pypeliner.containerize.containerize_args(*command, **self.job.ctx)
+        # local tasks like setobj need to run without docker args,
+        # since they might already be running inside docker
+        if not self.job.ctx.get('local'):
+            command = pypeliner.containerize.containerize_args(*command)
         return command
 
     def finalize(self):
