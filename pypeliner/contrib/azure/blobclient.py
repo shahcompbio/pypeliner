@@ -12,8 +12,6 @@ from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from pypeliner.helpers import Backoff
 
-from .rabbitmq import RabbitMqSemaphore
-
 
 class UnconfiguredStorageAccountError(Exception):
     pass
@@ -59,7 +57,7 @@ class AzureLoggingFilter(logging.Filter):
 class BlobStorageClient(object):
     def __init__(
             self, storage_account_name, client_id, tenant_id, secret_key,
-            storage_account_token=None, mq_username=None, mq_password=None, mq_ip=None, mq_vhost=None
+            storage_account_token=None,
     ):
         """
         abstraction around all azure blob related methods
@@ -71,20 +69,8 @@ class BlobStorageClient(object):
         :type tenant_id: str
         :param secret_key: secret key for the app
         :type secret_key: str
-        :param mq_username: rabbitmq username
-        :type mq_username: str
-        :param mq_password: rabbitmq password
-        :type mq_password: str
-        :param mq_ip: rabbitmq IP address
-        :type mq_ip: str
-        :param mq_vhost: rabbitmq vhost
-        :type mq_vhost: str
         """
         self.account_name = storage_account_name
-        self.mq_username = mq_username
-        self.mq_password = mq_password
-        self.mq_ip = mq_ip
-        self.mq_vhost = mq_vhost
 
         self.logger = self.__get_logger(add_azure_filter=True)
 
@@ -212,43 +198,24 @@ class BlobStorageClient(object):
     @Backoff(exception_type=AzureHttpError, max_backoff=1800, randomize=True)
     def __get_blob_to_path(
             self, container_name, blob_name, destination_file_path,
-            username=None, password=None, ipaddress=None,
-            vhost=None):
+    ):
         """
         download data from blob storage
         :param container_name: blob container name
         :param blob_name: blob path
         :param destination_file_path: path to download the file to
-        :param username: username for rabbitmq instance
-        :param password: password for rabbitmq instance
-        :param ipaddress: ip for rabbitmq instance
-        :param vhost: rabbitmq vhost
         :return: azure.storage.blob.baseblobservice.Blob instance with content properties and metadata
         """
         blob_name = self.__format_blob_name(blob_name)
-        if username:
-            queue = "{}_pull".format(self.account_name)
-
-            semaphore = RabbitMqSemaphore(
-                username, password, ipaddress, queue, vhost,
-                self.blob_client.get_blob_to_path,
-                [container_name, blob_name, destination_file_path],
-                {}
-            )
-
-            blob = semaphore.run()
-
-        else:
-
-            try:
-                blob_client = self.blob_client.get_blob_client(container_name, blob_name)
-                with open(destination_file_path, "wb") as my_blob:
-                    download_stream = blob_client.download_blob()
-                    my_blob.write(download_stream.readall())
-                blob = blob_client.get_blob_properties()
-            except Exception as exc:
-                self.logger.exception("Error downloading {} from {}".format(blob_name, container_name))
-                raise exc
+        try:
+            blob_client = self.blob_client.get_blob_client(container_name, blob_name)
+            with open(destination_file_path, "wb") as my_blob:
+                download_stream = blob_client.download_blob()
+                my_blob.write(download_stream.readall())
+            blob = blob_client.get_blob_properties()
+        except Exception as exc:
+            self.logger.exception("Error downloading {} from {}".format(blob_name, container_name))
+            raise exc
 
         if not blob:
             self.logger.exception('Blob SDK returned None, retrying')
@@ -293,8 +260,6 @@ class BlobStorageClient(object):
         try:
             blob = self.__get_blob_to_path(
                 container_name, blob_name, destination_file_path,
-                username=self.mq_username, password=self.mq_username,
-                ipaddress=self.mq_ip, vhost=self.mq_vhost
             )
         except azure.common.AzureMissingResourceHttpError:
             raise pypeliner.storage.InputMissingException(blob_name)
