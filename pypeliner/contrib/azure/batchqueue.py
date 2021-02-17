@@ -1,14 +1,14 @@
 from __future__ import print_function
 
-import datetime
 import logging
 import os
-import time
 
+import datetime
+import dill as pickle
 import pypeliner.execqueue.base
 import pypeliner.helpers
-import dill as pickle
 import pypeliner.tests.jobs
+import time
 import yaml
 
 from .batchclient import BatchClient
@@ -154,7 +154,6 @@ class AzureJobQueue(object):
 
         command = ['pypeliner_delegate', '$AZ_BATCH_TASK_WORKING_DIR/' + before_remote_path,
                    '$AZ_BATCH_TASK_WORKING_DIR/' + after_remote_path]
-
 
         # local tasks like setobj need to run without docker args,
         # since they might already be running inside docker
