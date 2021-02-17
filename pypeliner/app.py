@@ -242,7 +242,6 @@ class Pypeline(object):
         self.sch.cleanup = not self.config['nocleanup']
         pypeliner.helpers.GlobalState.set('context_config', load_config(self.config['context_config']))
         pypeliner.helpers.GlobalState.set('sentinel_only', self.config['sentinel_only'])
-        pypeliner.helpers.GlobalState.set('tmpdir', self.config['tmpdir'])
 
         if self.config['sentinel_only']:
             self.runskip = pypeliner.runskip.SentinalRunSkip(

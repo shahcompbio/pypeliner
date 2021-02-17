@@ -155,22 +155,13 @@ class AzureJobQueue(object):
         command = ['pypeliner_delegate', '$AZ_BATCH_TASK_WORKING_DIR/' + before_remote_path,
                    '$AZ_BATCH_TASK_WORKING_DIR/' + after_remote_path]
 
-        command, shell_files = pypeliner.containerize.containerize_args(*command, **ctx)
 
-        if shell_files:
-            command[-1] = os.path.basename(command[-1])
+        # local tasks like setobj need to run without docker args,
+        # since they might already be running inside docker
+        if not ctx.get('local'):
+            command = pypeliner.containerize.containerize_args(*command)
 
         command = ' '.join(command)
-
-        job_shell_files = []
-        for shell_file in shell_files:
-            job_shell_blobname = os.path.join(
-                self.job_blobname_prefix[name],
-                shell_file)
-
-            job_shell_files.append(self.batch_client.create_blob_resource(
-                shell_file, job_shell_blobname, os.path.basename(shell_file)
-            ))
 
         self.create_run_script(command, script_local_path, pool_id)
 
@@ -179,7 +170,7 @@ class AzureJobQueue(object):
 
         # Add the task to the job
         self.batch_client.add_task(
-            job_id, task_id, before_file_resource, job_shell_files,
+            job_id, task_id, before_file_resource,
             run_script_file, self.job_blobname_prefix[name]
         )
 

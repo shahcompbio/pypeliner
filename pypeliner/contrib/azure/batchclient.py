@@ -630,7 +630,7 @@ class BatchClient(object):
         )
 
     def add_task(
-            self, job_id, task_id, input_file, job_shell_files, job_script_file,
+            self, job_id, task_id, input_file, job_script_file,
             output_blob_prefix
     ):
         """
@@ -649,7 +649,7 @@ class BatchClient(object):
         """
         commands = ['/bin/bash job.sh']
 
-        resource_files = [input_file, job_script_file] + job_shell_files
+        resource_files = [input_file, job_script_file]
 
         # Obtain a shared access signature that provides write access to the output
         # container to which the tasks will upload their output.
