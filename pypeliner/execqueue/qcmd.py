@@ -1,12 +1,13 @@
 import logging
 import subprocess
-import time
 
 import pypeliner.helpers
+import time
 
 
 class QEnv(object):
     """ Paths to qsub, qstat, qdel """
+
     def __init__(self):
         self.qsub_bin = pypeliner.helpers.which('qsub')
         self.qstat_bin = pypeliner.helpers.which('qstat')
@@ -16,6 +17,7 @@ class QEnv(object):
 
 class LsfEnv(object):
     """ Paths to qsub, qstat, qdel in LSF"""
+
     def __init__(self):
         self.qsub_bin = pypeliner.helpers.which('bsub')
         self.qstat_bin = pypeliner.helpers.which('bjobs')
@@ -29,7 +31,8 @@ class QstatError(Exception):
 
 class QstatJobStatus(object):
     """ Class representing statuses retrieved using qstat """
-    def __init__(self, qenv, qstat_period=20, max_qstat_failures=10):
+
+    def __init__(self, qenv, qstat_period=30, max_qstat_failures=10):
         self.qenv = qenv
         self.qstat_period = qstat_period
         self.max_qstat_failures = max_qstat_failures
@@ -39,7 +42,7 @@ class QstatJobStatus(object):
         self.qstat_time = None
         self.logger = logging.getLogger('pypeliner.execqueue')
 
-    def update(self):
+    def update(self, jobs):
         """ Update cached job status after sleeping for remainder of polling time.
         """
         if self.qstat_attempt_time is not None:
@@ -48,7 +51,7 @@ class QstatJobStatus(object):
             time.sleep(sleep_time)
         self.qstat_attempt_time = time.time()
         try:
-            self.cached_job_status = self.get_qstat_job_status()
+            self.cached_job_status = self.get_qstat_job_status(jobs)
             self.qstat_failures = 0
             self.qstat_time = time.time()
         except:
@@ -86,7 +89,7 @@ class QstatJobStatus(object):
 
         return 'e' in self.cached_job_status.get(qsub_job_id, '').lower()
 
-    def get_qstat_job_status(self):
+    def get_qstat_job_status(self, jobs):
         """ Run qstat to obtain job statues.
 
         Returns:
@@ -133,13 +136,14 @@ class QacctWrapper(object):
                 qacct_results[key] = value
         return qacct_results
 
-
     def check(self):
         """ Run qacct to obtain finished job info.
         """
         try:
-            with open(self.qacct_stdout_filename, 'w') as qacct_stdout, open(self.qacct_stderr_filename, 'w') as qacct_stderr:
-                subprocess.check_call([self.qenv.qacct_bin, '-j', self.job_id], stdout=qacct_stdout, stderr=qacct_stderr)
+            with open(self.qacct_stdout_filename, 'w') as qacct_stdout, \
+                    open(self.qacct_stderr_filename, 'w') as qacct_stderr:
+                subprocess.check_call([self.qenv.qacct_bin, '-j', self.job_id], stdout=qacct_stdout,
+                                      stderr=qacct_stderr)
         except subprocess.CalledProcessError:
             self.qacct_failures += 1
             if self.qacct_failures > self.max_qacct_failures:
@@ -152,6 +156,7 @@ class QacctWrapper(object):
 
 class LsfacctWrapper(QacctWrapper):
     """class to check job status after completion in LSF"""
+
     def parse_qacct(self):
         """parse job completion status report"""
         qacct_results = dict()
@@ -174,8 +179,9 @@ class LsfacctWrapper(QacctWrapper):
 
 class QsubWrapper(object):
     """class to submit jobs in SGE"""
+
     def __init__(self, qenv, ctx, name, script_filename, native_spec, job_stdout_filename,
-                 job_stderr_filename, submit_stdout_filename, submit_stderr_filename,):
+                 job_stderr_filename, submit_stdout_filename, submit_stderr_filename):
         self.qsub_job_id = None
         self.qenv = qenv
         self.ctx = ctx
@@ -206,13 +212,13 @@ class QsubWrapper(object):
     def submit_job(self):
         """submit job and return job id"""
         try:
-            with open(self.submit_stdout_filename, 'w') as submit_stdout, open(self.submit_stderr_filename, 'w') as submit_stderr:
+            with open(self.submit_stdout_filename, 'w') as submit_stdout, \
+                    open(self.submit_stderr_filename, 'w') as submit_stderr:
                 subprocess.check_call(self.submit_command, stdout=submit_stdout, stderr=submit_stderr)
         except Exception as e:
             raise pypeliner.execqueue.base.SubmitError('submit error ' + str(e))
 
         return self.extract_job_id()
-
 
 
 class LsfsubWrapper(QsubWrapper):
