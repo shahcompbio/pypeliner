@@ -343,6 +343,8 @@ class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
             qstat_output = json.loads(qstat_output)
 
             for record in qstat_output['RECORDS']:
+                if 'ERROR' in record:
+                    continue
                 if record['STAT'] == 'DONE':
                     continue
                 try:
