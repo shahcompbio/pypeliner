@@ -345,7 +345,7 @@ class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
             for record in qstat_output['RECORDS']:
                 if 'ERROR' in record:
                     continue
-                if record['STAT'] == 'DONE':
+                if record['STAT'] not in ['PEND', 'WAIT', 'PROV', 'RUN']:
                     continue
                 try:
                     job_status[record['JOBID']] = record['STAT'].lower()
