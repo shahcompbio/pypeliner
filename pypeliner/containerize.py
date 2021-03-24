@@ -173,7 +173,7 @@ def get_docker_prep_command(server, image, username, password):
     pull_cmd = 'docker pull {0}'.format(image_uri)
     login_cmd = 'docker login {0} -u {1} -p {2}'.format(server, username, password)
 
-    cmd = ['{\n', pull_cmd, '\n}', '||', '{\n', login_cmd, '&&', pull_cmd, '\n}']
+    cmd = [login_cmd, '&&', pull_cmd]
     cmd = ' '.join(cmd)
 
     return cmd
