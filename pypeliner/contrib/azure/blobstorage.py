@@ -1,10 +1,10 @@
-import datetime
 import os
-import time
 
+import datetime
 import pypeliner.flyweight
 import pypeliner.helpers
 import pypeliner.storage
+import time
 from pypeliner.sqlitedb import SqliteDb
 
 from .blobclient import BlobStorageClient, BlobMissing
@@ -101,15 +101,10 @@ class AzureBlob(object):
 
 class AzureBlobStorage(object):
     def __init__(self, **kwargs):
-        self.rabbitmq_username = os.environ.get("RABBITMQ_USERNAME", None)
-        self.rabbitmq_password = os.environ.get("RABBITMQ_PASSWORD", None)
-        self.rabbitmq_ipaddress = os.environ.get("RABBITMQ_IP", None)
-        self.rabbitmq_vhost = os.environ.get("RABBITMQ_VHOST", None)
         self.client_id = os.environ["CLIENT_ID"]
         self.secret_key = os.environ["SECRET_KEY"]
         self.tenant_id = os.environ["TENANT_ID"]
         self.subscription_id = os.environ["SUBSCRIPTION_ID"]
-        self.keyvault_account = os.environ['AZURE_KEYVAULT_ACCOUNT']
         self.blob_client = None
 
         metadata_prefix = kwargs.get('metadata_prefix')
@@ -133,10 +128,6 @@ class AzureBlobStorage(object):
             storage_account_name, self.client_id, self.tenant_id,
             self.secret_key,
             storage_account_token=account_token,
-            mq_username=self.rabbitmq_username,
-            mq_password=self.rabbitmq_password,
-            mq_ip=self.rabbitmq_ipaddress,
-            mq_vhost=self.rabbitmq_vhost
         )
 
     def create_createtime_cache(self, blob_name):
@@ -154,18 +145,14 @@ class AzureBlobStorage(object):
         self.saved_createtimes.__exit__(exc_type, exc_value, traceback)
 
     def __getstate__(self):
-        return (self.cached_createtimes, self.saved_createtimes, self.cached_exists,
-                self.rabbitmq_username, self.rabbitmq_password,
-                self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
-                self.secret_key, self.tenant_id, self.subscription_id,
-                self.keyvault_account)
+        return (
+            self.cached_createtimes, self.saved_createtimes, self.cached_exists,
+            self.client_id, self.secret_key, self.tenant_id, self.subscription_id
+        )
 
     def __setstate__(self, state):
         [self.cached_createtimes, self.saved_createtimes, self.cached_exists,
-         self.rabbitmq_username, self.rabbitmq_password,
-         self.rabbitmq_ipaddress, self.rabbitmq_vhost, self.client_id,
-         self.secret_key, self.tenant_id, self.subscription_id,
-         self.keyvault_account] = state
+         self.client_id, self.secret_key, self.tenant_id, self.subscription_id] = state
 
     def create_store(self, filename, **kwargs):
         kwargs['createtime_cache'] = self.cached_createtimes.create_flyweight(filename)
