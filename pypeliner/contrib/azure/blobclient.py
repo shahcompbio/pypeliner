@@ -212,7 +212,6 @@ class BlobStorageClient(object):
             with open(destination_file_path, "wb") as my_blob:
                 download_stream = blob_client.download_blob()
                 download_stream.readinto(my_blob)
-                # my_blob.write(download_stream.readall())
             blob = blob_client.get_blob_properties()
         except Exception as exc:
             self.logger.exception("Error downloading {} from {}".format(blob_name, container_name))
