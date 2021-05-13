@@ -17,6 +17,7 @@ import socket
 import time
 import uuid
 from datetime import timedelta
+from collections import deque
 
 import pypeliner.commandline
 
@@ -425,13 +426,21 @@ class JobCallable(object):
         text = '--- stdout ---\n'
         try:
             with open(self.stdout_filename, 'r') as job_stdout:
-                text += job_stdout.read()
+                data = deque(job_stdout, 100)
+                if len(data) == 100:
+                    text += '...\n'
+                for line in data:
+                    text += line
         except IOError:
             text += 'missing file ' + self.stdout_filename + '\n'
         text += '--- stderr ---\n'
         try:
             with open(self.stderr_filename, 'r') as job_stderr:
-                text += job_stderr.read()
+                data = deque(job_stderr, 100)
+                if len(data) == 100:
+                    text += '...\n'
+                for line in data:
+                    text += line
         except IOError:
             text += 'missing file ' + self.stderr_filename + '\n'
         return text
