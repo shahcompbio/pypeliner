@@ -25,7 +25,7 @@ class AzureJobQueue(object):
         secret_key = os.environ['SECRET_KEY']
 
         with open(config_filename) as f:
-            self.config = yaml.load(f)
+            self.config = yaml.safe_load(f)
 
         storage_account_name = self.config['pypeliner_storage_account']
         storage_keys = pypeliner.helpers.GlobalState.get('azure_storage_keys', {})

@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     ctx = {'mem': 1}
     if args.get('configyaml') is not None:
-        ctx = yaml.load(open(args['configyaml']), Loader=yaml.FullLoader)
+        ctx = yaml.safe_load(open(args['configyaml']), Loader=yaml.FullLoader)
 
     with exec_queue:
         run_basic(exec_queue, base_temps_dir, ctx)

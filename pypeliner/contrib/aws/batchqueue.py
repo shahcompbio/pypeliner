@@ -28,7 +28,7 @@ class AwsJobQueue(object):
         self.run_id = aws_helpers.random_string(8)
 
         with open(config_filename) as f:
-            self.config = yaml.load(f)
+            self.config = yaml.safe_load(f)
 
         self.logger = logging.getLogger('pypeliner.execqueue.aws_batch')
 

@@ -38,7 +38,7 @@ class CondaSandbox(object):
         # TODO: Probably want some error checking on packages etc.
         if os.path.exists(self.prefix):
             with open(env_config_file, 'r') as fh:
-                env_config = yaml.load(fh)
+                env_config = yaml.safe_load(fh)
             if (env_config['channels'] == self.channels) and (set(env_config['packages']) == set(self.packages)):
                 return False
             else:

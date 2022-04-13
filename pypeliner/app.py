@@ -172,7 +172,7 @@ def load_config(configfile):
     if not configfile:
         return
     with open(configfile) as configyaml:
-        return yaml.load(configyaml)
+        return yaml.safe_load(configyaml)
 
 
 class Pypeline(object):
