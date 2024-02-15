@@ -374,7 +374,7 @@ class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
         qsub_id_groups = [qsub_ids[x:x + 100] for x in range(0, len(qsub_ids), 100)]
 
         for ids_group in qsub_id_groups:
-            cmd = [self.qenv.qstat_bin, '-j', ','.join(ids_group)]
+            cmd = [self.qenv.qstat_bin, '-j', ','.join([str(v) for v in ids_group])]
             qstat_output = subprocess.check_output(cmd).decode().split('\n')
             assert len(qstat_output) > 1
             header = {v: i for i, v in enumerate(qstat_output[0].strip().split())}
