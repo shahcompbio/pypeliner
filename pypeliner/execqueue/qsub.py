@@ -358,7 +358,50 @@ class LsfQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
             return None
         # possible error states are POST_ERR state if it fails, or {P|U|S}SUSP states
         return 'ERR' in self.cached_job_status.get(qsub_job_id, '') or \
-               'SUSP' in self.cached_job_status.get(qsub_job_id, '')
+            'SUSP' in self.cached_job_status.get(qsub_job_id, '')
+
+
+class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
+    """ Statuses of jobs on a lfs cluster """
+
+    def get_qstat_job_status(self, jobs):
+        job_status = dict()
+
+        qsub_ids = [val.qsub_job_id for val in jobs.values()]
+
+        qsub_id_groups = [qsub_ids[x:x + 100] for x in range(0, len(qsub_ids), 100)]
+
+        for ids_group in qsub_id_groups:
+            cmd = [self.qenv.qstat_bin, '-j', ','.join(ids_group)]
+            qstat_output = subprocess.check_output(cmd).decode()
+            assert len(qstat_output) == 2
+            header = {v: i for i, v in enumerate(qstat_output[0].strip().split('\t'))}
+
+            for line in qstat_output[1:]:
+                line = line.strip().split('\t')
+                status = line[header['ST']]
+                jobid = line[header['JOBID']]
+
+                if status not in ['CF', 'CG', 'PD', 'R', 'RD', 'RF', 'RH', 'RQ', 'RS', 'RV', 'SI', 'SE', 'SO']:
+                    continue
+
+                job_status[jobid] = status
+
+        return job_status
+
+    def errors(self, qsub_job_id):
+        if self.cached_job_status is None:
+            return None
+        # possible error states are POST_ERR state if it fails, or {P|U|S}SUSP states
+        return 'F' in self.cached_job_status.get(qsub_job_id, '') or \
+            'S' in self.cached_job_status.get(qsub_job_id, '') or \
+            'OOM' in self.cached_job_status.get(qsub_job_id, '') or \
+            'BF' in self.cached_job_status.get(qsub_job_id, '') or \
+            'CA' in self.cached_job_status.get(qsub_job_id, '') or \
+            'DL' in self.cached_job_status.get(qsub_job_id, '') or \
+            'SE' in self.cached_job_status.get(qsub_job_id, '') or \
+            'ST' in self.cached_job_status.get(qsub_job_id, '') or \
+            'TO' in self.cached_job_status.get(qsub_job_id, '')
 
 
 class LsfJobQueue(AsyncQsubJobQueue):
@@ -376,3 +419,20 @@ class LsfJobQueue(AsyncQsubJobQueue):
     @property
     def qenv(self):
         return pypeliner.execqueue.qcmd.LsfEnv()
+
+
+class SlurmJobQueue(AsyncQsubJobQueue):
+    """ Queue of jobs running on a lfs cluster """
+
+    def __init__(self, modules=None, **kwargs):
+        super(SlurmJobQueue, self).__init__(modules, **kwargs)
+        self.qstat = SlurmQstatJobStatus(self.qenv)
+
+    def create(self, ctx, name, sent, temps_dir):
+        """create job"""
+        return AsyncQsubJob(ctx, name, sent, temps_dir, self.modules, self.qenv, self.native_spec, self.qstat,
+                            pypeliner.execqueue.qcmd.SlurmsubWrapper, pypeliner.execqueue.qcmd.SlurmacctWrapper)
+
+    @property
+    def qenv(self):
+        return pypeliner.execqueue.qcmd.SlurmEnv()
