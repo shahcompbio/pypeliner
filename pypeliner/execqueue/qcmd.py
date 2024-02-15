@@ -85,7 +85,6 @@ class QstatJobStatus(object):
         if qsub_time >= self.qstat_time:
             return False
 
-        print('finished', qsub_job_id, type(qsub_job_id), self.cached_job_status)
         return qsub_job_id not in self.cached_job_status
 
     def errors(self, qsub_job_id):
@@ -97,7 +96,6 @@ class QstatJobStatus(object):
         if self.cached_job_status is None:
             return None
 
-        print('error', qsub_job_id, self.cached_job_status)
         return 'e' in self.cached_job_status.get(qsub_job_id, '').lower()
 
     def get_qstat_job_status(self, jobs):
