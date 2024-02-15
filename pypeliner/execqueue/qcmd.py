@@ -285,5 +285,5 @@ class SlurmsubWrapper(QsubWrapper):
     def extract_job_id(self):
         """parse the job id from job submission command output"""
         with open(self.submit_stdout_filename, 'r') as submit_stdout:
-            return submit_stdout.readline().rstrip().replace("Submitted batch job", "")
-
+            jobid = submit_stdout.readline().rstrip().replace("Submitted batch job", "")
+            return int(jobid)
