@@ -381,6 +381,8 @@ class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
 
             for line in qstat_output[1:]:
                 line = line.strip().split()
+                if len(line) == 0:
+                    continue
                 print(line, header['ST'])
                 status = line[header['ST']]
                 jobid = line[header['JOBID']]
