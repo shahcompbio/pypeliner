@@ -391,6 +391,8 @@ class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
 
                 job_status[jobid] = status
 
+                print(job_status)
+
         return job_status
 
     def errors(self, qsub_job_id):
