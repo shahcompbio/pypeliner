@@ -13,6 +13,8 @@ def create(requested_queue, modules=None, native_spec=None, config_filename=None
         exec_queue_name = 'pypeliner.execqueue.qsub.AsyncQsubJobQueue'
     elif requested_queue == 'lsf':
         exec_queue_name = 'pypeliner.execqueue.qsub.LsfJobQueue'
+    elif requested_queue == 'slurm':
+        exec_queue_name = 'pypeliner.execqueue.qsub.SlurmJobQueue'
     elif requested_queue == 'pbs':
         exec_queue_name = 'pypeliner.execqueue.qsub.PbsJobQueue'
     elif requested_queue == 'drmaa':
