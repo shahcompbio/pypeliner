@@ -223,7 +223,7 @@ class AsyncQsubJob(object):
         error_text += [desc + ' for job: ' + self.name]
 
         if self.qsub_job_id is not None:
-            error_text += ['qsub id: ' + self.qsub_job_id]
+            error_text += ['qsub id: ' + str(self.qsub_job_id)]
 
         error_text += ['delegator command: ' + ' '.join(self.command)]
         error_text += ['submit command: ' + ' '.join(self.submit_command)]
