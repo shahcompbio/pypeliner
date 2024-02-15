@@ -85,6 +85,7 @@ class QstatJobStatus(object):
         if qsub_time >= self.qstat_time:
             return False
 
+        print(qsub_job_id, self.cached_job_status)
         return qsub_job_id not in self.cached_job_status
 
     def errors(self, qsub_job_id):
