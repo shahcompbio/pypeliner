@@ -387,14 +387,11 @@ class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
                 status = line[header['ST']]
                 jobid = line[header['JOBID']]
 
-                print(status)
-
                 if status not in ['CF', 'CG', 'PD', 'R', 'RD', 'RF', 'RH', 'RQ', 'RS', 'RV', 'SI', 'SE', 'SO']:
                     continue
 
-                print(status)
-
                 job_status[jobid] = status
+                print(job_status)
 
         return job_status
 
