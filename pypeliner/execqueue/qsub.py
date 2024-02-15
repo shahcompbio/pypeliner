@@ -379,6 +379,8 @@ class SlurmQstatJobStatus(pypeliner.execqueue.qcmd.QstatJobStatus):
             assert len(qstat_output) > 1
             header = {v: i for i, v in enumerate(qstat_output[0].strip().split('\t'))}
 
+            print(header)
+
             for line in qstat_output[1:]:
                 line = line.strip().split('\t')
                 status = line[header['ST']]
