@@ -211,7 +211,6 @@ class MultiLineFormatter(logging.Formatter):
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
-        print(record)
         return json.dumps(vars(record))
 
 
