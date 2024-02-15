@@ -40,6 +40,7 @@ class QsubJob(object):
         self.debug_files = []
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
+            script_file.write("#!/bin/sh\n")
             script_file.write(' '.join(self.command) + '\n')
         pypeliner.helpers.set_executable(self.script_filename)
         self.submit_command = self.create_submit_command(
@@ -145,6 +146,7 @@ class AsyncQsubJob(object):
 
         self.script_filename = os.path.join(temps_dir, 'submit.sh')
         with open(self.script_filename, 'w') as script_file:
+            script_file.write("#!/bin/sh\n")
             script_file.write(' '.join(self.command) + '\n')
         pypeliner.helpers.set_executable(self.script_filename)
 
