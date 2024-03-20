@@ -257,21 +257,17 @@ class JobInstance(object):
             else:
                 return val + retry_val
         elif isinstance(val, six.string_types) and ':' in val:
-            assert val.count(':') == 1, "time ctx values only support hours and minutes"
-            # Juno and Luna only accept Hours and Mins, no seconds
             val = [int(i) for i in val.split(':')]
-            val = timedelta(hours=val[0], minutes=val[1])
             if by_factor:
                 assert isinstance(retry_val, (int, float)), \
                     "retry_factor for time should be an integer or float"
-                val *= retry_val
+                val = [v * retry_val for v in val]
             else:
                 retry_val = [int(i) for i in retry_val.split(':')]
-                retry_val = timedelta(hours=retry_val[0], minutes=retry_val[1])
-                val += retry_val
-            hours = str(int(val.total_seconds() / 3600)).zfill(2)
-            mins = str(int((val.total_seconds() / 60) % 60)).zfill(2)
-            return '{}:{}'.format(hours, mins)
+                assert len(val) == len(retry_val)
+                val = [v1 + v2 for v1, v2 in zip(val, retry_val)]
+            val = [str(v).zfill(2) for v in val]
+            return ':'.join(val)
         else:
             raise Exception('unknown_format')
 
