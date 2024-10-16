@@ -24,6 +24,15 @@ class LsfEnv(object):
         self.qacct_bin = pypeliner.helpers.which('bhist')
         self.qdel_bin = pypeliner.helpers.which('bkill')
 
+class SlurmEnv(object):
+    """ Paths to qsub, qstat, qdel in LSF"""
+
+    def __init__(self):
+        self.qsub_bin = pypeliner.helpers.which('sbatch')
+        self.qstat_bin = pypeliner.helpers.which('squeue')
+        self.qacct_bin = pypeliner.helpers.which('sacct')
+        self.qdel_bin = pypeliner.helpers.which('scancel')
+
 
 class QstatError(Exception):
     pass
@@ -177,6 +186,24 @@ class LsfacctWrapper(QacctWrapper):
         return qacct_results
 
 
+class SlurmacctWrapper(QacctWrapper):
+    """class to check job status after completion in LSF"""
+
+    def parse_qacct(self):
+        """parse job completion status report"""
+        qacct_results = dict()
+
+        with open(self.qacct_stdout_filename, 'r') as qacct_file:
+            lines = [line.strip().split('|') for line in qacct_file]
+            assert len(lines) == 2
+            header = {v: i for i, v in enumerate(lines[0])}
+            exit_code = lines[1][header['ExitCode']]
+            status = lines[1][header['State']]
+            qacct_results[exit_code] = exit_code
+            assert status == 'COMPLETED' or status == 'FAILED'
+        return qacct_results
+
+
 class QsubWrapper(object):
     """class to submit jobs in SGE"""
 
@@ -238,3 +265,23 @@ class LsfsubWrapper(QsubWrapper):
         """parse the job id from job submission command output"""
         with open(self.submit_stdout_filename, 'r') as submit_stdout:
             return submit_stdout.readline().rstrip().replace("<", "\t").replace(">", '\t').split('\t')[1]
+
+
+class SlurmsubWrapper(QsubWrapper):
+    """class to submit jobs in LSF"""
+
+    def create_submit_command(self):
+        """generate the job submission command"""
+        qsub = [self.qenv.qsub_bin]
+        qsub += self.native_spec.format(**self.ctx).split()
+        qsub += ['-J', pypeliner.execqueue.utils.qsub_format_name(self.name)]
+        qsub += ['-o', self.job_stdout_filename]
+        qsub += ['-e', self.job_stderr_filename]
+        qsub += [self.script_filename]
+        return qsub
+
+    def extract_job_id(self):
+        """parse the job id from job submission command output"""
+        with open(self.submit_stdout_filename, 'r') as submit_stdout:
+            jobid = submit_stdout.readline().rstrip().replace("Submitted batch job", "")
+            return int(jobid)
